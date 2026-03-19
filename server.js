@@ -199,6 +199,66 @@ Return ONLY raw JSON:
 }
 
 // ─────────────────────────────────────────────
+// PASS 4 — CONFIRMATION (Sonnet)
+// Looks at the chart fresh + the signal from Pass 3
+// Confirms direction, sharpens entry/SL/TP levels
+// Boosts confidence if it agrees, lowers if it disagrees
+// NEVER blocks the signal — only improves it
+// ─────────────────────────────────────────────
+async function pass4(charts, sym, tf, signal, structure, smc, key) {
+  // If WAIT, skip confirmation — nothing to confirm
+  if(signal.verdict === 'WAIT') return signal;
+
+  const sys = `You are a senior trading analyst doing a final review of a trading signal. Your job is to:
+1. Confirm the signal direction is correct by looking at the chart yourself
+2. Sharpen the exact entry, stop loss, and take profit levels
+3. Add any confluences the first analyst may have missed
+4. Adjust the confidence score up or down based on what you see
+5. Improve the fullAnalysis with any additional insights
+
+IMPORTANT: Do NOT change BUY to SELL or vice versa unless the signal is completely wrong. Your job is to IMPROVE the signal, not reject it.
+
+Return ONLY raw JSON with the improved signal:
+{"verdict":"<keep same as input unless completely wrong>","confidence":<adjusted 40-95>,"signal_grade":"<adjust if needed>","confirmation":"Confirmed/Partially Confirmed/Adjusted","confirmation_note":"<what you confirmed or changed and why>","entry":"<sharpened entry price>","entry_trigger":"<sharpened confirmation>","sl":"<sharpened stop loss>","sl_reason":"<why>","tp1":"<sharpened TP1>","tp1_reason":"<why>","tp2":"<sharpened TP2>","tp2_reason":"<why>","tp3":"<sharpened TP3>","rr_tp1":"<updated R:R>","rr_tp2":"<updated R:R>","rrLabel":"Acceptable/Good/Excellent","additional_confluences":["<any extra confluences found>"],"missed_risks":"<any risks the first analyst missed>","candle_analysis":"<fresh look at last 5 candles>","fullAnalysis":"<12-16 sentences of elite HTML analysis with strong tags — the most complete analysis possible covering everything: trend, structure, all SMC elements, every confluence, precise entry/SL/TP reasoning, trade management, invalidation levels, and complete trade thesis>"}`;
+
+  const improved = await claude(MODEL_SONNET, key, sys, [
+    ...charts.map(c=>imgBlock(c.base64,c.mime)),
+    {type:'text',text:`Review and improve this ${signal.verdict} signal for ${sym} ${tf}.\n\nOriginal signal:\nVerdict: ${signal.verdict}\nConfidence: ${signal.confidence}%\nGrade: ${signal.signal_grade}\nEntry: ${signal.entry}\nSL: ${signal.sl}\nTP1: ${signal.tp1} (${signal.rr_tp1})\nTP2: ${signal.tp2}\nSummary: ${signal.summary}\n\nChart data:\nTrend: ${structure.trend} (${structure.strength})\nStructure: ${structure.structure}\nSMC: OBs:${JSON.stringify(smc.order_blocks)} FVGs:${JSON.stringify(smc.fvg)}\nInstitutional bias: ${smc.institutional_bias}\n\nConfirm the direction, sharpen the levels, add any missed confluences.`}
+  ], 2500);
+
+  // Merge improvements back into original signal
+  return {
+    ...signal,
+    verdict:        improved.verdict        || signal.verdict,
+    confidence:     improved.confidence     || signal.confidence,
+    signal_grade:   improved.signal_grade   || signal.signal_grade,
+    entry:          improved.entry          || signal.entry,
+    entry_trigger:  improved.entry_trigger  || signal.entry_trigger,
+    sl:             improved.sl             || signal.sl,
+    sl_reason:      improved.sl_reason      || signal.sl_reason,
+    tp1:            improved.tp1            || signal.tp1,
+    tp1_reason:     improved.tp1_reason     || signal.tp1_reason,
+    tp2:            improved.tp2            || signal.tp2,
+    tp2_reason:     improved.tp2_reason     || signal.tp2_reason,
+    tp3:            improved.tp3            || signal.tp3,
+    rr_tp1:         improved.rr_tp1         || signal.rr_tp1,
+    rr_tp2:         improved.rr_tp2         || signal.rr_tp2,
+    rrLabel:        improved.rrLabel        || signal.rrLabel,
+    candle_analysis:improved.candle_analysis|| signal.candle_analysis,
+    fullAnalysis:   improved.fullAnalysis   || signal.fullAnalysis,
+    confluences:    [
+      ...(signal.confluences||[]),
+      ...(improved.additional_confluences||[])
+    ].filter(Boolean),
+    _pass4: {
+      confirmation: improved.confirmation,
+      note: improved.confirmation_note,
+      missed_risks: improved.missed_risks
+    }
+  };
+}
+
+// ─────────────────────────────────────────────
 // EMAIL ALERTS
 // ─────────────────────────────────────────────
 async function sendEmailAlert(signal) {
@@ -299,9 +359,16 @@ app.post('/api/analyze',async(req,res)=>{
     const entry=await pass2(chartList,sym,structure,smc,livePrice,key);
     console.log(`[Step 2] ✓ ${entry.direction} @ ${entry.entry_price} Quality:${entry.entry_quality}`);
 
-    const result=await pass3(chartList,sym,tf,structure,smc,entry,mktCtx,livePrice,winStats,key);
+    const signal=await pass3(chartList,sym,tf,structure,smc,entry,mktCtx,livePrice,winStats,key);
+    console.log(`[Step 3] ✓ ${signal.verdict} Grade:${signal.signal_grade} Conf:${signal.confidence}%`);
+
+    // Pass 4 — confirmation (runs in parallel with nothing, sharpens the signal)
+    console.log('[Step 4] Confirming and sharpening signal...');
+    const result=await pass4(chartList,sym,tf,signal,structure,smc,key);
+    console.log(`[Step 4] ✓ ${result.verdict} Grade:${result.signal_grade} Conf:${result.confidence}% (${result._pass4?.confirmation||'confirmed'})`);
+
     const elapsed=((Date.now()-t0)/1000).toFixed(1);
-    console.log(`[Step 3] ✓ ${elapsed}s | ${result.verdict} Grade:${result.signal_grade} Conf:${result.confidence}%\n`);
+    console.log(`[NexTrade] ⚡ Done in ${elapsed}s\n`);
 
     if(email) incrementUsage(email);
 
