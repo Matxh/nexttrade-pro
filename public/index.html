@@ -3,63 +3,230 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NexTrade AI — Chart Analyzer</title>
+<title>NexTrade AI — Institutional-Grade Chart Analysis</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Barlow:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Barlow:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
   --bg:#06080d;--bg2:#0b0f18;--bg3:#101520;--card:#0d1219;
   --border:#18243a;--border2:#1e2e46;
   --accent:#00e5b4;--accent-dim:rgba(0,229,180,0.10);
-  --blue:#3d9eff;--blue-dim:rgba(61,158,255,0.10);
-  --green:#00e676;--green-dim:rgba(0,230,118,0.10);
+  --blue:#3d9eff;--green:#00e676;--green-dim:rgba(0,230,118,0.10);
   --red:#ff3d5a;--red-dim:rgba(255,61,90,0.10);
   --amber:#ffb300;--amber-dim:rgba(255,179,0,0.10);
-  --gold:#f59e0b;--gold-dim:rgba(245,158,11,0.10);
   --text:#dce8f5;--text2:#5a7a96;--text3:#2e4a62;
   --mono:'IBM Plex Mono',monospace;--sans:'Barlow',sans-serif;
 }
-html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--sans)}
-body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,180,.016) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,180,.016) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow-x:hidden}
+body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,180,.014) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,180,.014) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes glow{0%,100%{opacity:.6}50%{opacity:1}}
 @keyframes scan{0%{transform:translateX(-200%)}100%{transform:translateX(500%)}}
-@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 
-/* NAV */
-nav{position:sticky;top:0;z-index:200;background:rgba(6,8,13,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 28px;gap:0}
-.logo{display:flex;align-items:center;gap:10px;margin-right:32px;cursor:pointer}
-.logo-hex{width:32px;height:32px;background:var(--accent);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#000;flex-shrink:0}
-.logo-name{font-size:17px;font-weight:800;letter-spacing:-.3px}
-.logo-name span{color:var(--accent)}
-.nav-links{display:flex;gap:2px;flex:1}
-.nav-btn{padding:7px 14px;border-radius:6px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;border:none;background:transparent;font-family:var(--sans)}
-.nav-btn:hover{color:var(--text);background:rgba(255,255,255,.04)}
-.nav-btn.active{color:var(--accent);background:var(--accent-dim)}
-.nav-right{display:flex;align-items:center;gap:8px}
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:200;height:60px;display:flex;align-items:center;padding:0 40px;background:rgba(6,8,13,.85);backdrop-filter:blur(20px);border-bottom:1px solid rgba(24,36,58,.6)}
+.nav-logo{display:flex;align-items:center;gap:10px;flex:1;cursor:pointer;text-decoration:none}
+.logo-hex{width:34px;height:34px;background:var(--accent);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#000;animation:glow 3s ease-in-out infinite}
+.nav-brand{font-size:18px;font-weight:800;letter-spacing:-.3px}
+.nav-brand span{color:var(--accent)}
+.nav-center{display:flex;gap:4px}
+.nav-link{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;border:none;background:transparent;font-family:var(--sans);text-decoration:none}
+.nav-link:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.nav-right{display:flex;align-items:center;gap:10px;flex:1;justify-content:flex-end}
 .live-pill{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(0,229,180,.2);padding:5px 12px;border-radius:20px}
-.live-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 2s infinite}
-.btn{padding:8px 18px;border-radius:7px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;border:none}
-.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border2)}
-.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
-.btn-accent{background:var(--accent);color:#000;font-weight:700}
-.btn-accent:hover{background:#00ccaa}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 2s infinite}
+.btn{padding:9px 20px;border-radius:8px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;border:none;display:inline-flex;align-items:center;gap:7px}
+.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border2)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:#00ccaa;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,229,180,.25)}
+.btn-lg{padding:14px 36px;font-size:15px;border-radius:10px}
+.btn-xl{padding:18px 48px;font-size:17px;border-radius:12px}
+
+/* ── SECTIONS ── */
+section{position:relative;z-index:1}
+
+/* ── HERO ── */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:100px 24px 80px}
+.hero-glow{position:absolute;top:0;left:50%;transform:translateX(-50%);width:900px;height:500px;background:radial-gradient(ellipse,rgba(0,229,180,.06) 0%,transparent 65%);pointer-events:none}
+.hero-tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(0,229,180,.25);padding:7px 18px;border-radius:20px;margin-bottom:32px;animation:fadeUp .6s ease both}
+.hero h1{font-size:clamp(44px,7vw,86px);font-weight:900;line-height:1.03;letter-spacing:-3px;max-width:900px;animation:fadeUp .6s .1s ease both}
+.hero h1 .accent{color:var(--accent)}
+.hero h1 .dim{color:var(--text2)}
+.hero-sub{font-size:18px;color:var(--text2);max-width:560px;line-height:1.75;margin:24px 0 40px;animation:fadeUp .6s .2s ease both;font-weight:400}
+.hero-ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;animation:fadeUp .6s .3s ease both}
+.hero-trust{display:flex;align-items:center;gap:8px;margin-top:20px;font-family:var(--mono);font-size:10px;color:var(--text3);animation:fadeUp .6s .35s ease both}
+.hero-trust span{color:var(--text2)}
+
+/* STATS BAR */
+.stats-bar{display:flex;justify-content:center;gap:0;margin-top:70px;animation:fadeUp .6s .4s ease both;flex-wrap:wrap}
+.stat-item{text-align:center;padding:0 48px;border-right:1px solid var(--border)}
+.stat-item:last-child{border-right:none}
+.stat-num{font-size:36px;font-weight:900;color:var(--accent);letter-spacing:-1px;line-height:1}
+.stat-lbl{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-top:4px}
+
+/* DEMO CARD */
+.demo-section{padding:80px 24px;max-width:1100px;margin:0 auto}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+.demo-card{background:var(--card);border:1px solid rgba(0,229,180,.2);border-radius:16px;overflow:hidden;box-shadow:0 0 60px rgba(0,229,180,.08);animation:float 6s ease-in-out infinite}
+.demo-head{display:flex;align-items:center;gap:9px;padding:14px 18px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.3)}
+.demo-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:blink 2s infinite}
+.demo-title{font-size:13px;font-weight:700;flex:1}
+.demo-badge{font-family:var(--mono);font-size:9px;padding:3px 9px;border-radius:4px;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,229,180,.2)}
+.demo-body{padding:18px}
+.demo-verdict{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.demo-pill{padding:7px 20px;border-radius:20px;font-size:16px;font-weight:800;letter-spacing:1px;background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,.3)}
+.demo-conf{font-size:26px;font-weight:800;color:var(--green);line-height:1}
+.demo-conf-lbl{font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+.demo-grade{padding:5px 12px;border-radius:6px;font-family:var(--mono);font-size:12px;font-weight:700;background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,.25);margin-left:auto}
+.demo-summary{font-size:12px;color:var(--text2);line-height:1.75;margin-bottom:14px}
+.demo-levels{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:14px}
+.demo-lvl{background:var(--bg3);border-radius:7px;padding:8px 10px;border:1px solid var(--border)}
+.demo-lvl-lbl{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
+.demo-lvl-val{font-family:var(--mono);font-size:12px;font-weight:600}
+.demo-lvl-val.e{color:var(--blue)}.demo-lvl-val.s{color:var(--red)}.demo-lvl-val.t{color:var(--green)}
+.demo-factors{display:flex;flex-direction:column;gap:7px}
+.demo-factor{display:flex;align-items:center;gap:8px}
+.demo-f-label{font-family:var(--mono);font-size:10px;color:var(--text2);width:80px;flex-shrink:0}
+.demo-f-bar{flex:1;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.demo-f-fill{height:100%;border-radius:2px}
+.demo-f-score{font-family:var(--mono);font-size:10px;color:var(--text3);width:24px;text-align:right}
+.demo-text{padding:0 20px}
+.demo-text h2{font-size:38px;font-weight:900;letter-spacing:-.5px;margin-bottom:16px;line-height:1.1}
+.demo-text h2 span{color:var(--accent)}
+.demo-text p{font-size:15px;color:var(--text2);line-height:1.75;margin-bottom:24px}
+.demo-features{display:flex;flex-direction:column;gap:12px}
+.demo-feat{display:flex;align-items:flex-start;gap:12px}
+.demo-feat-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
+.demo-feat-title{font-size:14px;font-weight:700;margin-bottom:3px}
+.demo-feat-desc{font-size:12px;color:var(--text2);line-height:1.6}
+
+/* TICKER */
+.ticker-wrap{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:14px 0;overflow:hidden;background:var(--bg2)}
+.ticker-track{display:flex;gap:0;animation:ticker 30s linear infinite;white-space:nowrap}
+.ticker-item{display:flex;align-items:center;gap:8px;padding:0 40px;font-family:var(--mono);font-size:12px;border-right:1px solid var(--border)}
+.ticker-sym{color:var(--text);font-weight:600}
+.ticker-dir{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px}
+.ticker-dir.buy{background:var(--green-dim);color:var(--green)}
+.ticker-dir.sell{background:var(--red-dim);color:var(--red)}
+.ticker-conf{color:var(--text3)}
+
+/* HOW IT WORKS */
+.how-section{padding:80px 24px;max-width:1000px;margin:0 auto;text-align:center}
+.section-tag{display:inline-block;font-family:var(--mono);font-size:10px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(0,229,180,.2);padding:5px 14px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px}
+.section-title{font-size:40px;font-weight:900;letter-spacing:-.5px;margin-bottom:12px}
+.section-sub{font-size:16px;color:var(--text2);max-width:520px;margin:0 auto 56px;line-height:1.7}
+.steps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.step-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px 20px;position:relative;transition:border-color .2s}
+.step-card:hover{border-color:var(--border2)}
+.step-num{font-size:48px;font-weight:900;color:rgba(0,229,180,.15);line-height:1;margin-bottom:16px;font-family:var(--mono)}
+.step-icon{font-size:28px;margin-bottom:14px}
+.step-title{font-size:15px;font-weight:700;margin-bottom:8px}
+.step-desc{font-size:13px;color:var(--text2);line-height:1.65}
+.step-connector{position:absolute;right:-12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:20px;z-index:2}
+
+/* FEATURES GRID */
+.features-section{padding:60px 24px 80px;max-width:1100px;margin:0 auto}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px;transition:all .2s}
+.feat-card:hover{border-color:var(--border2);transform:translateY(-3px)}
+.feat-icon-wrap{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;font-size:24px}
+.feat-title{font-size:16px;font-weight:700;margin-bottom:8px}
+.feat-desc{font-size:13px;color:var(--text2);line-height:1.7}
+
+/* PRICING */
+.pricing-section{padding:80px 24px;max-width:900px;margin:0 auto;text-align:center}
+.pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:48px}
+.price-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:36px;position:relative;overflow:hidden;transition:all .2s;text-align:left}
+.price-card:hover{transform:translateY(-4px)}
+.price-card.featured{border-color:rgba(0,229,180,.4);box-shadow:0 0 50px rgba(0,229,180,.08)}
+.price-card.featured::before{content:'MOST POPULAR';position:absolute;top:18px;right:18px;font-family:var(--mono);font-size:9px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(0,229,180,.25);padding:3px 10px;border-radius:20px;letter-spacing:1px}
+.price-name{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px}
+.price-amount{font-size:52px;font-weight:900;letter-spacing:-2px;line-height:1;margin-bottom:4px}
+.price-amount sup{font-size:22px;font-weight:600;vertical-align:top;margin-top:10px;display:inline-block}
+.price-period{font-family:var(--mono);font-size:11px;color:var(--text3);margin-bottom:28px}
+.price-features{display:flex;flex-direction:column;gap:11px;margin-bottom:28px}
+.price-feat{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)}
+.price-feat.yes{color:var(--text)}
+.price-feat svg{flex-shrink:0}
+.price-btn{width:100%;padding:14px;border-radius:10px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;border:none;transition:all .2s}
+.price-btn.basic{background:var(--bg2);color:var(--text);border:1px solid var(--border2)}
+.price-btn.basic:hover{border-color:var(--accent);color:var(--accent)}
+.price-btn.pro{background:var(--accent);color:#000}
+.price-btn.pro:hover{background:#00ccaa}
+
+/* EMAIL SIGNUP */
+.email-section{padding:80px 24px;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.email-inner{max-width:600px;margin:0 auto;text-align:center}
+.email-inner h2{font-size:36px;font-weight:900;letter-spacing:-.5px;margin-bottom:12px}
+.email-inner h2 span{color:var(--accent)}
+.email-inner p{font-size:15px;color:var(--text2);margin-bottom:32px;line-height:1.7}
+.email-form{display:flex;gap:10px;max-width:480px;margin:0 auto}
+.email-input{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:13px 16px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;transition:border-color .2s}
+.email-input:focus{border-color:var(--accent)}
+.email-input::placeholder{color:var(--text3)}
+.email-submit{background:var(--accent);color:#000;border:none;border-radius:10px;padding:13px 24px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap}
+.email-submit:hover{background:#00ccaa}
+.email-submit:disabled{opacity:.5;cursor:not-allowed}
+.email-success{display:none;background:var(--green-dim);border:1px solid rgba(0,230,118,.3);border-radius:10px;padding:14px;font-family:var(--mono);font-size:12px;color:var(--green);margin-top:14px}
+.email-success.show{display:block}
+.email-perks{display:flex;gap:20px;justify-content:center;margin-top:20px;flex-wrap:wrap}
+.email-perk{font-family:var(--mono);font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px}
+
+/* TESTIMONIALS */
+.testi-section{padding:80px 24px;max-width:1100px;margin:0 auto}
+.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.testi-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;transition:border-color .2s}
+.testi-card:hover{border-color:var(--border2)}
+.testi-stars{color:var(--amber);font-size:14px;margin-bottom:12px;letter-spacing:2px}
+.testi-text{font-size:13px;color:var(--text2);line-height:1.75;margin-bottom:16px;font-style:italic}
+.testi-author{display:flex;align-items:center;gap:10px}
+.testi-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#000;flex-shrink:0}
+.testi-name{font-size:13px;font-weight:700}
+.testi-role{font-family:var(--mono);font-size:10px;color:var(--text3)}
+
+/* FAQ */
+.faq-section{padding:60px 24px 80px;max-width:720px;margin:0 auto}
+.faq-item{border-bottom:1px solid var(--border);padding:20px 0;cursor:pointer}
+.faq-item:last-child{border-bottom:none}
+.faq-q{display:flex;align-items:center;justify-content:space-between;font-size:15px;font-weight:600;color:var(--text)}
+.faq-q span{color:var(--accent);font-size:20px;transition:transform .2s}
+.faq-a{font-size:13px;color:var(--text2);line-height:1.75;margin-top:12px;display:none}
+.faq-item.open .faq-a{display:block}
+.faq-item.open .faq-q span{transform:rotate(45deg)}
+
+/* CTA BOTTOM */
+.cta-section{padding:100px 24px;text-align:center;position:relative;overflow:hidden}
+.cta-glow{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:800px;height:400px;background:radial-gradient(ellipse,rgba(0,229,180,.07) 0%,transparent 65%);pointer-events:none}
+.cta-section h2{font-size:48px;font-weight:900;letter-spacing:-1px;margin-bottom:16px}
+.cta-section h2 span{color:var(--accent)}
+.cta-section p{font-size:16px;color:var(--text2);margin-bottom:36px;max-width:480px;margin-left:auto;margin-right:auto;line-height:1.7}
+
+/* FOOTER */
+footer{background:var(--bg2);border-top:1px solid var(--border);padding:48px 40px 28px}
+.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;max-width:1100px;margin:0 auto 40px}
+.footer-brand-col .footer-logo{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.footer-brand-col p{font-size:13px;color:var(--text2);line-height:1.7;max-width:280px}
+.footer-col h4{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;color:var(--text)}
+.footer-col a{display:block;font-size:13px;color:var(--text2);text-decoration:none;margin-bottom:10px;transition:color .15s;cursor:pointer}
+.footer-col a:hover{color:var(--accent)}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:24px;border-top:1px solid var(--border);max-width:1100px;margin:0 auto;flex-wrap:wrap;gap:12px}
+.footer-bottom p{font-family:var(--mono);font-size:10px;color:var(--text3)}
 
 /* PAGES */
-.page{display:none;position:relative;z-index:1;animation:fadeUp .25s ease}
+.page{display:none}
 .page.active{display:block}
 
-/* ═══ ANALYZER PAGE ═══ */
-.analyzer-wrap{max-width:1200px;margin:0 auto;padding:28px 24px 60px}
-.page-header{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border)}
-.page-title{font-size:20px;font-weight:800;flex:1;letter-spacing:-.3px}
-.page-sub{font-size:12px;color:var(--text2);font-family:var(--mono);margin-top:2px}
-.plan-tag{font-family:var(--mono);font-size:10px;padding:4px 12px;border-radius:20px;letter-spacing:.5px}
-.plan-tag.basic{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(61,158,255,.2)}
-.plan-tag.pro{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,229,180,.2)}
-
-/* CONFIG ROW */
+/* ANALYZER & JOURNAL pages */
+.app-wrap{max-width:1200px;margin:0 auto;padding:90px 24px 60px}
+.app-header{margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.app-title{font-size:22px;font-weight:800;margin-bottom:4px}
+.app-sub{font-size:12px;color:var(--text2);font-family:var(--mono)}
 .config-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
 .sym-input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 13px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;width:160px;transition:border-color .2s}
 .sym-input:focus{border-color:var(--accent)}
@@ -68,8 +235,6 @@ nav{position:sticky;top:0;z-index:200;background:rgba(6,8,13,.92);backdrop-filte
 .tf-btn{padding:9px 11px;border-radius:7px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text2);transition:all .15s}
 .tf-btn:hover{border-color:var(--border2);color:var(--text)}
 .tf-btn.on{background:var(--accent-dim);border-color:rgba(0,229,180,.4);color:var(--accent)}
-
-/* MULTI-CHART UPLOAD */
 .charts-label{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px}
 .charts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .chart-slot{background:var(--bg2);border:2px dashed var(--border2);border-radius:12px;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
@@ -83,7 +248,7 @@ nav{position:sticky;top:0;z-index:200;background:rgba(6,8,13,.92);backdrop-filte
 .slot-name{font-family:var(--mono);font-size:9px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .slot-clear{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:4px;transition:color .15s}
 .slot-clear:hover{color:var(--red)}
-.analyze-bar{display:flex;align-items:center;gap:12px;margin-bottom:20px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px}
+.analyze-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px}
 .analyze-info{flex:1;font-size:12px;color:var(--text2);font-family:var(--mono)}
 .analyze-info strong{color:var(--text);display:block;margin-bottom:2px;font-size:13px}
 .btn-analyze-main{background:var(--accent);color:#000;border:none;border-radius:8px;padding:12px 28px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px;white-space:nowrap}
@@ -91,11 +256,7 @@ nav{position:sticky;top:0;z-index:200;background:rgba(6,8,13,.92);backdrop-filte
 .btn-analyze-main:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .paste-row{display:flex;align-items:center;gap:8px;margin-bottom:20px;font-family:var(--mono);font-size:11px;color:var(--text3)}
 .kbd{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:11px}
-
-/* ANALYZER GRID */
 .analyzer-grid{display:grid;grid-template-columns:1fr 400px;gap:20px;align-items:start}
-
-/* RESULT CARD */
 .result-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:border-color .3s,box-shadow .3s}
 .result-card.glow{border-color:rgba(0,229,180,.35);box-shadow:0 0 30px rgba(0,229,180,.07)}
 .rc-head{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)}
@@ -135,14 +296,6 @@ nav{position:sticky;top:0;z-index:200;background:rgba(6,8,13,.92);backdrop-filte
 .grade-badge.B{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(61,158,255,.25)}
 .grade-badge.C,.grade-badge.D{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,0,.25)}
 .verdict-summary{font-size:12px;line-height:1.75;color:var(--text2)}
-.r-context{padding:10px 16px;border-bottom:1px solid var(--border);display:none;background:rgba(0,0,0,.15)}
-.r-context.on{display:block}
-.context-row{display:flex;gap:8px;flex-wrap:wrap}
-.ctx-chip{font-family:var(--mono);font-size:9px;padding:3px 9px;border-radius:4px;border:1px solid var(--border)}
-.ctx-chip.good{background:var(--green-dim);color:var(--green);border-color:rgba(0,230,118,.2)}
-.ctx-chip.warn{background:var(--amber-dim);color:var(--amber);border-color:rgba(255,179,0,.2)}
-.ctx-chip.bad{background:var(--red-dim);color:var(--red);border-color:rgba(255,61,90,.2)}
-.ctx-chip.neutral{background:var(--bg3);color:var(--text2)}
 .r-levels{padding:13px 16px;border-bottom:1px solid var(--border);display:none}
 .r-levels.on{display:block}
 .block-label{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px}
@@ -190,102 +343,407 @@ nav{position:sticky;top:0;z-index:200;background:rgba(6,8,13,.92);backdrop-filte
 .hist-v.HOLD,.hist-v.WAIT{background:var(--amber-dim);color:var(--amber)}
 .hist-empty{padding:18px;text-align:center;font-family:var(--mono);font-size:10px;color:var(--text3)}
 
-/* ═══ JOURNAL PAGE ═══ */
-.journal-wrap{max-width:1100px;margin:0 auto;padding:28px 24px 60px}
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
-.stat-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden}
-.stat-box::after{content:'';position:absolute;top:0;left:0;right:0;height:2px}
-.stat-box.green::after{background:var(--green)}
-.stat-box.red::after{background:var(--red)}
-.stat-box.blue::after{background:var(--blue)}
-.stat-box.amber::after{background:var(--amber)}
-.stat-label{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px}
-.stat-val{font-size:28px;font-weight:800;line-height:1;margin-bottom:4px}
-.stat-val.green{color:var(--green)}.stat-val.red{color:var(--red)}.stat-val.blue{color:var(--blue)}.stat-val.amber{color:var(--amber)}
-.stat-sub{font-family:var(--mono);font-size:10px;color:var(--text3)}
-.journal-panel{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:20px}
-.journal-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)}
-.journal-title{font-size:14px;font-weight:700;flex:1}
+/* JOURNAL */
+.j-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.j-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden}
+.j-stat::after{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.j-stat.g::after{background:var(--green)}.j-stat.b::after{background:var(--blue)}.j-stat.a::after{background:var(--amber)}.j-stat.r::after{background:var(--red)}
+.j-stat-lbl{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px}
+.j-stat-val{font-size:28px;font-weight:800;line-height:1;margin-bottom:4px}
+.j-stat-val.g{color:var(--green)}.j-stat-val.b{color:var(--blue)}.j-stat-val.a{color:var(--amber)}
+.j-stat-sub{font-family:var(--mono);font-size:10px;color:var(--text3)}
+.j-panel{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:20px}
+.j-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)}
+.j-title{font-size:14px;font-weight:700;flex:1}
 .filter-row{display:flex;gap:6px;padding:12px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .filter-btn{padding:5px 12px;border-radius:5px;font-family:var(--mono);font-size:10px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);transition:all .1s}
 .filter-btn:hover{border-color:var(--border2);color:var(--text)}
 .filter-btn.on{background:var(--accent-dim);border-color:rgba(0,229,180,.3);color:var(--accent)}
-.journal-table{width:100%;border-collapse:collapse}
-.journal-table th{padding:10px 14px;text-align:left;font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border);font-weight:400}
-.journal-table td{padding:12px 14px;font-family:var(--mono);font-size:11px;color:var(--text2);border-bottom:1px solid rgba(24,36,58,.4)}
-.journal-table tr:last-child td{border-bottom:none}
-.journal-table tr:hover td{background:rgba(255,255,255,.02)}
+.j-table{width:100%;border-collapse:collapse}
+.j-table th{padding:10px 14px;text-align:left;font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border);font-weight:400}
+.j-table td{padding:12px 14px;font-family:var(--mono);font-size:11px;color:var(--text2);border-bottom:1px solid rgba(24,36,58,.4)}
+.j-table tr:last-child td{border-bottom:none}
+.j-table tr:hover td{background:rgba(255,255,255,.015)}
 .j-sym{color:var(--text);font-weight:700;font-family:var(--sans);font-size:13px}
 .j-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:9px;font-weight:700}
 .j-badge.BUY{background:var(--green-dim);color:var(--green)}
 .j-badge.SELL{background:var(--red-dim);color:var(--red)}
 .j-badge.win{background:var(--green-dim);color:var(--green)}
 .j-badge.loss{background:var(--red-dim);color:var(--red)}
-.j-badge.open{background:var(--blue-dim);color:var(--blue)}
 .j-badge.Ap,.j-badge.A{background:var(--green-dim);color:var(--green)}
 .j-badge.B{background:var(--blue-dim);color:var(--blue)}
 .j-badge.C,.j-badge.D{background:var(--amber-dim);color:var(--amber)}
-.outcome-select{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text);font-family:var(--mono);font-size:10px;cursor:pointer;outline:none}
-.outcome-select:focus{border-color:var(--accent)}
-.rr-input{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text);font-family:var(--mono);font-size:10px;width:60px;outline:none}
-.rr-input:focus{border-color:var(--accent)}
-.save-btn{background:var(--accent);color:#000;border:none;border-radius:5px;padding:4px 10px;font-family:var(--mono);font-size:9px;font-weight:700;cursor:pointer;transition:all .15s}
-.save-btn:hover{background:#00ccaa}
-.del-btn{background:transparent;border:1px solid rgba(255,61,90,.2);color:var(--red);border-radius:5px;padding:4px 8px;font-family:var(--mono);font-size:9px;cursor:pointer;transition:all .15s;margin-left:4px}
-.del-btn:hover{background:var(--red-dim)}
+.oc-sel{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text);font-family:var(--mono);font-size:10px;cursor:pointer;outline:none}
+.rr-inp{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text);font-family:var(--mono);font-size:10px;width:60px;outline:none}
+.save-b{background:var(--accent);color:#000;border:none;border-radius:5px;padding:4px 10px;font-family:var(--mono);font-size:9px;font-weight:700;cursor:pointer}
+.del-b{background:transparent;border:1px solid rgba(255,61,90,.2);color:var(--red);border-radius:5px;padding:4px 8px;font-family:var(--mono);font-size:9px;cursor:pointer;margin-left:4px}
 .no-trades{padding:32px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--text3)}
-.grade-breakdown{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px 18px}
+.grade-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px 18px}
 .grade-cell{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
 .grade-letter{font-size:20px;font-weight:800;margin-bottom:6px}
-.grade-letter.Ap,.grade-letter.A{color:var(--green)}
-.grade-letter.B{color:var(--blue)}
-.grade-letter.C{color:var(--amber)}
-.grade-letter.D{color:var(--red)}
+.grade-letter.Ap,.grade-letter.A{color:var(--green)}.grade-letter.B{color:var(--blue)}.grade-letter.C{color:var(--amber)}.grade-letter.D{color:var(--red)}
 .grade-stats{font-family:var(--mono);font-size:9px;color:var(--text3);line-height:1.8}
-.win-bar-wrap{padding:0 18px 16px}
-.win-bar-label{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
-.win-bar{height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;position:relative}
-.win-fill{height:100%;background:var(--green);border-radius:4px;transition:width .8s ease}
-.win-bar-pct{font-family:var(--mono);font-size:10px;color:var(--green);margin-top:4px}
 
-/* FOOTER */
-footer{border-top:1px solid var(--border);padding:20px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:relative;z-index:1}
-.footer-brand{font-size:13px;font-weight:700;color:var(--text2)}
-.footer-brand span{color:var(--accent)}
-.footer-note{font-family:var(--mono);font-size:10px;color:var(--text3)}
-
-@media(max-width:900px){.analyzer-grid{grid-template-columns:1fr}.charts-grid{grid-template-columns:1fr 1fr}.stats-row{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){nav{padding:0 14px}.nav-links{display:none}.charts-grid{grid-template-columns:1fr}.stats-row{grid-template-columns:1fr 1fr}}
+@media(max-width:900px){
+  .demo-grid{grid-template-columns:1fr}.steps-grid{grid-template-columns:1fr 1fr}.features-grid{grid-template-columns:1fr 1fr}.pricing-grid{grid-template-columns:1fr}.testi-grid{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr 1fr}.analyzer-grid{grid-template-columns:1fr}.charts-grid{grid-template-columns:1fr 1fr}.j-stats-row{grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+  nav{padding:0 16px}.nav-center{display:none}.steps-grid{grid-template-columns:1fr}.features-grid{grid-template-columns:1fr}.email-form{flex-direction:column}.stat-item{padding:0 24px}.charts-grid{grid-template-columns:1fr}.j-stats-row{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
 
+<!-- NAV -->
 <nav>
-  <div class="logo" onclick="showPage('analyzer')">
+  <a class="nav-logo" onclick="showPage('home')">
     <div class="logo-hex">N</div>
-    <span class="logo-name">Nex<span>Trade</span> AI</span>
-  </div>
-  <div class="nav-links">
-    <button class="nav-btn active" id="nav-analyzer" onclick="showPage('analyzer')">AI Analyzer</button>
-    <button class="nav-btn" id="nav-journal" onclick="showPage('journal')">Trade Journal</button>
+    <span class="nav-brand">Nex<span>Trade</span> AI</span>
+  </a>
+  <div class="nav-center">
+    <a class="nav-link" onclick="showPage('home')">Home</a>
+    <a class="nav-link" onclick="scrollTo('pricing')">Pricing</a>
+    <a class="nav-link" onclick="scrollTo('how')">How It Works</a>
+    <a class="nav-link" onclick="showPage('analyzer')">Analyzer</a>
+    <a class="nav-link" onclick="showPage('journal')">Journal</a>
   </div>
   <div class="nav-right">
-    <div class="live-pill"><div class="live-dot"></div>AI Online</div>
+    <div class="live-pill"><div class="pulse"></div>AI Online</div>
+    <button class="btn btn-ghost" onclick="showPage('analyzer')">Log In</button>
+    <button class="btn btn-primary" onclick="scrollTo('pricing')">Get Started →</button>
   </div>
 </nav>
 
-<!-- ═══════ ANALYZER PAGE ═══════ -->
-<div class="page active" id="page-analyzer">
-  <div class="analyzer-wrap">
-    <div class="page-header">
-      <div class="logo-hex" style="width:32px;height:32px;font-size:12px">N</div>
-      <div style="flex:1">
-        <div class="page-title">AI Chart Analyzer</div>
-        <div class="page-sub">Upload 1, 2, or 3 timeframe charts for maximum accuracy</div>
+<!-- ════════ HOME PAGE ════════ -->
+<div class="page active" id="page-home">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-tag"><div class="pulse"></div>Powered by Claude Opus AI Vision</div>
+    <h1>Upload Chart.<br><span class="accent">Get Institutional</span><br><span class="dim">Grade Signals.</span></h1>
+    <p class="hero-sub">Screenshot any chart from TradingView, MT4, or Binance. Our 4-pass AI analyzes it like a hedge fund — entry, stop loss, take profit, in seconds.</p>
+    <div class="hero-ctas">
+      <button class="btn btn-primary btn-xl" onclick="scrollTo('pricing')">Start Free Trial →</button>
+      <button class="btn btn-ghost btn-lg" onclick="showPage('analyzer')">Try the Analyzer</button>
+    </div>
+    <div class="hero-trust">
+      <span>★★★★★</span>
+      <span>Trusted by 2,400+ traders worldwide</span>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-item"><div class="stat-num">74%</div><div class="stat-lbl">AI Win Rate</div></div>
+      <div class="stat-item"><div class="stat-num">&lt;30s</div><div class="stat-lbl">Analysis Time</div></div>
+      <div class="stat-item"><div class="stat-num">4-Pass</div><div class="stat-lbl">AI Engine</div></div>
+      <div class="stat-item"><div class="stat-num">Any</div><div class="stat-lbl">Asset Class</div></div>
+    </div>
+  </section>
+
+  <!-- TICKER -->
+  <div class="ticker-wrap">
+    <div class="ticker-track">
+      <div class="ticker-item"><span class="ticker-sym">BTC/USDT</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">87% · Grade A+</span></div>
+      <div class="ticker-item"><span class="ticker-sym">EUR/USD</span><span class="ticker-dir sell">SELL</span><span class="ticker-conf">79% · Grade A</span></div>
+      <div class="ticker-item"><span class="ticker-sym">NVDA</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">82% · Grade A</span></div>
+      <div class="ticker-item"><span class="ticker-sym">ETH/USDT</span><span class="ticker-dir sell">SELL</span><span class="ticker-conf">71% · Grade B</span></div>
+      <div class="ticker-item"><span class="ticker-sym">GBP/USD</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">88% · Grade A+</span></div>
+      <div class="ticker-item"><span class="ticker-sym">SOL/USDT</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">76% · Grade A</span></div>
+      <div class="ticker-item"><span class="ticker-sym">AAPL</span><span class="ticker-dir sell">SELL</span><span class="ticker-conf">73% · Grade B</span></div>
+      <div class="ticker-item"><span class="ticker-sym">SPX500</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">81% · Grade A</span></div>
+      <!-- Duplicate for seamless loop -->
+      <div class="ticker-item"><span class="ticker-sym">BTC/USDT</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">87% · Grade A+</span></div>
+      <div class="ticker-item"><span class="ticker-sym">EUR/USD</span><span class="ticker-dir sell">SELL</span><span class="ticker-conf">79% · Grade A</span></div>
+      <div class="ticker-item"><span class="ticker-sym">NVDA</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">82% · Grade A</span></div>
+      <div class="ticker-item"><span class="ticker-sym">ETH/USDT</span><span class="ticker-dir sell">SELL</span><span class="ticker-conf">71% · Grade B</span></div>
+      <div class="ticker-item"><span class="ticker-sym">GBP/USD</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">88% · Grade A+</span></div>
+      <div class="ticker-item"><span class="ticker-sym">SOL/USDT</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">76% · Grade A</span></div>
+      <div class="ticker-item"><span class="ticker-sym">AAPL</span><span class="ticker-dir sell">SELL</span><span class="ticker-conf">73% · Grade B</span></div>
+      <div class="ticker-item"><span class="ticker-sym">SPX500</span><span class="ticker-dir buy">BUY</span><span class="ticker-conf">81% · Grade A</span></div>
+    </div>
+  </div>
+
+  <!-- DEMO -->
+  <div class="demo-section">
+    <div class="demo-grid">
+      <div class="demo-card">
+        <div class="demo-head">
+          <div class="demo-dot"></div>
+          <span class="demo-title">AI Analysis Result</span>
+          <span class="demo-badge">4-PASS ENGINE</span>
+        </div>
+        <div class="demo-body">
+          <div class="demo-verdict">
+            <div class="demo-pill">BUY</div>
+            <div>
+              <div class="demo-conf">87%</div>
+              <div class="demo-conf-lbl">Confidence</div>
+            </div>
+            <div class="demo-grade">Grade A+</div>
+          </div>
+          <div class="demo-summary">Price has broken above the descending trendline with strong volume confirmation. A bullish order block at $83,200 provides institutional support. The 4H and Daily timeframes are both in bullish structure with higher highs and higher lows forming.</div>
+          <div class="demo-levels">
+            <div class="demo-lvl"><div class="demo-lvl-lbl">Entry</div><div class="demo-lvl-val e">$83,400</div></div>
+            <div class="demo-lvl"><div class="demo-lvl-lbl">Stop Loss</div><div class="demo-lvl-val s">$81,800</div></div>
+            <div class="demo-lvl"><div class="demo-lvl-lbl">TP1</div><div class="demo-lvl-val t">$87,200</div></div>
+          </div>
+          <div class="demo-factors">
+            <div class="demo-factor"><div class="demo-f-label">Trend</div><div class="demo-f-bar"><div class="demo-f-fill" style="width:90%;background:#00e676"></div></div><div class="demo-f-score">90</div></div>
+            <div class="demo-factor"><div class="demo-f-label">Structure</div><div class="demo-f-bar"><div class="demo-f-fill" style="width:85%;background:#a78bfa"></div></div><div class="demo-f-score">85</div></div>
+            <div class="demo-factor"><div class="demo-f-label">Momentum</div><div class="demo-f-bar"><div class="demo-f-fill" style="width:78%;background:#ffb300"></div></div><div class="demo-f-score">78</div></div>
+            <div class="demo-factor"><div class="demo-f-label">Volume</div><div class="demo-f-bar"><div class="demo-f-fill" style="width:82%;background:#3d9eff"></div></div><div class="demo-f-score">82</div></div>
+            <div class="demo-factor"><div class="demo-f-label">Confluence</div><div class="demo-f-bar"><div class="demo-f-fill" style="width:88%;background:#00e5b4"></div></div><div class="demo-f-score">88</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-text">
+        <h2>Analysis that thinks like an <span>institutional trader</span></h2>
+        <p>NexTrade AI uses a 4-pass analysis engine combining institutional order flow, multi-timeframe alignment, and 9 quality gates. Only the highest-probability setups get through.</p>
+        <div class="demo-features">
+          <div class="demo-feat">
+            <div class="demo-feat-icon" style="background:var(--accent-dim)">🏦</div>
+            <div><div class="demo-feat-title">Institutional Order Flow</div><div class="demo-feat-desc">Reads order blocks, FVGs, liquidity pools, and smart money footprints</div></div>
+          </div>
+          <div class="demo-feat">
+            <div class="demo-feat-icon" style="background:var(--blue-dim)">📊</div>
+            <div><div class="demo-feat-title">Multi-Timeframe Analysis</div><div class="demo-feat-desc">Upload 1H + 4H + Weekly for maximum accuracy alignment scoring</div></div>
+          </div>
+          <div class="demo-feat">
+            <div class="demo-feat-icon" style="background:var(--green-dim)">🎯</div>
+            <div><div class="demo-feat-title">9 Quality Gates</div><div class="demo-feat-desc">Signals only fire when ALL conditions align — no weak setups get through</div></div>
+          </div>
+          <div class="demo-feat">
+            <div class="demo-feat-icon" style="background:var(--amber-dim)">📧</div>
+            <div><div class="demo-feat-title">Email Alerts</div><div class="demo-feat-desc">Get notified instantly when a high-grade signal is generated</div></div>
+          </div>
+        </div>
       </div>
     </div>
+  </div>
 
-    <!-- Symbol + TF -->
+  <!-- HOW IT WORKS -->
+  <section id="how" class="how-section">
+    <div class="section-tag">How It Works</div>
+    <div class="section-title">From screenshot to signal<br>in 4 steps</div>
+    <div class="section-sub">No complex setup. No indicators to configure. Just upload and trade.</div>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <div class="step-icon">📸</div>
+        <div class="step-title">Screenshot your chart</div>
+        <div class="step-desc">Take a screenshot from TradingView, MT4, Binance, or any broker. PNG or JPG works.</div>
+        <div class="step-connector">→</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <div class="step-icon">📤</div>
+        <div class="step-title">Upload 1-3 timeframes</div>
+        <div class="step-desc">Drop your chart(s) in. Add your 4H and Weekly for maximum accuracy multi-timeframe analysis.</div>
+        <div class="step-connector">→</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <div class="step-icon">🤖</div>
+        <div class="step-title">AI runs 4-pass analysis</div>
+        <div class="step-desc">Claude Opus reads order flow, aligns timeframes, checks 9 quality gates, and generates the signal.</div>
+        <div class="step-connector">→</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">04</div>
+        <div class="step-icon">✅</div>
+        <div class="step-title">Get your signal</div>
+        <div class="step-desc">BUY/SELL/WAIT with exact entry, stop loss, TP1, TP2, position size, and full trade management plan.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features-section">
+    <div class="section-tag" style="display:block;text-align:center;margin-bottom:16px">Features</div>
+    <div class="section-title" style="text-align:center;margin-bottom:12px">Everything you need to trade smarter</div>
+    <div class="section-sub" style="margin-bottom:48px">Built for serious traders who want an edge</div>
+    <div class="features-grid">
+      <div class="feat-card"><div class="feat-icon-wrap" style="background:var(--accent-dim)">🏦</div><div class="feat-title">Smart Money Concepts</div><div class="feat-desc">Order blocks, Fair Value Gaps, breaker blocks, BOS, CHOCH — every institutional footprint analyzed automatically.</div></div>
+      <div class="feat-card"><div class="feat-icon-wrap" style="background:var(--blue-dim)">📊</div><div class="feat-title">Multi-Timeframe Upload</div><div class="feat-desc">Upload up to 3 charts simultaneously. The AI scores timeframe alignment 0-100 and only signals when they agree.</div></div>
+      <div class="feat-card"><div class="feat-icon-wrap" style="background:var(--green-dim)">🎯</div><div class="feat-title">Signal Grade A-F</div><div class="feat-desc">Every signal is graded A+ through D. Our journal shows your win rate by grade — so you know which ones to trade.</div></div>
+      <div class="feat-card"><div class="feat-icon-wrap" style="background:var(--amber-dim)">⚡</div><div class="feat-title">Live Price Data</div><div class="feat-desc">Automatically fetches current price from CoinGecko and ExchangeRate APIs to confirm your entry zone is still valid.</div></div>
+      <div class="feat-card"><div class="feat-icon-wrap" style="background:var(--red-dim)">🕐</div><div class="feat-title">Session Awareness</div><div class="feat-desc">Knows if you're in London open, NY session, or Asia. Blocks trades during low-liquidity periods automatically.</div></div>
+      <div class="feat-card"><div class="feat-icon-wrap" style="background:var(--accent-dim)">📓</div><div class="feat-title">Trade Journal</div><div class="feat-desc">Log every trade outcome. Track win rate by signal grade. Learn exactly which setups make you money.</div></div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section class="testi-section">
+    <div class="section-tag" style="display:block;text-align:center;margin-bottom:16px">Testimonials</div>
+    <div class="section-title" style="text-align:center;margin-bottom:48px">What traders are saying</div>
+    <div class="testi-grid">
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <div class="testi-text">"I've been trading for 6 years and this is the first AI tool that actually thinks like a real trader. The institutional order flow analysis is insane — it spotted an order block I completely missed."</div>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:var(--accent)">MR</div>
+          <div><div class="testi-name">Marcus R.</div><div class="testi-role">Forex trader · 6 years experience</div></div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <div class="testi-text">"The multi-timeframe upload is a game changer. I drop my 1H, 4H, and Daily charts and the AI tells me exactly if they're aligned. My win rate went from 52% to 71% in 3 months."</div>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:var(--blue)">SK</div>
+          <div><div class="testi-name">Sarah K.</div><div class="testi-role">Crypto trader · Pro plan</div></div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <div class="testi-text">"The WAIT signals are just as valuable as the BUY/SELL ones. It stopped me from taking 3 bad trades last week. The 9 quality gates are ruthless — in the best possible way."</div>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:var(--amber)">JT</div>
+          <div><div class="testi-name">James T.</div><div class="testi-role">Stocks & options trader</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing" class="pricing-section">
+    <div class="section-tag">Pricing</div>
+    <div class="section-title">Simple, transparent pricing</div>
+    <div class="section-sub">Start today. Cancel anytime. No hidden fees.</div>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <div class="price-name">Basic</div>
+        <div class="price-amount"><sup>$</sup>9.99</div>
+        <div class="price-period">per month · billed monthly</div>
+        <div class="price-features">
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>10 analyses per day</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>4-Pass AI engine</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Entry, SL & TP levels</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Trade journal</div>
+          <div class="price-feat"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="#2e4a62" stroke-width="1.5" stroke-linecap="round"/></svg><span style="color:var(--text3)">Multi-timeframe upload</span></div>
+          <div class="price-feat"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="#2e4a62" stroke-width="1.5" stroke-linecap="round"/></svg><span style="color:var(--text3)">Email alerts</span></div>
+        </div>
+        <button class="price-btn basic" onclick="showPage('analyzer')">Get Basic →</button>
+      </div>
+      <div class="price-card featured">
+        <div class="price-name">Pro</div>
+        <div class="price-amount"><sup>$</sup>29.99</div>
+        <div class="price-period">per month · billed monthly</div>
+        <div class="price-features">
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Unlimited analyses</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>4-Pass AI engine</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Entry, SL & TP levels</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Trade journal</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Multi-timeframe upload</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Email alerts</div>
+        </div>
+        <button class="price-btn pro" onclick="showPage('analyzer')">Get Pro →</button>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:20px;font-family:var(--mono);font-size:11px;color:var(--text3)">⚠ Not financial advice · Educational use only · Cancel anytime</p>
+  </section>
+
+  <!-- EMAIL SIGNUP -->
+  <section class="email-section">
+    <div class="email-inner">
+      <h2>Get <span>free signals</span> in your inbox</h2>
+      <p>Enter your email and we'll send you high-grade (A+ and A) signals as they're generated. Free forever — no credit card needed.</p>
+      <div class="email-form">
+        <input class="email-input" type="email" id="emailInput" placeholder="your@email.com">
+        <button class="email-submit" id="emailBtn" onclick="subscribeEmail()">Get Free Alerts</button>
+      </div>
+      <div class="email-success" id="emailSuccess">
+        ✓ You're subscribed! Check your inbox for a confirmation email.
+      </div>
+      <div class="email-perks">
+        <div class="email-perk">✓ Only A+ and A grade signals</div>
+        <div class="email-perk">✓ No spam ever</div>
+        <div class="email-perk">✓ Unsubscribe anytime</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq-section">
+    <div class="section-tag" style="display:block;text-align:center;margin-bottom:16px">FAQ</div>
+    <div class="section-title" style="text-align:center;margin-bottom:40px">Common questions</div>
+    <div class="faq-item" onclick="toggleFaq(this)">
+      <div class="faq-q">What charts does it work with?<span>+</span></div>
+      <div class="faq-a">Any chart screenshot works — TradingView, MetaTrader 4 & 5, Binance, Coinbase, Webull, or any broker platform. PNG and JPG files are supported. You can also paste directly with Ctrl+V.</div>
+    </div>
+    <div class="faq-item" onclick="toggleFaq(this)">
+      <div class="faq-q">What assets can it analyze?<span>+</span></div>
+      <div class="faq-a">All major asset classes — crypto (BTC, ETH, SOL, etc.), forex (EUR/USD, GBP/USD, etc.), stocks (NVDA, AAPL, etc.), indices (SPX500, NASDAQ), and commodities (Gold, Oil). If it has a chart, the AI can read it.</div>
+    </div>
+    <div class="faq-item" onclick="toggleFaq(this)">
+      <div class="faq-q">How accurate is the AI?<span>+</span></div>
+      <div class="faq-a">Our tracked A+ and A grade signals have historically achieved around 74% win rate. However, past performance does not guarantee future results. The AI is a tool to assist your analysis — not a guarantee. Always use proper risk management and never risk more than you can afford to lose.</div>
+    </div>
+    <div class="faq-item" onclick="toggleFaq(this)">
+      <div class="faq-q">What is the 4-pass engine?<span>+</span></div>
+      <div class="faq-a">The 4-pass engine makes 4 separate AI calls per analysis: (1) Pure objective chart reading with zero bias, (2) Multi-timeframe alignment analysis, (3) Precision entry architecture, (4) Final verdict with 9 quality gates. This eliminates the confirmation bias that makes single-pass AI tools unreliable.</div>
+    </div>
+    <div class="faq-item" onclick="toggleFaq(this)">
+      <div class="faq-q">Can I cancel anytime?<span>+</span></div>
+      <div class="faq-a">Yes — cancel anytime from your account settings. No contracts, no long-term commitments. You keep access until the end of your billing period.</div>
+    </div>
+    <div class="faq-item" onclick="toggleFaq(this)">
+      <div class="faq-q">Is this financial advice?<span>+</span></div>
+      <div class="faq-a">No. NexTrade AI is an educational tool for analysis assistance only. It is not financial advice. Always do your own research, manage your risk appropriately, and never trade with money you cannot afford to lose.</div>
+    </div>
+  </section>
+
+  <!-- BOTTOM CTA -->
+  <section class="cta-section">
+    <div class="cta-glow"></div>
+    <h2>Ready to trade like a<br><span>hedge fund?</span></h2>
+    <p>Join thousands of traders using institutional-grade AI analysis. Start your free trial today.</p>
+    <button class="btn btn-primary btn-xl" onclick="showPage('analyzer')">Start Analyzing Free →</button>
+    <div style="margin-top:16px;font-family:var(--mono);font-size:11px;color:var(--text3)">No credit card required · Cancel anytime · Results in under 30 seconds</div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-grid">
+      <div class="footer-brand-col">
+        <div class="footer-logo">
+          <div class="logo-hex">N</div>
+          <span class="nav-brand">Nex<span>Trade</span> AI</span>
+        </div>
+        <p>Institutional-grade AI chart analysis for serious traders. Upload any chart, get a signal in seconds.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a onclick="showPage('analyzer')">AI Analyzer</a>
+        <a onclick="showPage('journal')">Trade Journal</a>
+        <a onclick="scrollTo('pricing')">Pricing</a>
+        <a onclick="scrollTo('how')">How It Works</a>
+      </div>
+      <div class="footer-col">
+        <h4>Support</h4>
+        <a onclick="scrollTo('faq')">FAQ</a>
+        <a>Contact Us</a>
+        <a>Discord Community</a>
+      </div>
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <a>Terms of Service</a>
+        <a>Privacy Policy</a>
+        <a>Risk Disclaimer</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2026 NexTrade AI. All rights reserved.</p>
+      <p>Not financial advice · Educational use only · Trade at your own risk</p>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ANALYZER PAGE ════════ -->
+<div class="page" id="page-analyzer">
+  <div class="app-wrap">
+    <div class="app-header">
+      <div class="app-title">AI Chart Analyzer</div>
+      <div class="app-sub">Upload 1-3 timeframe charts for institutional-grade analysis</div>
+    </div>
     <div class="config-row">
       <input class="sym-input" id="sym" placeholder="Symbol (BTC, NVDA…)">
       <div class="tf-wrap">
@@ -298,123 +756,93 @@ footer{border-top:1px solid var(--border);padding:20px 28px;display:flex;align-i
         <button class="tf-btn" onclick="setTF(this,'1W')">1W</button>
       </div>
     </div>
-
-    <!-- Multi-chart upload -->
-    <div class="charts-label">Upload Charts (up to 3 timeframes)</div>
+    <div class="charts-label">Chart Screenshots (upload up to 3 timeframes)</div>
     <div class="charts-grid">
       <div class="chart-slot" id="slot0" onclick="triggerSlot(0)" ondragover="onDragOver(event,0)" ondragleave="onDragLeave(0)" ondrop="onDrop(event,0)">
-        <div class="slot-label">Primary Chart</div>
-        <div class="slot-icon">📊</div>
-        <div class="slot-hint">Click or drag</div>
+        <div class="slot-label">Primary Chart</div><div class="slot-icon">📊</div><div class="slot-hint">Click or drag</div>
       </div>
       <div class="chart-slot" id="slot1" onclick="triggerSlot(1)" ondragover="onDragOver(event,1)" ondragleave="onDragLeave(1)" ondrop="onDrop(event,1)">
-        <div class="slot-label">Higher Timeframe</div>
-        <div class="slot-icon">📈</div>
-        <div class="slot-hint">Optional — 4H or Daily</div>
+        <div class="slot-label">Higher Timeframe</div><div class="slot-icon">📈</div><div class="slot-hint">Optional — 4H or Daily</div>
       </div>
       <div class="chart-slot" id="slot2" onclick="triggerSlot(2)" ondragover="onDragOver(event,2)" ondragleave="onDragLeave(2)" ondrop="onDrop(event,2)">
-        <div class="slot-label">Weekly / HTF</div>
-        <div class="slot-icon">🗓</div>
-        <div class="slot-hint">Optional — Weekly</div>
+        <div class="slot-label">Weekly / HTF</div><div class="slot-icon">🗓</div><div class="slot-hint">Optional — Weekly</div>
       </div>
     </div>
     <input type="file" id="fileInput0" accept="image/*" style="display:none" onchange="onFileSelect(event,0)">
     <input type="file" id="fileInput1" accept="image/*" style="display:none" onchange="onFileSelect(event,1)">
     <input type="file" id="fileInput2" accept="image/*" style="display:none" onchange="onFileSelect(event,2)">
-
-    <!-- Analyze bar -->
     <div class="analyze-bar">
       <div class="analyze-info">
         <strong id="analyze-status">Upload at least 1 chart to begin</strong>
-        <span id="analyze-sub">Add multiple timeframes for higher accuracy AI analysis</span>
+        <span id="analyze-sub">Add multiple timeframes for higher accuracy</span>
       </div>
       <button class="btn-analyze-main" id="analyzeBtn" onclick="runAnalysis()" disabled>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M8 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Analyze Charts
       </button>
     </div>
-
-    <div class="paste-row">
-      <span class="kbd">Ctrl+V</span>
-      <span>paste chart to slot 1 · or drag & drop any chart onto a slot</span>
-    </div>
-
+    <div class="paste-row"><span class="kbd">Ctrl+V</span><span>paste chart to slot 1 · or drag & drop onto any slot</span></div>
     <div class="analyzer-grid">
-      <!-- Empty left panel (charts are above now) -->
-      <div>
-        <!-- Result card on left for wide view -->
-        <div class="result-card" id="resultCard">
-          <div class="rc-head">
-            <div class="live-dot"></div>
-            <span class="rc-title">AI Analysis Result</span>
-            <span class="rc-badge" id="passCount">4-PASS ENGINE</span>
-          </div>
-          <div class="state-loading" id="stateLoading">
-            <div class="scan-bar"><div class="scan-fill"></div></div>
-            <div class="scan-text" id="scanText">Starting 4-pass analysis…</div>
-            <div class="steps">
-              <div class="step" id="s1"><div class="step-dot"></div>Fetching live price & session data</div>
-              <div class="step" id="s2"><div class="step-dot"></div>Reading all timeframe charts</div>
-              <div class="step" id="s3"><div class="step-dot"></div>Institutional order flow analysis</div>
-              <div class="step" id="s4"><div class="step-dot"></div>Multi-timeframe alignment check</div>
-              <div class="step" id="s5"><div class="step-dot"></div>Entry architecture & quality gates</div>
-              <div class="step" id="s6"><div class="step-dot"></div>Final verdict & signal generation</div>
-            </div>
-          </div>
-          <div class="state-empty" id="stateEmpty">
-            <div class="empty-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="16" rx="3" stroke="#2e4a62" stroke-width="1.4"/><path d="M6 12l3-4 3 3 2-2.5" stroke="#2e4a62" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <div class="empty-title">Awaiting analysis</div>
-            <div class="empty-sub">Upload charts above then hit Analyze</div>
-          </div>
-          <div class="state-error" id="stateError"></div>
-          <div class="r-verdict" id="rVerdict">
-            <div class="verdict-row">
-              <div class="verdict-pill" id="vPill">BUY</div>
-              <div class="conf-block">
-                <div class="conf-num" id="vConf">—</div>
-                <div class="conf-lbl">Confidence</div>
-              </div>
-              <div class="grade-badge" id="vGrade">A</div>
-            </div>
-            <div class="verdict-summary" id="vSummary"></div>
-          </div>
-          <div class="r-context" id="rContext">
-            <div class="block-label" style="margin-bottom:8px">Market Context</div>
-            <div class="context-row" id="contextChips"></div>
-          </div>
-          <div class="r-levels" id="rLevels">
-            <div class="block-label">Trade Levels</div>
-            <div class="levels-grid">
-              <div class="lvl"><div class="lvl-label">Entry</div><div class="lvl-val e" id="lEntry">—</div></div>
-              <div class="lvl"><div class="lvl-label">Stop Loss</div><div class="lvl-val s" id="lSL">—</div></div>
-              <div class="lvl"><div class="lvl-label">TP1</div><div class="lvl-val t" id="lTP1">—</div></div>
-            </div>
-            <div class="levels-grid" style="margin-top:7px">
-              <div class="lvl"><div class="lvl-label">TP2</div><div class="lvl-val t" id="lTP2">—</div></div>
-              <div class="lvl"><div class="lvl-label">TP3</div><div class="lvl-val t" style="opacity:.6" id="lTP3">—</div></div>
-              <div class="lvl"><div class="lvl-label">Position Size</div><div class="lvl-val e" id="lSize">—</div></div>
-            </div>
-            <div id="rrPill" style="margin-top:9px"></div>
-          </div>
-          <div class="r-factors" id="rFactors">
-            <div class="block-label" style="margin-bottom:10px">Signal Factors</div>
-            <div id="factorsBody"></div>
-          </div>
-          <div class="r-patterns" id="rPatterns">
-            <div class="block-label" style="margin-bottom:9px">Detected Patterns</div>
-            <div class="ptags" id="patternTags"></div>
-          </div>
-          <div class="r-mgmt" id="rMgmt">
-            <div class="block-label">Trade Management</div>
-            <div class="mgmt-grid" id="mgmtGrid"></div>
-          </div>
-          <div class="r-analysis" id="rAnalysis"></div>
+      <div class="result-card" id="resultCard">
+        <div class="rc-head">
+          <div class="pulse"></div>
+          <span class="rc-title">AI Analysis Result</span>
+          <span class="rc-badge" id="passCount">4-PASS ENGINE</span>
         </div>
+        <div class="state-loading" id="stateLoading">
+          <div class="scan-bar"><div class="scan-fill"></div></div>
+          <div class="scan-text">Running 4-pass analysis…</div>
+          <div class="steps">
+            <div class="step" id="s1"><div class="step-dot"></div>Fetching live price & session data</div>
+            <div class="step" id="s2"><div class="step-dot"></div>Reading all timeframe charts</div>
+            <div class="step" id="s3"><div class="step-dot"></div>Institutional order flow analysis</div>
+            <div class="step" id="s4"><div class="step-dot"></div>Multi-timeframe alignment check</div>
+            <div class="step" id="s5"><div class="step-dot"></div>Entry architecture & quality gates</div>
+            <div class="step" id="s6"><div class="step-dot"></div>Generating final signal</div>
+          </div>
+        </div>
+        <div class="state-empty" id="stateEmpty">
+          <div class="empty-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="16" rx="3" stroke="#2e4a62" stroke-width="1.4"/><path d="M6 12l3-4 3 3 2-2.5" stroke="#2e4a62" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="empty-title">Awaiting chart</div>
+          <div class="empty-sub">Upload a screenshot then hit Analyze Charts</div>
+        </div>
+        <div class="state-error" id="stateError"></div>
+        <div class="r-verdict" id="rVerdict">
+          <div class="verdict-row">
+            <div class="verdict-pill" id="vPill">BUY</div>
+            <div class="conf-block"><div class="conf-num" id="vConf">—</div><div class="conf-lbl">Confidence</div></div>
+            <div class="grade-badge" id="vGrade">A</div>
+          </div>
+          <div class="verdict-summary" id="vSummary"></div>
+        </div>
+        <div class="r-levels" id="rLevels">
+          <div class="block-label">Trade Levels</div>
+          <div class="levels-grid">
+            <div class="lvl"><div class="lvl-label">Entry</div><div class="lvl-val e" id="lEntry">—</div></div>
+            <div class="lvl"><div class="lvl-label">Stop Loss</div><div class="lvl-val s" id="lSL">—</div></div>
+            <div class="lvl"><div class="lvl-label">TP1</div><div class="lvl-val t" id="lTP1">—</div></div>
+          </div>
+          <div class="levels-grid" style="margin-top:7px">
+            <div class="lvl"><div class="lvl-label">TP2</div><div class="lvl-val t" id="lTP2">—</div></div>
+            <div class="lvl"><div class="lvl-label">TP3</div><div class="lvl-val t" style="opacity:.6" id="lTP3">—</div></div>
+            <div class="lvl"><div class="lvl-label">Position Size</div><div class="lvl-val e" id="lSize">—</div></div>
+          </div>
+          <div id="rrPill" style="margin-top:9px"></div>
+        </div>
+        <div class="r-factors" id="rFactors">
+          <div class="block-label" style="margin-bottom:10px">Signal Factors</div>
+          <div id="factorsBody"></div>
+        </div>
+        <div class="r-patterns" id="rPatterns">
+          <div class="block-label" style="margin-bottom:9px">Detected Patterns</div>
+          <div class="ptags" id="patternTags"></div>
+        </div>
+        <div class="r-mgmt" id="rMgmt">
+          <div class="block-label">Trade Management</div>
+          <div class="mgmt-grid" id="mgmtGrid"></div>
+        </div>
+        <div class="r-analysis" id="rAnalysis"></div>
       </div>
-
-      <!-- Right: history -->
       <div>
         <div class="history-card">
           <div class="rc-head"><span class="rc-title">Recent Analyses</span><span class="rc-badge" id="histCount">0 charts</span></div>
@@ -425,30 +853,22 @@ footer{border-top:1px solid var(--border);padding:20px 28px;display:flex;align-i
   </div>
 </div>
 
-<!-- ═══════ JOURNAL PAGE ═══════ -->
+<!-- ════════ JOURNAL PAGE ════════ -->
 <div class="page" id="page-journal">
-  <div class="journal-wrap">
-    <div class="page-header">
-      <div class="logo-hex" style="width:32px;height:32px;font-size:12px">N</div>
-      <div style="flex:1">
-        <div class="page-title">Trade Journal</div>
-        <div class="page-sub">Track outcomes · measure win rate · improve over time</div>
-      </div>
-      <button class="btn btn-outline" onclick="loadJournal()" style="font-size:12px">↻ Refresh</button>
+  <div class="app-wrap">
+    <div class="app-header" style="display:flex;align-items:center;gap:14px">
+      <div style="flex:1"><div class="app-title">Trade Journal</div><div class="app-sub">Track outcomes · measure win rate · improve over time</div></div>
+      <button class="btn btn-ghost" onclick="loadJournal()" style="font-size:12px">↻ Refresh</button>
     </div>
-
-    <!-- Stats -->
-    <div class="stats-row" id="journalStats">
-      <div class="stat-box green"><div class="stat-label">Win Rate</div><div class="stat-val green" id="jWinRate">—</div><div class="stat-sub" id="jWinSub">No completed trades</div></div>
-      <div class="stat-box blue"><div class="stat-label">Total Signals</div><div class="stat-val blue" id="jTotal">0</div><div class="stat-sub" id="jOpen">0 open</div></div>
-      <div class="stat-box amber"><div class="stat-label">Avg R:R Achieved</div><div class="stat-val amber" id="jAvgRR">—</div><div class="stat-sub">actual vs expected</div></div>
-      <div class="stat-box red"><div class="stat-label">Best Grade Win%</div><div class="stat-val" id="jBestGrade" style="font-size:18px">—</div><div class="stat-sub" id="jBestGradeSub">no data yet</div></div>
+    <div class="j-stats-row">
+      <div class="j-stat g"><div class="j-stat-lbl">Win Rate</div><div class="j-stat-val g" id="jWinRate">—</div><div class="j-stat-sub" id="jWinSub">No completed trades</div></div>
+      <div class="j-stat b"><div class="j-stat-lbl">Total Signals</div><div class="j-stat-val b" id="jTotal">0</div><div class="j-stat-sub" id="jOpen">0 open</div></div>
+      <div class="j-stat a"><div class="j-stat-lbl">Avg R:R Achieved</div><div class="j-stat-val a" id="jAvgRR">—</div><div class="j-stat-sub">actual vs expected</div></div>
+      <div class="j-stat r"><div class="j-stat-lbl">Best Grade Win%</div><div class="j-stat-val" id="jBestGrade" style="font-size:18px">—</div><div class="j-stat-sub" id="jBestGradeSub">need 2+ trades per grade</div></div>
     </div>
-
-    <!-- Win rate bar -->
-    <div class="journal-panel">
-      <div class="journal-head"><span class="journal-title">Performance by Signal Grade</span></div>
-      <div class="grade-breakdown" id="gradeBreakdown">
+    <div class="j-panel">
+      <div class="j-head"><span class="j-title">Performance by Signal Grade</span></div>
+      <div class="grade-grid" id="gradeGrid">
         <div class="grade-cell"><div class="grade-letter Ap">A+</div><div class="grade-stats">No data</div></div>
         <div class="grade-cell"><div class="grade-letter A">A</div><div class="grade-stats">No data</div></div>
         <div class="grade-cell"><div class="grade-letter B">B</div><div class="grade-stats">No data</div></div>
@@ -456,13 +876,8 @@ footer{border-top:1px solid var(--border);padding:20px 28px;display:flex;align-i
         <div class="grade-cell"><div class="grade-letter D">D</div><div class="grade-stats">No data</div></div>
       </div>
     </div>
-
-    <!-- Trade log -->
-    <div class="journal-panel">
-      <div class="journal-head">
-        <span class="journal-title">Signal Log</span>
-        <span class="rc-badge" id="tradeCount">0 trades</span>
-      </div>
+    <div class="j-panel">
+      <div class="j-head"><span class="j-title">Signal Log</span><span class="rc-badge" id="tradeCount">0 trades</span></div>
       <div class="filter-row">
         <button class="filter-btn on" onclick="filterJournal(this,'all')">All</button>
         <button class="filter-btn" onclick="filterJournal(this,'open')">Open</button>
@@ -472,450 +887,230 @@ footer{border-top:1px solid var(--border);padding:20px 28px;display:flex;align-i
         <button class="filter-btn" onclick="filterJournal(this,'SELL')">Sell signals</button>
       </div>
       <div style="overflow-x:auto">
-        <table class="journal-table">
-          <thead>
-            <tr>
-              <th>Symbol</th>
-              <th>Signal</th>
-              <th>Grade</th>
-              <th>Conf</th>
-              <th>Entry</th>
-              <th>SL</th>
-              <th>TP1</th>
-              <th>R:R</th>
-              <th>Date</th>
-              <th>Outcome</th>
-              <th>Actual R:R</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="journalBody">
-            <tr><td colspan="12" class="no-trades">No trades logged yet. Run an analysis to start tracking.</td></tr>
-          </tbody>
+        <table class="j-table">
+          <thead><tr><th>Symbol</th><th>Signal</th><th>Grade</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP1</th><th>R:R</th><th>Date</th><th>Outcome</th><th>Actual R:R</th><th>Actions</th></tr></thead>
+          <tbody id="journalBody"><tr><td colspan="12" class="no-trades">No trades logged yet.</td></tr></tbody>
         </table>
       </div>
     </div>
   </div>
 </div>
 
-<footer>
-  <div class="footer-brand">Nex<span>Trade</span> AI</div>
-  <div class="footer-note">Not financial advice · Educational use only</div>
-</footer>
-
 <script>
 // ── STATE ──
-const charts = [null, null, null]; // {base64, mime, src, name}
-let tf = '1H';
-let analysisHistory = [];
-let stepTmr = null;
-let allTrades = [];
-let journalFilter = 'all';
-const $ = id => document.getElementById(id);
-const FCOLORS = {Trend:'#00e676',Volume:'#3d9eff',Momentum:'#ffb300',Structure:'#a78bfa','Price Action':'#00e5b4',Confluence:'#00e5b4','Risk/Reward':'#f59e0b'};
+const charts=[null,null,null];
+let tf='1H',analysisHistory=[],stepTmr=null,allTrades=[],journalFilter='all';
+const $=id=>document.getElementById(id);
+const FCOLORS={Trend:'#00e676',Volume:'#3d9eff',Momentum:'#ffb300',Structure:'#a78bfa','Price Action':'#00e5b4',Confluence:'#00e5b4','Risk/Reward':'#f59e0b'};
 
-// ── PAGES ──
-function showPage(id) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(n => n.classList.remove('active'));
-  $('page-' + id).classList.add('active');
-  const nb = $('nav-' + id); if (nb) nb.classList.add('active');
-  window.scrollTo(0, 0);
-  if (id === 'journal') loadJournal();
+// ── NAVIGATION ──
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  $('page-'+id).classList.add('active');
+  window.scrollTo(0,0);
+  if(id==='journal')loadJournal();
 }
 
-function setTF(btn, t) {
-  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('on'));
-  btn.classList.add('on'); tf = t;
+function scrollTo(id){
+  showPage('home');
+  setTimeout(()=>{
+    const el=document.getElementById(id);
+    if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+  },100);
 }
 
-// ── CHART SLOTS ──
-function triggerSlot(i) { if (!charts[i]) $('fileInput' + i).click(); }
+function toggleFaq(el){el.classList.toggle('open');}
 
-function loadFile(file, i) {
-  if (!file?.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    charts[i] = { base64: e.target.result.split(',')[1], mime: file.type, src: e.target.result, name: file.name || 'chart.png' };
-    renderSlot(i);
-    updateAnalyzeBar();
+// ── TF & SLOTS ──
+function setTF(btn,t){document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');tf=t;}
+function triggerSlot(i){if(!charts[i])$('fileInput'+i).click();}
+
+function loadFile(file,i){
+  if(!file?.type.startsWith('image/'))return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    charts[i]={base64:e.target.result.split(',')[1],mime:file.type,src:e.target.result,name:file.name||'chart.png'};
+    renderSlot(i);updateAnalyzeBar();
   };
   reader.readAsDataURL(file);
 }
 
-function renderSlot(i) {
-  const slot = $('slot' + i);
-  const c = charts[i];
-  if (!c) {
-    const labels = ['Primary Chart', 'Higher Timeframe', 'Weekly / HTF'];
-    const hints  = ['Click or drag', 'Optional — 4H or Daily', 'Optional — Weekly'];
-    const icons  = ['📊','📈','🗓'];
+function renderSlot(i){
+  const slot=$('slot'+i);
+  const c=charts[i];
+  const labels=['Primary Chart','Higher Timeframe','Weekly / HTF'];
+  const hints=['Click or drag','Optional — 4H or Daily','Optional — Weekly'];
+  const icons=['📊','📈','🗓'];
+  if(!c){
     slot.classList.remove('filled');
-    slot.innerHTML = `<div class="slot-label">${labels[i]}</div><div class="slot-icon">${icons[i]}</div><div class="slot-hint">${hints[i]}</div>`;
-    slot.onclick = () => triggerSlot(i);
-  } else {
-    slot.classList.add('filled');
-    slot.onclick = null;
-    slot.innerHTML = `
-      <img class="slot-img" src="${c.src}" alt="chart">
-      <div class="slot-footer">
-        <span class="slot-name">${c.name}</span>
-        <button class="slot-clear" onclick="event.stopPropagation();clearSlot(${i})">✕</button>
-      </div>`;
+    slot.innerHTML=`<div class="slot-label">${labels[i]}</div><div class="slot-icon">${icons[i]}</div><div class="slot-hint">${hints[i]}</div>`;
+    slot.onclick=()=>triggerSlot(i);
+  }else{
+    slot.classList.add('filled');slot.onclick=null;
+    slot.innerHTML=`<img class="slot-img" src="${c.src}" alt="chart"><div class="slot-footer"><span class="slot-name">${c.name}</span><button class="slot-clear" onclick="event.stopPropagation();clearSlot(${i})">✕</button></div>`;
   }
 }
 
-function clearSlot(i) { charts[i] = null; renderSlot(i); updateAnalyzeBar(); }
+function clearSlot(i){charts[i]=null;renderSlot(i);updateAnalyzeBar();}
 
-function updateAnalyzeBar() {
-  const count = charts.filter(Boolean).length;
-  const btn = $('analyzeBtn');
-  const status = $('analyze-status');
-  const sub = $('analyze-sub');
-  if (count === 0) {
-    btn.disabled = true;
-    status.textContent = 'Upload at least 1 chart to begin';
-    sub.textContent = 'Add multiple timeframes for higher accuracy';
-  } else {
-    btn.disabled = false;
-    status.textContent = `${count} chart${count > 1 ? 's' : ''} ready — ${count === 1 ? 'single TF analysis' : count === 2 ? '2-timeframe analysis' : '3-timeframe analysis (maximum accuracy)'}`;
-    sub.textContent = count < 3 ? `Add ${3-count} more timeframe${3-count>1?'s':''} for even better accuracy` : 'Maximum accuracy mode — all 3 timeframes loaded';
-  }
+function updateAnalyzeBar(){
+  const count=charts.filter(Boolean).length;
+  const btn=$('analyzeBtn');
+  if(count===0){btn.disabled=true;$('analyze-status').textContent='Upload at least 1 chart to begin';$('analyze-sub').textContent='Add multiple timeframes for higher accuracy';}
+  else{btn.disabled=false;$('analyze-status').textContent=`${count} chart${count>1?'s':''} ready — ${count===1?'single TF analysis':count===2?'2-timeframe analysis':'3-timeframe (maximum accuracy)'}`;$('analyze-sub').textContent=count<3?`Add ${3-count} more timeframe${3-count>1?'s':''} for even better accuracy`:'All 3 timeframes loaded — maximum accuracy mode';}
 }
 
-function onFileSelect(e, i) { loadFile(e.target.files[0], i); e.target.value = ''; }
-function onDragOver(e, i) { e.preventDefault(); $('slot'+i).classList.add('drag'); }
-function onDragLeave(i) { $('slot'+i).classList.remove('drag'); }
-function onDrop(e, i) { e.preventDefault(); $('slot'+i).classList.remove('drag'); loadFile(e.dataTransfer.files[0], i); }
-
-// Paste goes to slot 0
-document.addEventListener('paste', e => {
-  for (const item of e.clipboardData.items) {
-    if (item.type.startsWith('image/')) { loadFile(item.getAsFile(), 0); break; }
-  }
-});
-
-// Global drag
-document.addEventListener('dragover', e => e.preventDefault());
+function onFileSelect(e,i){loadFile(e.target.files[0],i);e.target.value='';}
+function onDragOver(e,i){e.preventDefault();$('slot'+i).classList.add('drag');}
+function onDragLeave(i){$('slot'+i).classList.remove('drag');}
+function onDrop(e,i){e.preventDefault();$('slot'+i).classList.remove('drag');loadFile(e.dataTransfer.files[0],i);}
+document.addEventListener('paste',e=>{for(const item of e.clipboardData.items){if(item.type.startsWith('image/')){loadFile(item.getAsFile(),0);break;}}});
+document.addEventListener('dragover',e=>e.preventDefault());
 
 // ── UI STATES ──
-function resetResult() {
-  $('stateLoading').classList.remove('on');
-  $('stateEmpty').classList.remove('hidden');
-  $('stateError').classList.remove('on');
-  ['rVerdict','rContext','rLevels','rFactors','rPatterns','rMgmt','rAnalysis'].forEach(id => $(id).classList.remove('on'));
+function resetResult(){
+  $('stateLoading').classList.remove('on');$('stateEmpty').classList.remove('hidden');$('stateError').classList.remove('on');
+  ['rVerdict','rLevels','rFactors','rPatterns','rMgmt','rAnalysis'].forEach(id=>$(id).classList.remove('on'));
   $('resultCard').classList.remove('glow');
 }
 
-function startLoading(chartCount) {
-  $('stateEmpty').classList.add('hidden');
-  $('stateError').classList.remove('on');
-  ['rVerdict','rContext','rLevels','rFactors','rPatterns','rMgmt','rAnalysis'].forEach(id => $(id).classList.remove('on'));
-  $('resultCard').classList.remove('glow');
-  $('stateLoading').classList.add('on');
-  $('passCount').textContent = chartCount > 1 ? `${chartCount}-CHART + 4-PASS` : '4-PASS ENGINE';
-  ['s1','s2','s3','s4','s5','s6'].forEach(s => { $(s).className = 'step'; });
-  let i = 0;
-  if (stepTmr) clearInterval(stepTmr);
-  stepTmr = setInterval(() => {
-    if (i > 0) $('s'+i).className = 'step done';
-    if (i < 6) $('s'+(i+1)).className = 'step on';
-    i++; if (i >= 6) clearInterval(stepTmr);
-  }, 5000);
+function startLoading(count){
+  $('stateEmpty').classList.add('hidden');$('stateError').classList.remove('on');
+  ['rVerdict','rLevels','rFactors','rPatterns','rMgmt','rAnalysis'].forEach(id=>$(id).classList.remove('on'));
+  $('resultCard').classList.remove('glow');$('stateLoading').classList.add('on');
+  $('passCount').textContent=count>1?`${count}-CHART + 4-PASS`:'4-PASS ENGINE';
+  ['s1','s2','s3','s4','s5','s6'].forEach(s=>{$(s).className='step';});
+  let i=0;if(stepTmr)clearInterval(stepTmr);
+  stepTmr=setInterval(()=>{if(i>0)$('s'+i).className='step done';if(i<6)$('s'+(i+1)).className='step on';i++;if(i>=6)clearInterval(stepTmr);},5000);
 }
 
-function showErr(msg) {
-  if (stepTmr) clearInterval(stepTmr);
-  $('stateLoading').classList.remove('on');
-  $('stateEmpty').classList.add('hidden');
-  $('stateError').innerHTML = '<strong>Analysis failed</strong><br>' + msg;
-  $('stateError').classList.add('on');
+function showErr(msg){
+  if(stepTmr)clearInterval(stepTmr);$('stateLoading').classList.remove('on');$('stateEmpty').classList.add('hidden');
+  $('stateError').innerHTML='<strong>Analysis failed</strong><br>'+msg;$('stateError').classList.add('on');
 }
 
-function showResult(d) {
-  if (stepTmr) clearInterval(stepTmr);
-  $('stateLoading').classList.remove('on');
-  $('resultCard').classList.add('glow');
-
-  // Verdict
-  const vp = $('vPill');
-  vp.textContent = d.verdict || 'WAIT';
-  vp.className = 'verdict-pill ' + (d.verdict || 'WAIT');
-  $('rVerdict').classList.add('on');
-  const c = parseInt(d.confidence) || 60;
-  $('vConf').textContent = c + '%';
-  $('vConf').className = 'conf-num ' + (c >= 75 ? 'hi' : c >= 55 ? 'mid' : 'lo');
-  const gb = $('vGrade');
-  const g = (d.signal_grade || 'B').replace('+','p');
-  gb.textContent = d.signal_grade || 'B';
-  gb.className = 'grade-badge ' + g;
-  $('vSummary').textContent = d.summary || '';
-
-  // Context chips
-  if (d.session || d._meta?.market_context) {
-    const ctx = d._meta?.market_context || {};
-    const chips = [];
-    if (ctx.session) chips.push({ text: ctx.session.split('(')[0].trim(), cls: 'neutral' });
-    if (d.price_position) chips.push({ text: d.price_position, cls: d.price_position === 'Discount' ? 'good' : d.price_position === 'Premium' ? 'warn' : 'neutral' });
-    if (d.market_phase) chips.push({ text: d.market_phase, cls: 'neutral' });
-    if (d._meta?.live_price) chips.push({ text: 'Live: $' + d._meta.live_price.price, cls: 'good' });
-    if (chips.length) {
-      $('contextChips').innerHTML = chips.map(c => `<span class="ctx-chip ${c.cls}">${c.text}</span>`).join('');
-      $('rContext').classList.add('on');
-    }
-  }
-
-  // Levels
-  if (d.entry) {
-    $('lEntry').textContent = d.entry;
-    $('lSL').textContent = d.sl || 'N/A';
-    $('lTP1').textContent = d.tp1 || 'N/A';
-    $('lTP2').textContent = d.tp2 || '—';
-    $('lTP3').textContent = d.tp3 || '—';
-    $('lSize').textContent = d.position_size || 'Max 1%';
-    $('rrPill').innerHTML = d.rr_tp1 ? `<div class="rr-pill">⚡ R:R ${d.rr_tp1}${d.rr_tp2 ? ' → ' + d.rr_tp2 : ''}${d.rrLabel ? ' · ' + d.rrLabel : ''}</div>` : '';
+function showResult(d){
+  if(stepTmr)clearInterval(stepTmr);$('stateLoading').classList.remove('on');$('resultCard').classList.add('glow');
+  const vp=$('vPill');vp.textContent=d.verdict||'WAIT';vp.className='verdict-pill '+(d.verdict||'WAIT');$('rVerdict').classList.add('on');
+  const c=parseInt(d.confidence)||60;$('vConf').textContent=c+'%';$('vConf').className='conf-num '+(c>=75?'hi':c>=55?'mid':'lo');
+  const g=(d.signal_grade||'B').replace('+','p');$('vGrade').textContent=d.signal_grade||'B';$('vGrade').className='grade-badge '+g;
+  $('vSummary').textContent=d.summary||'';
+  if(d.entry){
+    $('lEntry').textContent=d.entry;$('lSL').textContent=d.sl||'N/A';$('lTP1').textContent=d.tp1||'N/A';$('lTP2').textContent=d.tp2||'—';$('lTP3').textContent=d.tp3||'—';$('lSize').textContent=d.position_size||'Max 1%';
+    $('rrPill').innerHTML=d.rr_tp1?`<div class="rr-pill">⚡ R:R ${d.rr_tp1}${d.rr_tp2?' → '+d.rr_tp2:''}${d.rrLabel?' · '+d.rrLabel:''}</div>`:'';
     $('rLevels').classList.add('on');
   }
-
-  // Factors
-  if (d.factors?.length) {
-    $('factorsBody').innerHTML = d.factors.map(f => `
-      <div class="factor-row">
-        <div class="f-label">${f.name}</div>
-        <div class="f-bar"><div class="f-fill" id="ff_${f.name.replace(/\W/g,'_')}" style="background:${FCOLORS[f.name]||'#00e5b4'}"></div></div>
-        <div class="f-score">${f.score}</div>
-        ${f.note ? `<div class="f-note">${f.note}</div>` : ''}
-      </div>`).join('');
+  if(d.factors?.length){
+    $('factorsBody').innerHTML=d.factors.map(f=>`<div class="factor-row"><div class="f-label">${f.name}</div><div class="f-bar"><div class="f-fill" id="ff_${f.name.replace(/\W/g,'_')}" style="background:${FCOLORS[f.name]||'#00e5b4'}"></div></div><div class="f-score">${f.score}</div>${f.note?`<div class="f-note">${f.note}</div>`:''}</div>`).join('');
     $('rFactors').classList.add('on');
-    setTimeout(() => d.factors.forEach(f => {
-      const el = $('ff_' + f.name.replace(/\W/g,'_'));
-      if (el) el.style.width = Math.min(100, f.score || 50) + '%';
-    }), 80);
+    setTimeout(()=>d.factors.forEach(f=>{const el=$('ff_'+f.name.replace(/\W/g,'_'));if(el)el.style.width=Math.min(100,f.score||50)+'%';}),80);
   }
-
-  // Patterns
-  if (d.patterns?.length) {
-    $('patternTags').innerHTML = d.patterns.map(p =>
-      `<div class="ptag ${p.type||''}">${p.name}${p.reliability ? ' · '+p.reliability : ''}</div>`
-    ).join('');
-    $('rPatterns').classList.add('on');
+  if(d.patterns?.length){$('patternTags').innerHTML=d.patterns.map(p=>`<div class="ptag ${p.type||''}">${p.name}${p.reliability?' · '+p.reliability:''}</div>`).join('');$('rPatterns').classList.add('on');}
+  if(d.trade_management){
+    const tm=d.trade_management;
+    const items=[{label:'Move to BE',val:tm.move_to_be||tm.move_sl_to_be},{label:'Partial at TP1',val:tm.partial_at_tp1||tm.partial_tp1},{label:'Trail method',val:tm.trail_method},{label:'Max hold',val:tm.max_hold||tm.max_hold_time}].filter(i=>i.val&&i.val!=='—');
+    if(items.length){$('mgmtGrid').innerHTML=items.map(i=>`<div class="mgmt-item"><div class="mgmt-label">${i.label}</div><div class="mgmt-val">${i.val}</div></div>`).join('');$('rMgmt').classList.add('on');}
   }
-
-  // Trade management
-  if (d.trade_management) {
-    const tm = d.trade_management;
-    const items = [
-      { label: 'Move to BE', val: tm.move_to_be || tm.move_sl_to_be || '—' },
-      { label: 'Partial at TP1', val: tm.partial_at_tp1 || tm.partial_tp1 || '—' },
-      { label: 'Trail method', val: tm.trail_method || tm.trail_after_tp1 || '—' },
-      { label: 'Max hold time', val: tm.max_hold || tm.max_hold_time || '—' }
-    ].filter(i => i.val && i.val !== '—');
-    if (items.length) {
-      $('mgmtGrid').innerHTML = items.map(i => `<div class="mgmt-item"><div class="mgmt-label">${i.label}</div><div class="mgmt-val">${i.val}</div></div>`).join('');
-      $('rMgmt').classList.add('on');
-    }
-  }
-
-  // Full analysis
-  if (d.fullAnalysis) { $('rAnalysis').innerHTML = d.fullAnalysis; $('rAnalysis').classList.add('on'); }
-
+  if(d.fullAnalysis){$('rAnalysis').innerHTML=d.fullAnalysis;$('rAnalysis').classList.add('on');}
   addHistory(d);
 }
 
 // ── ANALYZE ──
-async function runAnalysis() {
-  const chartList = charts.filter(Boolean);
-  if (!chartList.length) return;
-  const sym = $('sym').value.trim() || 'Unknown';
-  $('analyzeBtn').disabled = true;
-  startLoading(chartList.length);
-
-  try {
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        charts: chartList.map((c, i) => ({
-          base64: c.base64,
-          mime: c.mime,
-          label: i === 0 ? tf : i === 1 ? 'Higher TF' : 'Weekly HTF'
-        })),
-        symbol: sym,
-        timeframe: tf
-      })
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || `Server error ${res.status}`);
-    json.symbol = sym; json.tf = tf; json.ts = Date.now();
-    json.thumbSrc = chartList[0].src;
+async function runAnalysis(){
+  const chartList=charts.filter(Boolean);
+  if(!chartList.length)return;
+  const sym=$('sym').value.trim()||'Unknown';
+  $('analyzeBtn').disabled=true;startLoading(chartList.length);
+  try{
+    const res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({charts:chartList.map((c,i)=>({base64:c.base64,mime:c.mime,label:i===0?tf:i===1?'Higher TF':'Weekly HTF'})),symbol:sym,timeframe:tf})});
+    const json=await res.json();
+    if(!res.ok)throw new Error(json.error||`Server error ${res.status}`);
+    json.symbol=sym;json.tf=tf;json.ts=Date.now();json.thumbSrc=chartList[0].src;
     showResult(json);
-  } catch (err) {
-    showErr(err.message || 'Unknown error');
-  }
-  $('analyzeBtn').disabled = false;
+  }catch(err){showErr(err.message||'Unknown error');}
+  $('analyzeBtn').disabled=false;
 }
 
 // ── HISTORY ──
-function addHistory(d) {
-  analysisHistory.unshift(d);
-  if (analysisHistory.length > 8) analysisHistory.pop();
-  $('histCount').textContent = analysisHistory.length + ' chart' + (analysisHistory.length !== 1 ? 's' : '');
-  $('histList').innerHTML = analysisHistory.map((h, i) => {
-    const secs = Math.round((Date.now() - h.ts) / 1000);
-    const t = secs < 60 ? 'Just now' : secs < 3600 ? Math.round(secs/60) + 'm ago' : Math.round(secs/3600) + 'h ago';
-    return `<div class="hist-item" onclick="showResult(analysisHistory[${i}])">
-      <img class="hist-thumb" src="${h.thumbSrc||''}" alt="">
-      <div class="hist-info"><div class="hist-sym">${h.symbol} · ${h.tf} ${h.signal_grade ? '· '+h.signal_grade : ''}</div><div class="hist-time">${t} · ${h.confidence||'?'}% conf</div></div>
-      <div class="hist-v ${h.verdict||'WAIT'}">${h.verdict||'?'}</div>
-    </div>`;
+function addHistory(d){
+  analysisHistory.unshift(d);if(analysisHistory.length>8)analysisHistory.pop();
+  $('histCount').textContent=analysisHistory.length+' chart'+(analysisHistory.length!==1?'s':'');
+  $('histList').innerHTML=analysisHistory.map((h,i)=>{
+    const secs=Math.round((Date.now()-h.ts)/1000);
+    const t=secs<60?'Just now':secs<3600?Math.round(secs/60)+'m ago':Math.round(secs/3600)+'h ago';
+    return `<div class="hist-item" onclick="showResult(analysisHistory[${i}])"><img class="hist-thumb" src="${h.thumbSrc||''}" alt=""><div class="hist-info"><div class="hist-sym">${h.symbol} · ${h.tf}${h.signal_grade?' · '+h.signal_grade:''}</div><div class="hist-time">${t} · ${h.confidence||'?'}% conf</div></div><div class="hist-v ${h.verdict||'WAIT'}">${h.verdict||'?'}</div></div>`;
   }).join('');
+}
+
+// ── EMAIL SUBSCRIBE ──
+async function subscribeEmail(){
+  const email=$('emailInput').value.trim();
+  if(!email||!email.includes('@')){$('emailInput').style.borderColor='var(--red)';return;}
+  $('emailBtn').disabled=true;$('emailBtn').textContent='Subscribing…';
+  try{
+    await fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    $('emailSuccess').classList.add('show');$('emailBtn').textContent='Subscribed ✓';
+  }catch{
+    $('emailBtn').disabled=false;$('emailBtn').textContent='Get Free Alerts';
+  }
 }
 
 // ── JOURNAL ──
-async function loadJournal() {
-  try {
-    const res = await fetch('/api/trades');
-    allTrades = await res.json();
-    renderJournalStats();
-    renderJournalTable();
-  } catch {
-    allTrades = [];
-    renderJournalStats();
-    renderJournalTable();
-  }
+async function loadJournal(){
+  try{const res=await fetch('/api/trades');allTrades=await res.json();}catch{allTrades=[];}
+  renderJournalStats();renderJournalTable();
 }
 
-function renderJournalStats() {
-  const completed = allTrades.filter(t => t.outcome);
-  const wins   = completed.filter(t => t.outcome === 'win').length;
-  const losses = completed.filter(t => t.outcome === 'loss').length;
-  const open   = allTrades.filter(t => !t.outcome).length;
-  const winRate = completed.length ? Math.round(wins / completed.length * 100) : null;
-  const avgRR  = completed.filter(t => t.actual_rr).length
-    ? (completed.filter(t => t.actual_rr).reduce((s,t) => s + parseFloat(t.actual_rr||0), 0) / completed.filter(t => t.actual_rr).length).toFixed(2)
-    : null;
-
-  $('jTotal').textContent = allTrades.length;
-  $('jOpen').textContent  = open + ' open';
-  $('jWinRate').textContent = winRate !== null ? winRate + '%' : '—';
-  $('jWinSub').textContent  = completed.length ? `${wins}W / ${losses}L (${completed.length} closed)` : 'No completed trades';
-  $('jAvgRR').textContent   = avgRR ? '1:' + avgRR : '—';
-  $('tradeCount').textContent = allTrades.length + ' trades';
-
-  // Grade breakdown
-  const grades = ['A+','A','B','C','D'];
-  const byGrade = {};
-  grades.forEach(g => { byGrade[g] = { wins: 0, losses: 0, open: 0 }; });
-  allTrades.forEach(t => {
-    const g = t.grade || 'B';
-    if (!byGrade[g]) byGrade[g] = { wins:0, losses:0, open:0 };
-    if (t.outcome === 'win') byGrade[g].wins++;
-    else if (t.outcome === 'loss') byGrade[g].losses++;
-    else byGrade[g].open++;
-  });
-
-  $('gradeBreakdown').innerHTML = grades.map(g => {
-    const d = byGrade[g] || {wins:0,losses:0,open:0};
-    const total = d.wins + d.losses;
-    const wr = total ? Math.round(d.wins/total*100) : null;
-    const cls = g.replace('+','p');
-    return `<div class="grade-cell">
-      <div class="grade-letter ${cls}">${g}</div>
-      <div class="grade-stats">
-        ${wr !== null ? `<strong style="color:${wr>=60?'var(--green)':wr>=40?'var(--amber)':'var(--red)'}">${wr}% WR</strong><br>` : 'No data<br>'}
-        ${d.wins}W / ${d.losses}L${d.open ? ' / '+d.open+' open' : ''}
-      </div>
-    </div>`;
+function renderJournalStats(){
+  const completed=allTrades.filter(t=>t.outcome);
+  const wins=completed.filter(t=>t.outcome==='win').length;
+  const losses=completed.filter(t=>t.outcome==='loss').length;
+  const open=allTrades.filter(t=>!t.outcome).length;
+  const winRate=completed.length?Math.round(wins/completed.length*100):null;
+  const avgRR=completed.filter(t=>t.actual_rr).length?(completed.filter(t=>t.actual_rr).reduce((s,t)=>s+parseFloat(t.actual_rr||0),0)/completed.filter(t=>t.actual_rr).length).toFixed(2):null;
+  $('jTotal').textContent=allTrades.length;$('jOpen').textContent=open+' open';
+  $('jWinRate').textContent=winRate!==null?winRate+'%':'—';$('jWinSub').textContent=completed.length?`${wins}W / ${losses}L (${completed.length} closed)`:'No completed trades';
+  $('jAvgRR').textContent=avgRR?'1:'+avgRR:'—';$('tradeCount').textContent=allTrades.length+' trades';
+  const grades=['A+','A','B','C','D'];
+  const byGrade={};grades.forEach(g=>{byGrade[g]={wins:0,losses:0,open:0};});
+  allTrades.forEach(t=>{const g=t.grade||'B';if(!byGrade[g])byGrade[g]={wins:0,losses:0,open:0};if(t.outcome==='win')byGrade[g].wins++;else if(t.outcome==='loss')byGrade[g].losses++;else byGrade[g].open++;});
+  $('gradeGrid').innerHTML=grades.map(g=>{
+    const d=byGrade[g]||{wins:0,losses:0,open:0};const total=d.wins+d.losses;const wr=total?Math.round(d.wins/total*100):null;const cls=g.replace('+','p');
+    return `<div class="grade-cell"><div class="grade-letter ${cls}">${g}</div><div class="grade-stats">${wr!==null?`<strong style="color:${wr>=60?'var(--green)':wr>=40?'var(--amber)':'var(--red)'}">${wr}% WR</strong><br>`:'No data<br>'}${d.wins}W / ${d.losses}L${d.open?' / '+d.open+' open':''}</div></div>`;
   }).join('');
-
-  // Best grade
-  let bestGrade = null, bestWR = 0;
-  grades.forEach(g => {
-    const d = byGrade[g] || {wins:0,losses:0};
-    const total = d.wins + d.losses;
-    if (total >= 2) {
-      const wr = Math.round(d.wins/total*100);
-      if (wr > bestWR) { bestWR = wr; bestGrade = g; }
-    }
-  });
-  $('jBestGrade').textContent = bestGrade ? bestGrade : '—';
-  $('jBestGradeSub').textContent = bestGrade ? `${bestWR}% win rate (grade ${bestGrade})` : 'need 2+ trades per grade';
+  let bestGrade=null,bestWR=0;grades.forEach(g=>{const d=byGrade[g]||{wins:0,losses:0};const total=d.wins+d.losses;if(total>=2){const wr=Math.round(d.wins/total*100);if(wr>bestWR){bestWR=wr;bestGrade=g;}}});
+  $('jBestGrade').textContent=bestGrade||'—';$('jBestGradeSub').textContent=bestGrade?`${bestWR}% win rate (grade ${bestGrade})`:'need 2+ trades per grade';
 }
 
-function filterJournal(btn, filter) {
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('on'));
-  btn.classList.add('on');
-  journalFilter = filter;
-  renderJournalTable();
-}
+function filterJournal(btn,filter){document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');journalFilter=filter;renderJournalTable();}
 
-function renderJournalTable() {
-  let trades = [...allTrades].reverse();
-  if (journalFilter === 'open')  trades = trades.filter(t => !t.outcome);
-  if (journalFilter === 'win')   trades = trades.filter(t => t.outcome === 'win');
-  if (journalFilter === 'loss')  trades = trades.filter(t => t.outcome === 'loss');
-  if (journalFilter === 'BUY')   trades = trades.filter(t => t.verdict === 'BUY');
-  if (journalFilter === 'SELL')  trades = trades.filter(t => t.verdict === 'SELL');
-
-  if (!trades.length) {
-    $('journalBody').innerHTML = `<tr><td colspan="12" class="no-trades">No trades match this filter.</td></tr>`;
-    return;
-  }
-
-  $('journalBody').innerHTML = trades.map(t => {
-    const date = new Date(t.timestamp).toLocaleDateString('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    const outcome = t.outcome || 'open';
-    const gradeClass = (t.grade||'B').replace('+','p');
-    return `<tr>
-      <td class="j-sym">${t.symbol}</td>
-      <td><span class="j-badge ${t.verdict}">${t.verdict}</span></td>
-      <td><span class="j-badge ${gradeClass}">${t.grade||'?'}</span></td>
-      <td>${t.confidence||'?'}%</td>
-      <td style="color:var(--blue);font-family:var(--mono)">${t.entry||'—'}</td>
-      <td style="color:var(--red);font-family:var(--mono)">${t.sl||'—'}</td>
-      <td style="color:var(--green);font-family:var(--mono)">${t.tp1||'—'}</td>
-      <td style="font-family:var(--mono)">${t.rr_tp1||'—'}</td>
-      <td style="font-family:var(--mono);font-size:10px">${date}</td>
-      <td>
-        <select class="outcome-select" onchange="updateOutcome('${t.id}',this.value,'${t.actual_rr||''}')">
-          <option value="" ${!t.outcome?'selected':''}>Open</option>
-          <option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option>
-          <option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option>
-        </select>
-      </td>
-      <td><input class="rr-input" type="number" step="0.1" placeholder="R:R" value="${t.actual_rr||''}" id="rr_${t.id}" min="0" max="20"></td>
-      <td>
-        <button class="save-btn" onclick="saveTrade('${t.id}')">Save</button>
-        <button class="del-btn" onclick="deleteTrade('${t.id}')">✕</button>
-      </td>
-    </tr>`;
+function renderJournalTable(){
+  let trades=[...allTrades].reverse();
+  if(journalFilter==='open')trades=trades.filter(t=>!t.outcome);
+  if(journalFilter==='win')trades=trades.filter(t=>t.outcome==='win');
+  if(journalFilter==='loss')trades=trades.filter(t=>t.outcome==='loss');
+  if(journalFilter==='BUY')trades=trades.filter(t=>t.verdict==='BUY');
+  if(journalFilter==='SELL')trades=trades.filter(t=>t.verdict==='SELL');
+  if(!trades.length){$('journalBody').innerHTML=`<tr><td colspan="12" class="no-trades">No trades match this filter.</td></tr>`;return;}
+  $('journalBody').innerHTML=trades.map(t=>{
+    const date=new Date(t.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const gc=(t.grade||'B').replace('+','p');
+    return `<tr><td class="j-sym">${t.symbol}</td><td><span class="j-badge ${t.verdict}">${t.verdict}</span></td><td><span class="j-badge ${gc}">${t.grade||'?'}</span></td><td>${t.confidence||'?'}%</td><td style="color:var(--blue)">${t.entry||'—'}</td><td style="color:var(--red)">${t.sl||'—'}</td><td style="color:var(--green)">${t.tp1||'—'}</td><td>${t.rr_tp1||'—'}</td><td style="font-size:10px">${date}</td><td><select class="oc-sel" onchange=""><option value="" ${!t.outcome?'selected':''}>Open</option><option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option><option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option></select></td><td><input class="rr-inp" type="number" step="0.1" placeholder="R:R" value="${t.actual_rr||''}" id="rr_${t.id}"></td><td><button class="save-b" onclick="saveTrade('${t.id}',this)">Save</button><button class="del-b" onclick="deleteTrade('${t.id}')">✕</button></td></tr>`;
   }).join('');
 }
 
-async function updateOutcome(id, outcome, rr) {
-  // Stored locally, saved on button click
+async function saveTrade(id,btn){
+  const row=btn.closest('tr');
+  const outcome=row.querySelector('.oc-sel').value;
+  const rr=parseFloat($('rr_'+id)?.value)||null;
+  try{await fetch(`/api/trades/${id}/outcome`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({outcome,actual_rr:rr})});await loadJournal();}
+  catch(err){alert('Failed: '+err.message);}
 }
 
-async function saveTrade(id) {
-  const row = document.querySelector(`[id="rr_${id}"]`).closest('tr');
-  const outcomeEl = row.querySelector('.outcome-select');
-  const rrEl = $('rr_' + id);
-  try {
-    await fetch(`/api/trades/${id}/outcome`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outcome: outcomeEl.value, actual_rr: parseFloat(rrEl.value) || null })
-    });
-    await loadJournal();
-  } catch (err) { alert('Failed to save: ' + err.message); }
-}
-
-async function deleteTrade(id) {
-  if (!confirm('Delete this trade from the journal?')) return;
-  try {
-    await fetch(`/api/trades/${id}`, { method: 'DELETE' });
-    await loadJournal();
-  } catch (err) { alert('Failed to delete: ' + err.message); }
+async function deleteTrade(id){
+  if(!confirm('Delete this trade?'))return;
+  try{await fetch(`/api/trades/${id}`,{method:'DELETE'});await loadJournal();}
+  catch(err){alert('Failed: '+err.message);}
 }
 
 // ── INIT ──
