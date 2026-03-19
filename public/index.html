@@ -664,6 +664,8 @@ function showResult(d){
   }
   if(d.fullAnalysis){$('rAnalysis').innerHTML=d.fullAnalysis;$('rAnalysis').classList.add('on');}
   addHistory(d);
+  // Save to local journal automatically
+  if(d.symbol) saveTradeLocally(d, d.symbol, d.tf||tf);
 }
 
 // ── ANALYZE ──
@@ -697,15 +699,39 @@ function addHistory(d){
   }).join('');
 }
 
-// ── JOURNAL ──
-async function loadJournal(){
-  try{
-    const headers=currentUser?{'x-user-email':currentUser.email}:{};
-    const r=await fetch('/api/trades',{headers});
-    allTrades=await r.json();
-  }catch{allTrades=[];}
-  renderJournalStats();renderJournalTable();
+// ── JOURNAL — uses localStorage so trades never disappear ──
+function getStoredTrades() {
+  try { return JSON.parse(localStorage.getItem('nt_trades')||'[]'); }
+  catch { return []; }
 }
+function setStoredTrades(trades) {
+  localStorage.setItem('nt_trades', JSON.stringify(trades));
+}
+
+// Auto-save signal to local journal when analysis completes
+function saveTradeLocally(result, sym, tf) {
+  if(result.verdict !== 'BUY' && result.verdict !== 'SELL') return;
+  const trades = getStoredTrades();
+  const id = Date.now().toString();
+  trades.push({
+    id, symbol:sym, timeframe:tf,
+    verdict:result.verdict, grade:result.signal_grade,
+    confidence:result.confidence, entry:result.entry,
+    sl:result.sl, tp1:result.tp1, tp2:result.tp2,
+    rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(),
+    outcome:null, actual_rr:null
+  });
+  setStoredTrades(trades);
+}
+
+async function loadJournal(){
+  // Load from localStorage (always works, never resets)
+  allTrades = getStoredTrades();
+  renderJournalStats();
+  renderJournalTable();
+}
+
+function filterJournal(btn,filter){document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');journalFilter=filter;renderJournalTable();}
 
 function renderJournalStats(){
   const completed=allTrades.filter(t=>t.outcome);
@@ -725,8 +751,6 @@ function renderJournalStats(){
   let bestGrade=null,bestWR=0;grades.forEach(g=>{const d=byGrade[g]||{wins:0,losses:0};const total=d.wins+d.losses;if(total>=2){const wr=Math.round(d.wins/total*100);if(wr>bestWR){bestWR=wr;bestGrade=g;}}});
   $('jBestGrade').textContent=bestGrade||'—';$('jBestSub').textContent=bestGrade?`${bestWR}% win rate (${bestGrade})`:'need 2+ per grade';
 }
-
-function filterJournal(btn,filter){document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');journalFilter=filter;renderJournalTable();}
 
 function renderJournalTable(){
   let trades=[...allTrades].reverse();
@@ -749,25 +773,35 @@ function renderJournalTable(){
       <td style="color:var(--green);font-family:var(--mono)">${t.tp1||'—'}</td>
       <td style="font-family:var(--mono)">${t.rr_tp1||'—'}</td>
       <td style="font-family:var(--mono);font-size:10px">${date}</td>
-      <td><select class="oc-sel"><option value="" ${!t.outcome?'selected':''}>Open</option><option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option><option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option></select></td>
+      <td><select class="oc-sel" id="oc_${t.id}"><option value="" ${!t.outcome?'selected':''}>Open</option><option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option><option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option></select></td>
       <td><input class="rr-inp" type="number" step="0.1" placeholder="R:R" value="${t.actual_rr||''}" id="rr_${t.id}"></td>
-      <td><button class="save-b" onclick="saveTrade('${t.id}',this)">Save</button><button class="del-b" onclick="deleteTrade('${t.id}')">✕</button></td>
+      <td><button class="save-b" onclick="saveTrade('${t.id}')">Save</button><button class="del-b" onclick="deleteTrade('${t.id}')">✕</button></td>
     </tr>`;
   }).join('');
 }
 
-async function saveTrade(id,btn){
-  const row=btn.closest('tr');
-  const outcome=row.querySelector('.oc-sel').value;
-  const rr=parseFloat($('rr_'+id)?.value)||null;
-  try{await fetch(`/api/trades/${id}/outcome`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({outcome,actual_rr:rr})});await loadJournal();}
-  catch(err){alert('Failed: '+err.message);}
+function saveTrade(id){
+  const outcome = $('oc_'+id)?.value;
+  const rr = parseFloat($('rr_'+id)?.value)||null;
+  const trades = getStoredTrades();
+  const t = trades.find(t=>t.id===id);
+  if(!t) return;
+  t.outcome = outcome;
+  t.actual_rr = rr;
+  t.closed_at = new Date().toISOString();
+  setStoredTrades(trades);
+  allTrades = trades;
+  renderJournalStats();
+  renderJournalTable();
 }
 
-async function deleteTrade(id){
-  if(!confirm('Delete this trade?'))return;
-  try{await fetch(`/api/trades/${id}`,{method:'DELETE'});await loadJournal();}
-  catch(err){alert('Failed: '+err.message);}
+function deleteTrade(id){
+  if(!confirm('Delete this trade?')) return;
+  const trades = getStoredTrades().filter(t=>t.id!==id);
+  setStoredTrades(trades);
+  allTrades = trades;
+  renderJournalStats();
+  renderJournalTable();
 }
 
 // ── INIT SLOTS ──
