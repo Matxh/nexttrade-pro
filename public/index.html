@@ -664,8 +664,6 @@ function showResult(d){
   }
   if(d.fullAnalysis){$('rAnalysis').innerHTML=d.fullAnalysis;$('rAnalysis').classList.add('on');}
   addHistory(d);
-  // Save to local journal automatically
-  if(d.symbol) saveTradeLocally(d, d.symbol, d.tf||tf);
 }
 
 // ── ANALYZE ──
@@ -682,7 +680,11 @@ async function runAnalysis(){
     const r=await fetch('/api/analyze',{method:'POST',headers,body:JSON.stringify({charts:chartList.map((c,i)=>({base64:c.base64,mime:c.mime,label:i===0?tf:i===1?'Higher TF':'Weekly HTF'})),symbol:sym,timeframe:tf})});
     const json=await r.json();
     if(!r.ok) throw new Error(json.error||`Server error ${r.status}`);
-    json.symbol=sym;json.tf=tf;json.ts=Date.now();json.thumbSrc=chartList[0].src;
+    // Set symbol and tf BEFORE showing result
+    json.symbol=sym; json.tf=tf; json.ts=Date.now(); json.thumbSrc=chartList[0].src;
+    // Save to journal FIRST
+    saveTradeLocally(json, sym, tf);
+    // Then show result
     showResult(json);
   }catch(err){showErr(err.message||'Unknown error');}
   $('analyzeBtn').disabled=false;
