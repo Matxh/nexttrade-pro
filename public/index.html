@@ -390,16 +390,16 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:28px 32p
     <div class="paste-row"><span class="kbd">Ctrl+V</span><span>paste chart to slot 1 · drag & drop onto any slot</span></div>
     <div class="analyzer-grid">
       <div class="result-card" id="resultCard">
-        <div class="rc-head"><div class="pulse"></div><span class="rc-title">AI Analysis Result</span><span class="rc-badge" id="passCount">3-PASS ENGINE</span></div>
+        <div class="rc-head"><div class="pulse"></div><span class="rc-title">AI Analysis Result</span><span class="rc-badge" id="passCount">4-PASS ENGINE</span></div>
         <div class="state-loading" id="stateLoading">
           <div class="scan-bar"><div class="scan-fill"></div></div>
           <div class="scan-text">Running analysis…</div>
           <div class="steps">
-            <div class="step" id="s1"><div class="step-dot"></div>Fetching live price</div>
-            <div class="step" id="s2"><div class="step-dot"></div>Reading chart structure</div>
-            <div class="step" id="s3"><div class="step-dot"></div>Smart Money analysis</div>
-            <div class="step" id="s4"><div class="step-dot"></div>Finding best entry</div>
-            <div class="step" id="s5"><div class="step-dot"></div>Generating final signal</div>
+            <div class="step" id="s1"><div class="step-dot"></div>Fetching live price & session data</div>
+            <div class="step" id="s2"><div class="step-dot"></div>Pass 1 — Reading chart structure</div>
+            <div class="step" id="s3"><div class="step-dot"></div>Pass 2 — Smart Money analysis</div>
+            <div class="step" id="s4"><div class="step-dot"></div>Pass 3 — Generating signal (Claude Opus)</div>
+            <div class="step" id="s5"><div class="step-dot"></div>Pass 4 — Confirming & sharpening signal</div>
           </div>
         </div>
         <div class="state-empty" id="stateEmpty">
@@ -624,7 +624,7 @@ function startLoading(count){
   $('stateEmpty').classList.add('hidden');$('stateError').classList.remove('on');
   ['rVerdict','rLevels','rFactors','rPatterns','rMgmt','rAnalysis'].forEach(id=>$(id).classList.remove('on'));
   $('resultCard').classList.remove('glow');$('stateLoading').classList.add('on');
-  $('passCount').textContent=count>1?`${count}-CHART ENGINE`:'3-PASS ENGINE';
+  $('passCount').textContent=count>1?`${count}-CHART · 4-PASS`:'4-PASS ENGINE';
   ['s1','s2','s3','s4','s5'].forEach(s=>{$(s).className='step';});
   let i=0; if(stepTmr)clearInterval(stepTmr);
   stepTmr=setInterval(()=>{if(i>0)$('s'+i).className='step done';if(i<5)$('s'+(i+1)).className='step on';i++;if(i>=5)clearInterval(stepTmr);},4000);
