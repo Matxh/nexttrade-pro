@@ -402,15 +402,15 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:48px 40p
   </a>
   <div class="nav-center">
     <a class="nav-link" onclick="showPage('home')">Home</a>
-    <a class="nav-link" onclick="scrollTo('pricing')">Pricing</a>
-    <a class="nav-link" onclick="scrollTo('how')">How It Works</a>
+    <a class="nav-link" onclick="scrollToSection('pricing')">Pricing</a>
+    <a class="nav-link" onclick="scrollToSection('how')">How It Works</a>
     <a class="nav-link" onclick="showPage('analyzer')">Analyzer</a>
     <a class="nav-link" onclick="showPage('journal')">Journal</a>
   </div>
   <div class="nav-right">
     <div class="live-pill"><div class="pulse"></div>AI Online</div>
     <button class="btn btn-ghost" onclick="showPage('analyzer')">Log In</button>
-    <button class="btn btn-primary" onclick="scrollTo('pricing')">Get Started →</button>
+    <button class="btn btn-primary" onclick="scrollToSection('pricing')">Get Started →</button>
   </div>
 </nav>
 
@@ -424,7 +424,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:48px 40p
     <h1>Upload Chart.<br><span class="accent">Get Institutional</span><br><span class="dim">Grade Signals.</span></h1>
     <p class="hero-sub">Screenshot any chart from TradingView, MT4, or Binance. Our 4-pass AI analyzes it like a hedge fund — entry, stop loss, take profit, in seconds.</p>
     <div class="hero-ctas">
-      <button class="btn btn-primary btn-xl" onclick="scrollTo('pricing')">Start Free Trial →</button>
+      <button class="btn btn-primary btn-xl" onclick="scrollToSection('pricing')">Start Free Trial →</button>
       <button class="btn btn-ghost btn-lg" onclick="showPage('analyzer')">Try the Analyzer</button>
     </div>
     <div class="hero-trust">
@@ -714,12 +714,12 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:48px 40p
         <h4>Product</h4>
         <a onclick="showPage('analyzer')">AI Analyzer</a>
         <a onclick="showPage('journal')">Trade Journal</a>
-        <a onclick="scrollTo('pricing')">Pricing</a>
-        <a onclick="scrollTo('how')">How It Works</a>
+        <a onclick="scrollToSection('pricing')">Pricing</a>
+        <a onclick="scrollToSection('how')">How It Works</a>
       </div>
       <div class="footer-col">
         <h4>Support</h4>
-        <a onclick="scrollTo('faq')">FAQ</a>
+        <a onclick="scrollToSection('faq')">FAQ</a>
         <a>Contact Us</a>
         <a>Discord Community</a>
       </div>
@@ -911,7 +911,7 @@ function showPage(id){
   if(id==='journal')loadJournal();
 }
 
-function scrollTo(id){
+function scrollToSection(id){
   showPage('home');
   setTimeout(()=>{
     const el=document.getElementById(id);
