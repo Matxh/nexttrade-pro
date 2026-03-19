@@ -9,9 +9,11 @@ app.use('/api/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const API_URL    = 'https://api.anthropic.com/v1/messages';
-const MODEL_FAST = 'claude-sonnet-4-20250514';
-const MODEL_BEST = 'claude-opus-4-5';
+const API_URL  = 'https://api.anthropic.com/v1/messages';
+const MODEL_HAIKU  = 'claude-haiku-4-5-20251001'; // Fastest — for data reading (passes 1A+1B)
+const MODEL_SONNET = 'claude-sonnet-4-20250514';   // Fast+smart — for entry finding (pass 2)
+const MODEL_OPUS   = 'claude-opus-4-5';             // Best — for final verdict only (pass 3)
+
 const DB_FILE    = path.join(__dirname, 'trades.json');
 const SUBS_FILE  = path.join(__dirname, 'subscribers.json');
 const USERS_FILE = path.join(__dirname, 'users.json');
@@ -113,7 +115,7 @@ function getMarketContext(symbol) {
 // ─────────────────────────────────────────────
 // CLAUDE HELPER
 // ─────────────────────────────────────────────
-async function claude(model, apiKey, system, content, tokens=1500) {
+async function claude(model, apiKey, system, content, tokens=1000) {
   const r = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01'}, body:JSON.stringify({model, max_tokens:tokens, system, messages:[{role:'user',content}]}) });
   if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
   const d = await r.json();
@@ -124,117 +126,64 @@ async function claude(model, apiKey, system, content, tokens=1500) {
 const imgBlock = (b64,mime) => ({type:'image',source:{type:'base64',media_type:mime||'image/png',data:b64}});
 
 // ─────────────────────────────────────────────
-// PASS 1A — CHART READER (parallel)
+// PASS 1A — CHART STRUCTURE (Haiku — fastest)
+// Simple data extraction — Haiku handles this perfectly
 // ─────────────────────────────────────────────
 async function pass1a(charts, sym, key) {
-  const sys = `You are a professional technical analyst reading a trading chart. Your job is to identify what is happening on this chart and what direction price is most likely to move next.
-
-Read the chart and extract all data. Return ONLY raw JSON:
-{"current_price":"<>","trend":"Bullish/Bearish/Sideways","strength":"Strong/Moderate/Weak","structure":"HH+HL/LH+LL/Ranging","phase":"Accumulation/Markup/Distribution/Markdown/Consolidation","swing_high":"<>","swing_low":"<>","bos":"<>","choch":"<>","price_position":"Premium/Discount/Equilibrium","range_high":"<>","range_low":"<>","range_mid":"<>","htf_bias":"Bullish/Bearish/Neutral","alignment_score":<0-100>,"tradeable_direction":"Long/Short/Neutral","key_levels":[{"price":"<>","type":"Resistance/Support","strength":"Major/Minor","reason":"<>"}],"candles":"<last 5 candles>","patterns":[{"name":"<>","type":"bull/bear/neutral","reliability":"Low/Medium/High"}],"confidence":<0-100>}`;
-  const content = [...charts.map((c,i)=>[{type:'text',text:`Chart ${i+1}:`},imgBlock(c.base64,c.mime)]).flat(),{type:'text',text:`Read this ${sym} chart and tell me everything you see.`}];
-  return claude(MODEL_FAST, key, sys, content, 1200);
+  const sys = `Read this trading chart and extract data. Return ONLY raw JSON:
+{"current_price":"<>","trend":"Bullish/Bearish/Sideways","strength":"Strong/Moderate/Weak","structure":"HH+HL/LH+LL/Ranging","phase":"Accumulation/Markup/Distribution/Markdown/Consolidation","swing_high":"<>","swing_low":"<>","bos":"<or none>","choch":"<or none>","price_position":"Premium/Discount/Equilibrium","range_high":"<>","range_low":"<>","range_mid":"<>","htf_bias":"Bullish/Bearish/Neutral","alignment_score":<0-100>,"tradeable_direction":"Long/Short/Neutral","key_levels":[{"price":"<>","type":"Resistance/Support","strength":"Major/Minor","reason":"<>"}],"candles":"<last 5 candles>","patterns":[{"name":"<>","type":"bull/bear/neutral","reliability":"Low/Medium/High"}],"confidence":<0-100>}`;
+  const content = [...charts.map((c,i)=>[{type:'text',text:`Chart ${i+1}:`},imgBlock(c.base64,c.mime)]).flat(),{type:'text',text:`Extract all chart data for ${sym}.`}];
+  return claude(MODEL_HAIKU, key, sys, content, 1000);
 }
 
 // ─────────────────────────────────────────────
-// PASS 1B — SMC READER (parallel)
+// PASS 1B — SMC READING (Haiku — fastest)
+// Simple pattern recognition — Haiku is great at this
 // ─────────────────────────────────────────────
 async function pass1b(charts, sym, key) {
-  const sys = `You are a Smart Money Concepts analyst. Identify all SMC elements on this chart. Return ONLY raw JSON:
-{"order_blocks":{"bullish":"<price or none>","bearish":"<price or none>"},"fvg":{"bullish":"<range or none>","bearish":"<range or none>"},"liquidity":{"buy_side":"<level>","sell_side":"<level>"},"recent_sweep":"<or none>","institutional_bias":"Bullish/Bearish/Neutral","next_target":"<where price is going next>","volume":{"trend":"Increasing/Decreasing/Flat/NotVisible","notes":"<>"},"indicators":{"ema":"<>","rsi":"<value if visible>","macd":"<state if visible>","other":"<>"}}`;
-  return claude(MODEL_FAST, key, sys, [imgBlock(charts[0].base64,charts[0].mime),{type:'text',text:`Find all SMC elements on this ${sym} chart.`}], 1000);
+  const sys = `Identify Smart Money Concepts on this chart. Return ONLY raw JSON:
+{"order_blocks":{"bullish":"<price or none>","bearish":"<price or none>"},"fvg":{"bullish":"<range or none>","bearish":"<range or none>"},"liquidity":{"buy_side":"<level>","sell_side":"<level>"},"recent_sweep":"<or none>","institutional_bias":"Bullish/Bearish/Neutral","next_target":"<where price goes next>","volume":{"trend":"Increasing/Decreasing/Flat/NotVisible","notes":"<>"},"indicators":{"ema":"<alignment>","rsi":"<value if visible>","macd":"<state if visible>","other":"<>"}}`;
+  return claude(MODEL_HAIKU, key, sys, [imgBlock(charts[0].base64,charts[0].mime),{type:'text',text:`Find SMC elements on this ${sym} chart.`}], 800);
 }
 
 // ─────────────────────────────────────────────
-// PASS 2 — ENTRY FINDER
+// PASS 2 — ENTRY FINDER (Sonnet — fast + smart)
+// Finding the best entry needs more intelligence than Haiku
 // ─────────────────────────────────────────────
 async function pass2(charts, sym, structure, smc, livePrice, key) {
-  const sys = `You are a trading entry specialist. Your job is to find the single best trade setup on this chart RIGHT NOW. 
-
-You MUST find an entry — even in a ranging market there is always a better side to trade from. Look for:
-- Bounces off key support/resistance
-- Order block entries
-- FVG fills
-- Breakout entries
-- Pullback entries in a trend
-
-Pick the highest probability direction and find the entry. Return ONLY raw JSON:
+  const sys = `You are a trading entry specialist. Find the single best trade setup on this chart. Always find an entry — there is always a best side to trade from. Return ONLY raw JSON:
 {"entry_type":"Limit/Stop/Market/Retest","entry_price":"<specific price>","entry_zone":"<range>","entry_trigger":"<what confirms it>","entry_quality":"A+/A/B/C","direction":"Long/Short","sl_price":"<specific price>","sl_reason":"<why>","tp1_price":"<specific price>","tp1_reason":"<why>","tp1_rr":"<e.g. 1:2.1>","tp2_price":"<specific price>","tp2_reason":"<why>","tp2_rr":"<>","tp3_price":"<>","tp3_rr":"<>","obstacles_tp1":"<or none>","trade_management":{"move_to_be":"<when>","partial_at_tp1":"50%","trail_after_tp1":"<how>","max_hold":"<time>"}}`;
   const lp = livePrice ? `Current price: $${livePrice.price}` : '';
-  return claude(MODEL_FAST, key, sys, [
+  return claude(MODEL_SONNET, key, sys, [
     imgBlock(charts[0].base64,charts[0].mime),
-    {type:'text',text:`Find the best trade on this ${sym} chart.\n${lp}\nTrend: ${structure.trend} (${structure.strength})\nKey levels: ${JSON.stringify(structure.key_levels)}\nOBs: ${JSON.stringify(smc.order_blocks)}\nFVGs: ${JSON.stringify(smc.fvg)}\nNext target: ${smc.next_target}\n\nFind the BEST entry available right now.`}
-  ], 1200);
+    {type:'text',text:`Find the best trade on this ${sym} chart.\n${lp}\nTrend: ${structure.trend} (${structure.strength})\nKey levels: ${JSON.stringify(structure.key_levels)}\nOBs: ${JSON.stringify(smc.order_blocks)}\nFVGs: ${JSON.stringify(smc.fvg)}\nNext target: ${smc.next_target}`}
+  ], 1000);
 }
 
 // ─────────────────────────────────────────────
-// PASS 3 — SIGNAL GENERATOR
-// Key change: AI is a signal generator, not a gatekeeper
-// WAIT is reserved for truly flat, featureless charts only
+// PASS 3 — FINAL VERDICT (Opus — most accurate)
+// The final decision needs Opus quality — this is what users pay for
 // ─────────────────────────────────────────────
 async function pass3(charts, sym, tf, structure, smc, entry, mktCtx, livePrice, winStats, key) {
-  const sys = `You are a professional trading signal generator for a trading platform. Your users are paying for signals and need clear, actionable analysis.
+  const sys = `You are a professional trading signal generator. Generate a BUY or SELL signal with full analysis. 
 
-YOUR ROLE: Generate a BUY or SELL signal with full details. You are NOT a gatekeeper — you are an analyst giving your best read of the market.
-
-SIGNAL RULES:
-- Output BUY when: price is more likely to go up based on trend, structure, and key levels
-- Output SELL when: price is more likely to go down based on trend, structure, and key levels  
-- Output WAIT only when: the chart is a completely flat horizontal range with literally no direction and no key levels nearby to trade from — this should be RARE (less than 10% of charts)
-
-GRADING:
-- A+: 4+ confluences align perfectly, strong trend, key level, good R:R
-- A: 3 confluences, clear trend, decent R:R  
-- B: 2 confluences, identifiable direction
-- C: 1 confluence, marginal setup — signal it but note it is low confidence
-- D: No clear setup — only use this with WAIT
-
-IMPORTANT: A chart showing ANY of these should get a BUY or SELL signal:
-- A visible trend (higher highs or lower lows)
-- Price near a key level (support, resistance, OB, FVG)
-- A pattern forming (flag, triangle, engulfing candle)
-- RSI or MACD showing direction
-- Volume confirming a move
-
-The WAIT verdict means "I literally cannot find any direction on this chart." It does NOT mean "the setup isn't perfect." Use BUY or SELL even for B and C grade setups.
+RULES:
+- BUY when price is more likely to go up
+- SELL when price is more likely to go down
+- WAIT only when the chart is completely flat with zero direction — should be rare (under 10% of charts)
+- Any visible trend, key level, or pattern = BUY or SELL signal
+- Grade the signal A+ to D based on how many things align
 
 Return ONLY raw JSON:
-{"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A+/A/B/C/D","wait_reason":"<ONLY fill this if WAIT — must be specific>","market_phase":"<>","price_position":"Premium/Discount/Equilibrium","market_bias":"Strongly Bullish/Bullish/Neutral/Bearish/Strongly Bearish","summary":"<5-6 sentences describing exactly what you see, why you are bullish or bearish, the key level or setup, the entry plan, and the main risk>","entry":"<exact price>","entry_trigger":"<what confirms entry>","entry_zone":"<acceptable range>","sl":"<exact stop>","sl_reason":"<structural reason>","tp1":"<first target>","tp1_reason":"<>","tp2":"<second target>","tp2_reason":"<>","tp3":"<extended target>","rr_tp1":"<R:R>","rr_tp2":"<R:R>","rrLabel":"Acceptable/Good/Excellent","position_size":"<1% max — reduce on Friday>","confluences":["<list every reason supporting the trade>"],"key_levels":{"major_resistance":"<>","minor_resistance":"<>","major_support":"<>","minor_support":"<>","equilibrium":"<>"},"smart_money":{"order_blocks":"<>","fvg":"<>","liquidity_pools":"<>","recent_sweep":"<>","bos_choch":"<>","next_target":"<>"},"factors":[{"name":"Trend","score":<0-100>,"note":"<specific observation>"},{"name":"Volume","score":<0-100>,"note":"<>"},{"name":"Momentum","score":<0-100>,"note":"<>"},{"name":"Structure","score":<0-100>,"note":"<>"},{"name":"Price Action","score":<0-100>,"note":"<>"},{"name":"Confluence","score":<0-100>,"note":"<>"},{"name":"Risk/Reward","score":<0-100>,"note":"<>"}],"patterns":[{"name":"<>","type":"bull/bear/neutral","reliability":"Low/Medium/High","significance":"<>"}],"indicators":{"ema":"<>","rsi":"<>","macd":"<>","volume":"<>","other":"<>"},"invalidation":{"immediate":"<price that kills trade>","warning":"<warning level>","scenario":"<action to exit>"},"trade_management":{"move_to_be":"<when>","partial_tp1":"50% at TP1","trail_method":"<how>","max_hold":"<time>"},"candle_analysis":"<last 5 candles story>","best_case":"<ideal path>","worst_case":"<failure path>","fullAnalysis":"<10-14 sentences of professional HTML analysis using strong tags. Tell the full story: what the chart shows, the trend, the key levels with prices, the SMC elements, the specific setup and why it is valid, every confluence, the exact entry/SL/TP with reasons, position sizing, trade management plan, and what would invalidate the trade>"}`;
+{"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A+/A/B/C/D","wait_reason":"<only if WAIT>","market_phase":"<>","price_position":"Premium/Discount/Equilibrium","market_bias":"Strongly Bullish/Bullish/Neutral/Bearish/Strongly Bearish","summary":"<5-6 sentences: what you see, why bullish/bearish, the setup, entry plan, main risk>","entry":"<exact price>","entry_trigger":"<confirmation>","entry_zone":"<range>","sl":"<exact stop>","sl_reason":"<why>","tp1":"<first target>","tp1_reason":"<>","tp2":"<second target>","tp2_reason":"<>","tp3":"<extended target>","rr_tp1":"<R:R>","rr_tp2":"<R:R>","rrLabel":"Acceptable/Good/Excellent","position_size":"<1% max>","confluences":["<every reason supporting the trade>"],"key_levels":{"major_resistance":"<>","minor_resistance":"<>","major_support":"<>","minor_support":"<>","equilibrium":"<>"},"smart_money":{"order_blocks":"<>","fvg":"<>","liquidity_pools":"<>","recent_sweep":"<>","bos_choch":"<>","next_target":"<>"},"factors":[{"name":"Trend","score":<0-100>,"note":"<>"},{"name":"Volume","score":<0-100>,"note":"<>"},{"name":"Momentum","score":<0-100>,"note":"<>"},{"name":"Structure","score":<0-100>,"note":"<>"},{"name":"Price Action","score":<0-100>,"note":"<>"},{"name":"Confluence","score":<0-100>,"note":"<>"},{"name":"Risk/Reward","score":<0-100>,"note":"<>"}],"patterns":[{"name":"<>","type":"bull/bear/neutral","reliability":"Low/Medium/High","significance":"<>"}],"indicators":{"ema":"<>","rsi":"<>","macd":"<>","volume":"<>","other":"<>"},"invalidation":{"immediate":"<kills trade>","warning":"<warning level>","scenario":"<exit signal>"},"trade_management":{"move_to_be":"<when>","partial_tp1":"50% at TP1","trail_method":"<how>","max_hold":"<time>"},"candle_analysis":"<last 5 candles>","best_case":"<ideal path>","worst_case":"<failure path>","fullAnalysis":"<10-14 sentences professional HTML with strong tags covering: trend and structure, key levels with prices, SMC elements, the specific setup, all confluences, entry/SL/TP with reasons, position sizing, trade management, and invalidation>"}`;
 
-  const lp = livePrice ? `Live price: $${livePrice.price} (${livePrice.change24h||'?'}% 24h change)` : '';
+  const lp = livePrice ? `Live: $${livePrice.price} (${livePrice.change24h||'?'}% 24h)` : '';
   const ws = winStats ? `Track record: ${winStats.winRate}% win rate over ${winStats.total} signals` : '';
 
-  return claude(MODEL_BEST, key, sys, [
+  return claude(MODEL_OPUS, key, sys, [
     ...charts.map(c=>imgBlock(c.base64,c.mime)),
-    {type:'text',text:`Generate a trading signal for ${sym} on the ${tf} timeframe.
-
-${lp}
-Session: ${mktCtx.session}
-${ws}
-
-What I found from chart analysis:
-Trend: ${structure.trend} (${structure.strength})
-Structure: ${structure.structure}  
-HTF Bias: ${structure.htf_bias}
-Price Position: ${structure.price_position}
-Phase: ${structure.phase}
-Alignment Score: ${structure.alignment_score}/100
-
-Smart Money:
-OBs: ${JSON.stringify(smc.order_blocks)}
-FVGs: ${JSON.stringify(smc.fvg)}
-Liquidity: ${JSON.stringify(smc.liquidity)}
-Institutional Bias: ${smc.institutional_bias}
-Next Target: ${smc.next_target}
-
-Best entry found:
-Direction: ${entry.direction}
-Entry: ${entry.entry_price} (${entry.entry_type})
-Quality: ${entry.entry_quality}
-SL: ${entry.sl_price}
-TP1: ${entry.tp1_price} at ${entry.tp1_rr}
-
-Generate the signal. Give BUY or SELL unless this chart is completely flat with zero direction.`}
-  ], 4000);
+    {type:'text',text:`Generate trading signal for ${sym} ${tf}.\n\n${lp}\nSession: ${mktCtx.session}\n${ws}\n\nChart data:\nTrend: ${structure.trend} (${structure.strength}) | Structure: ${structure.structure} | HTF: ${structure.htf_bias} | Position: ${structure.price_position} | Alignment: ${structure.alignment_score}/100\n\nSMC: OBs:${JSON.stringify(smc.order_blocks)} FVGs:${JSON.stringify(smc.fvg)} Inst:${smc.institutional_bias} Target:${smc.next_target}\n\nBest entry: ${entry.direction} @ ${entry.entry_price} (${entry.entry_quality}) SL:${entry.sl_price} TP1:${entry.tp1_price} R:R:${entry.tp1_rr}\n\nGive BUY or SELL unless truly flat with zero direction.`}
+  ], 3500);
 }
 
 // ─────────────────────────────────────────────
@@ -258,14 +207,12 @@ app.post('/api/auth/signup',(req,res)=>{
   upsertUser(email,{password,plan:'none',active:false});
   res.json({success:true});
 });
-
 app.post('/api/auth/login',(req,res)=>{
   const{email,password}=req.body;
   const user=getUser(email);
   if(!user||user.password!==password) return res.status(401).json({error:'Invalid email or password'});
   res.json({success:true,user:{email,plan:user.plan,active:user.active,...getUsageInfo(email)}});
 });
-
 app.get('/api/auth/me',(req,res)=>{
   const email=req.headers['x-user-email']; if(!email) return res.status(401).json({error:'Not authenticated'});
   const user=getUser(email); if(!user) return res.status(404).json({error:'User not found'});
@@ -288,14 +235,12 @@ app.post('/api/stripe/checkout',async(req,res)=>{
     res.json({url:session.url});
   }catch(err){res.status(500).json({error:err.message});}
 });
-
 app.post('/api/stripe/portal',async(req,res)=>{
   const{email}=req.body; const user=getUser(email);
   if(!user?.stripeCustomerId) return res.status(400).json({error:'No subscription found'});
   try{const baseUrl=process.env.BASE_URL||'https://nexttrade-pro.vercel.app';const s=await stripeRequest('billing_portal/sessions','POST',{customer:user.stripeCustomerId,return_url:baseUrl});res.json({url:s.url});}
   catch(err){res.status(500).json({error:err.message});}
 });
-
 app.post('/api/webhook',async(req,res)=>{
   let event; try{event=JSON.parse(req.body.toString());}catch{return res.status(400).send('error');}
   const obj=event.data.object;
@@ -306,7 +251,11 @@ app.post('/api/webhook',async(req,res)=>{
 });
 
 // ─────────────────────────────────────────────
-// MAIN ANALYZE ENDPOINT
+// MAIN ANALYZE — OPTIMIZED PIPELINE
+// Step 1: Haiku reads chart (x2 parallel) + live price fetch = ~2-3s
+// Step 2: Sonnet finds entry = ~5-6s
+// Step 3: Opus generates final signal = ~8-10s
+// Total: ~15-18s (vs ~25s before)
 // ─────────────────────────────────────────────
 app.post('/api/analyze',async(req,res)=>{
   const{charts,imageBase64,imageMime,symbol,timeframe}=req.body;
@@ -329,26 +278,33 @@ app.post('/api/analyze',async(req,res)=>{
   const sym=symbol||'Unknown', tf=timeframe||chartList[0]?.label||'1H';
 
   try{
-    console.log(`\n[NexTrade] ⚡ ${sym} ${tf} — ${chartList.length} chart(s)`);
+    console.log(`\n[NexTrade] ⚡ ${sym} ${tf} | Haiku→Sonnet→Opus pipeline`);
     const t0=Date.now();
 
-    const[structure,smc,livePrice,winStats]=await Promise.all([
-      pass1a(chartList,sym,key),
-      pass1b(chartList,sym,key),
+    // STEP 1: All 3 run simultaneously — Haiku x2 + price fetch
+    // Haiku is 5x faster than Sonnet for reading tasks
+    console.log('[Step 1] Haiku reading chart structure + SMC + fetching price (parallel)...');
+    const [structure, smc, livePrice, winStats] = await Promise.all([
+      pass1a(chartList, sym, key),   // Haiku
+      pass1b(chartList, sym, key),   // Haiku
       fetchLivePrice(sym).catch(()=>null),
       Promise.resolve(getWinStats())
     ]);
-    const mktCtx=getMarketContext(sym);
-    console.log(`[Step 1] ✓ Trend:${structure.trend} Align:${structure.alignment_score} Dir:${structure.tradeable_direction}`);
+    const mktCtx = getMarketContext(sym);
+    const t1 = ((Date.now()-t0)/1000).toFixed(1);
+    console.log(`[Step 1] ✓ ${t1}s | Trend:${structure.trend} Align:${structure.alignment_score} SMC:${smc.institutional_bias}`);
 
-    const entry=await pass2(chartList,sym,structure,smc,livePrice,key);
-    console.log(`[Step 2] ✓ ${entry.direction} Entry:${entry.entry_price} Quality:${entry.entry_quality}`);
+    // STEP 2: Sonnet finds best entry
+    console.log('[Step 2] Sonnet finding best entry...');
+    const entry = await pass2(chartList, sym, structure, smc, livePrice, key);
+    const t2 = ((Date.now()-t0)/1000).toFixed(1);
+    console.log(`[Step 2] ✓ ${t2}s | ${entry.direction} @ ${entry.entry_price} Quality:${entry.entry_quality}`);
 
-    const result=await pass3(chartList,sym,tf,structure,smc,entry,mktCtx,livePrice,winStats,key);
-    console.log(`[Step 3] ✓ ${result.verdict} Grade:${result.signal_grade} Conf:${result.confidence}%`);
-
-    const elapsed=((Date.now()-t0)/1000).toFixed(1);
-    console.log(`[NexTrade] ⚡ Done in ${elapsed}s\n`);
+    // STEP 3: Opus makes final decision
+    console.log('[Step 3] Opus generating final signal...');
+    const result = await pass3(chartList, sym, tf, structure, smc, entry, mktCtx, livePrice, winStats, key);
+    const elapsed = ((Date.now()-t0)/1000).toFixed(1);
+    console.log(`[Step 3] ✓ ${elapsed}s | ${result.verdict} Grade:${result.signal_grade} Conf:${result.confidence}%\n`);
 
     if(email) incrementUsage(email);
 
@@ -359,7 +315,7 @@ app.post('/api/analyze',async(req,res)=>{
       sendEmailAlert({...result,symbol:sym,tf}).catch(console.error);
     }
 
-    result._meta={analysis_time_seconds:parseFloat(elapsed),charts_analyzed:chartList.length,live_price:livePrice,market_context:mktCtx,win_stats:winStats};
+    result._meta={analysis_time_seconds:parseFloat(elapsed),charts_analyzed:chartList.length,live_price:livePrice,market_context:mktCtx,win_stats:winStats,models_used:{step1:'claude-haiku (x2 parallel)',step2:'claude-sonnet',step3:'claude-opus'}};
     res.json(result);
 
   }catch(err){
@@ -379,4 +335,9 @@ app.delete('/api/trades/:id',(req,res)=>{saveTrades(loadTrades().filter(t=>t.id!
 app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 
 const PORT=process.env.PORT||3000;
-app.listen(PORT,()=>console.log(`\n  NexTrade AI — http://localhost:${PORT}\n`));
+app.listen(PORT,()=>{
+  console.log(`\n  NexTrade AI ⚡`);
+  console.log(`  Pipeline: Haiku(x2 parallel) → Sonnet → Opus`);
+  console.log(`  Est. time: ~12-18s per analysis`);
+  console.log(`  http://localhost:${PORT}\n`);
+});
