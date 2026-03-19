@@ -7,198 +7,224 @@ const app = express();
 app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─────────────────────────────────────────────
-// PASS 1 — RAW CHART READING
-// Reads the chart like a fresh set of eyes.
-// No bias. Just facts.
-// ─────────────────────────────────────────────
-async function pass1_readChart(imageBase64, imageMime, symbol, timeframe, apiKey) {
-  const system = `You are a pure chart reader with zero bias. Your only job is to read exactly what is on the chart — nothing more. You do NOT give trade recommendations in this step. You only report what you see as hard facts.
+const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const MODEL = 'claude-opus-4-5';
 
-Report ONLY raw JSON. No markdown, no code fences.
+async function callClaude(apiKey, system, userContent, maxTokens = 2000) {
+  const response = await fetch(ANTHROPIC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content: userContent }] })
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e.error?.message || `API error ${response.status}`);
+  }
+  const data = await response.json();
+  const raw = (data.content || []).map(c => c.text || '').join('').trim();
+  try {
+    return JSON.parse(raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim());
+  } catch {
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
+    throw new Error('Could not parse AI response as JSON');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// PASS 1 — PURE OBJECTIVE CHART READING
+// No bias. Facts only. What is literally on the chart.
+// ═══════════════════════════════════════════════
+async function pass1_objectiveReading(img, mime, symbol, tf, apiKey) {
+  const system = `You are a pure data extraction system. You read charts like a machine — only facts, zero opinions, zero trade bias. Your job is to extract every piece of objective information from this chart.
+
+Return ONLY raw JSON starting with { and ending with }. No markdown.
 
 {
-  "timeframe_detected": "<what timeframe you think this is>",
+  "timeframe": "<detected timeframe>",
   "asset_type": "Crypto" or "Forex" or "Stock" or "Index" or "Commodity",
-  "price_range": {"high": "<highest price visible>", "low": "<lowest price visible>", "current": "<current/last price>"},
-  "trend_direction": "Uptrend" or "Downtrend" or "Sideways",
-  "trend_strength": "Strong" or "Moderate" or "Weak",
-  "structure": {
-    "pattern": "HH+HL" or "LH+LL" or "Mixed" or "Ranging",
-    "last_swing_high": "<price>",
-    "last_swing_low": "<price>",
-    "bos_recent": "<describe any recent break of structure>",
-    "choch_recent": "<describe any change of character>"
-  },
+  "current_price": "<last visible price>",
+  "price_range": {"high": "<highest>", "low": "<lowest>"},
+  "trend": {"direction": "Up" or "Down" or "Sideways", "strength": "Strong" or "Moderate" or "Weak", "duration": "<how long trending>"},
+  "structure": {"type": "HH+HL" or "LH+LL" or "Ranging", "last_hh": "<price>", "last_hl": "<price>", "last_lh": "<price>", "last_ll": "<price>", "recent_bos": "<describe>", "recent_choch": "<describe>"},
   "key_levels": [
-    {"level": "<price>", "type": "Resistance" or "Support", "strength": "Strong" or "Weak", "reason": "<why this level matters>"},
-    {"level": "<price>", "type": "Resistance" or "Support", "strength": "Strong" or "Weak", "reason": "<why>"},
-    {"level": "<price>", "type": "Resistance" or "Support", "strength": "Strong" or "Weak", "reason": "<why>"},
-    {"level": "<price>", "type": "Resistance" or "Support", "strength": "Strong" or "Weak", "reason": "<why>"}
+    {"price": "<level>", "type": "Resistance" or "Support", "strength": "Major" or "Minor", "touches": "<how many times tested>", "notes": "<why important>"}
   ],
-  "candles": {
-    "last_5_description": "<describe the last 5 candles — size, color, wicks, what they show>",
-    "notable_candles": "<any pinbars, engulfing, doji, marubozu, inside bars visible>",
-    "momentum": "Bullish" or "Bearish" or "Neutral"
-  },
-  "volume": {
-    "visible": true or false,
-    "trend": "Increasing" or "Decreasing" or "Flat" or "Not visible",
-    "last_bar": "High" or "Low" or "Average" or "Not visible",
-    "notes": "<any volume spikes, climax, dry-up>"
-  },
-  "indicators_visible": {
-    "ema_sma": "<describe any moving averages — how many, alignment, price relative to them>",
-    "rsi": "<RSI value if visible, direction, any divergence>",
-    "macd": "<MACD state if visible — bullish/bearish, crossover, histogram>",
-    "bollinger": "<BB state if visible — expansion, contraction, price position>",
-    "other": "<any other indicators and their readings>"
-  },
-  "patterns_visible": [
-    {"name": "<pattern name>", "location": "<where on chart>", "type": "bull" or "bear" or "neutral"}
-  ],
-  "smart_money": {
-    "order_blocks": "<any visible OBs — location, type, tested or untested>",
-    "fvg": "<any fair value gaps — location, filled or unfilled>",
-    "liquidity": "<equal highs/lows, previous day high/low, obvious stop clusters>",
-    "sweeps": "<any recent liquidity sweeps visible>"
-  },
-  "price_position": "Premium" or "Discount" or "Equilibrium",
-  "range_high": "<top of current range>",
-  "range_low": "<bottom of current range>",
-  "range_midpoint": "<50% of current range>",
-  "observations": "<3-5 key objective observations about this chart — no trade bias, just facts>"
+  "price_in_range": "Premium" or "Discount" or "Equilibrium",
+  "range_high": "<top>", "range_low": "<bottom>", "range_mid": "<50% level>",
+  "candle_data": {"last_candle": "<color, size, wicks description>", "last_5_story": "<what the last 5 candles show>", "notable": "<any key candle patterns>"},
+  "volume": {"visible": true or false, "trend": "<increasing/decreasing/flat>", "last_bar": "<high/low/avg>", "anomalies": "<spikes, dry-up, climax>"},
+  "indicators": {"moving_averages": "<any MAs visible, alignment, price vs MAs>", "rsi": "<value if visible, direction, divergence>", "macd": "<state if visible>", "other": "<any other indicators>"},
+  "smc_elements": {"order_blocks": "<any OBs visible with levels>", "fvg": "<any FVGs with levels>", "liquidity": "<equal highs/lows, obvious stops>", "sweeps": "<any recent sweeps>"},
+  "patterns": [{"name": "<pattern>", "type": "bull/bear/neutral", "completion": "<forming/complete>"}],
+  "raw_observations": ["<fact 1>","<fact 2>","<fact 3>","<fact 4>","<fact 5>"]
 }`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({
-      model: 'claude-opus-4-5',
-      max_tokens: 2000,
-      system,
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageBase64 } },
-        { type: 'text', text: `Read this ${timeframe || '1H'} chart for ${symbol || 'unknown asset'}. Report only facts — no trade recommendation yet. What do you see exactly?` }
-      ]}]
-    })
-  });
-
-  if (!response.ok) {
-    const e = await response.json().catch(() => ({}));
-    throw new Error(e.error?.message || `Pass 1 API error ${response.status}`);
-  }
-
-  const data = await response.json();
-  const raw  = (data.content || []).map(c => c.text || '').join('').trim();
-  return JSON.parse(raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim());
+  return callClaude(apiKey, system, [
+    { type: 'image', source: { type: 'base64', media_type: mime, data: img } },
+    { type: 'text', text: `Extract all objective data from this ${tf} chart for ${symbol}. Facts only — no trade opinion.` }
+  ], 2000);
 }
 
-// ─────────────────────────────────────────────
-// PASS 2 — DEVIL'S ADVOCATE
-// Tries to DISPROVE the obvious trade.
-// Looks for everything that could go wrong.
-// ─────────────────────────────────────────────
-async function pass2_devilsAdvocate(imageBase64, imageMime, chartReading, symbol, timeframe, apiKey) {
-  const system = `You are a professional risk manager and devil's advocate for trading. You have been given a chart reading and your job is to challenge it — find every reason the obvious trade could FAIL.
+// ═══════════════════════════════════════════════
+// PASS 2A — BULL ANALYST
+// Only looks for reasons to buy.
+// Finds the strongest possible long setup.
+// ═══════════════════════════════════════════════
+async function pass2a_bullAnalyst(img, mime, reading, symbol, tf, apiKey) {
+  const system = `You are a specialist BULL analyst. Your job is to find the strongest possible reason to go LONG on this chart. You believe in buying opportunities. Look for every bullish reason.
 
-You are NOT trying to find a trade. You are trying to protect capital by finding all the risks, weaknesses, and reasons NOT to take the obvious setup.
+But you are also honest — if there is genuinely no bull case, score it low. You are biased toward bulls but not blind.
 
-Think like a short seller challenging a bull case, or a bull challenging a bear case.
-
-Return ONLY raw JSON. No markdown, no code fences.
+Return ONLY raw JSON.
 
 {
-  "obvious_trade": "<what the obvious trade direction is based on the chart reading>",
-  "counter_arguments": [
-    "<reason 1 the obvious trade could fail — be specific with price levels>",
-    "<reason 2>",
-    "<reason 3>",
-    "<reason 4 if applicable>",
-    "<reason 5 if applicable>"
-  ],
-  "hidden_risks": [
-    "<hidden risk 1 — something easy to miss>",
-    "<hidden risk 2>",
-    "<hidden risk 3>"
-  ],
-  "weakness_of_setup": "<what is the biggest weakness of the current setup — be brutal>",
-  "opposing_scenario": "<describe the full opposing scenario — if the market goes the other way, what does that look like?>",
-  "false_signal_risk": "High" or "Medium" or "Low",
-  "false_signal_reason": "<why this signal could be a fake-out or trap>",
-  "key_levels_against": "<what levels, if reached, would confirm the trade is failing>",
-  "verdict_challenge": "Strong Challenge" or "Moderate Challenge" or "Weak Challenge",
-  "verdict_challenge_reason": "<overall assessment of how risky this trade is>"
+  "bull_verdict": "Strong Buy" or "Buy" or "Weak Buy" or "No Bull Case",
+  "bull_confidence": <0-100>,
+  "bull_entry": "<ideal long entry>",
+  "bull_sl": "<stop for long>",
+  "bull_tp1": "<first target>",
+  "bull_tp2": "<second target>",
+  "bull_rr": "<R:R to TP1>",
+  "bull_confluences": ["<bull reason 1>","<bull reason 2>","<bull reason 3>","<bull reason 4>","<bull reason 5>"],
+  "bull_key_level": "<the most important support the bull case relies on>",
+  "bull_invalidation": "<price that kills the bull case>",
+  "bull_pattern": "<bullish pattern or setup name>",
+  "bull_timing": "<is now the right time to buy, or should bulls wait for a better entry?>",
+  "bull_score": <0-100 — overall score of how strong the bull case is>,
+  "bull_summary": "<3-4 sentences on the full bull case>"
 }`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({
-      model: 'claude-opus-4-5',
-      max_tokens: 1500,
-      system,
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageBase64 } },
-        { type: 'text', text: `Here is what was read from this ${timeframe || '1H'} ${symbol || ''} chart:\n\n${JSON.stringify(chartReading, null, 2)}\n\nNow challenge it. What could go wrong? Why might the obvious trade fail? Be brutally honest.` }
-      ]}]
-    })
-  });
-
-  if (!response.ok) {
-    const e = await response.json().catch(() => ({}));
-    throw new Error(e.error?.message || `Pass 2 API error ${response.status}`);
-  }
-
-  const data = await response.json();
-  const raw  = (data.content || []).map(c => c.text || '').join('').trim();
-  return JSON.parse(raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim());
+  return callClaude(apiKey, system, [
+    { type: 'image', source: { type: 'base64', media_type: mime, data: img } },
+    { type: 'text', text: `Chart data: ${JSON.stringify(reading)}\n\nFind the strongest possible LONG setup on this ${tf} ${symbol} chart. What is the bull case?` }
+  ], 1200);
 }
 
-// ─────────────────────────────────────────────
-// PASS 3 — FINAL VERDICT
-// Has both the bullish and bearish case.
-// Makes the final high-conviction decision.
-// ─────────────────────────────────────────────
-async function pass3_finalVerdict(imageBase64, imageMime, chartReading, riskAssessment, symbol, timeframe, apiKey) {
-  const system = `You are the head of a top-tier proprietary trading desk. You have received a detailed chart analysis AND a devil's advocate risk assessment. Your job is to make the final, highest-quality trading decision.
+// ═══════════════════════════════════════════════
+// PASS 2B — BEAR ANALYST
+// Only looks for reasons to sell.
+// Finds the strongest possible short setup.
+// ═══════════════════════════════════════════════
+async function pass2b_bearAnalyst(img, mime, reading, symbol, tf, apiKey) {
+  const system = `You are a specialist BEAR analyst. Your job is to find the strongest possible reason to go SHORT on this chart. You believe in selling opportunities. Look for every bearish reason.
 
-You have seen both sides — the bull case and the bear case. Now you must decide: is this worth trading, and if so, exactly how?
+But you are also honest — if there is genuinely no bear case, score it low.
 
-GOLDEN RULES for your final verdict:
-1. If the devil's advocate raised 3+ strong counter-arguments, confidence must be below 65
-2. If false signal risk is "High", you must either say WAIT or reduce confidence significantly
-3. Only signal BUY/SELL if there are at least 3 strong confluences AND minimum 1:2 R:R
-4. The stop loss must be at a LOGICAL structural level — never arbitrary
-5. Be honest about grade — A+ is rare, reserved for textbook perfect setups only
+Return ONLY raw JSON.
 
-Return ONLY raw JSON. No markdown, no code fences.
+{
+  "bear_verdict": "Strong Sell" or "Sell" or "Weak Sell" or "No Bear Case",
+  "bear_confidence": <0-100>,
+  "bear_entry": "<ideal short entry>",
+  "bear_sl": "<stop for short>",
+  "bear_tp1": "<first target>",
+  "bear_tp2": "<second target>",
+  "bear_rr": "<R:R to TP1>",
+  "bear_confluences": ["<bear reason 1>","<bear reason 2>","<bear reason 3>","<bear reason 4>","<bear reason 5>"],
+  "bear_key_level": "<the most important resistance the bear case relies on>",
+  "bear_invalidation": "<price that kills the bear case>",
+  "bear_pattern": "<bearish pattern or setup name>",
+  "bear_timing": "<is now the right time to sell, or should bears wait?>",
+  "bear_score": <0-100 — overall score of how strong the bear case is>,
+  "bear_summary": "<3-4 sentences on the full bear case>"
+}`;
+
+  return callClaude(apiKey, system, [
+    { type: 'image', source: { type: 'base64', media_type: mime, data: img } },
+    { type: 'text', text: `Chart data: ${JSON.stringify(reading)}\n\nFind the strongest possible SHORT setup on this ${tf} ${symbol} chart. What is the bear case?` }
+  ], 1200);
+}
+
+// ═══════════════════════════════════════════════
+// PASS 3 — RISK MANAGER (Devil's Advocate)
+// Reads both bull and bear cases.
+// Finds the traps, false signals, and dangers.
+// ═══════════════════════════════════════════════
+async function pass3_riskManager(img, mime, reading, bullCase, bearCase, symbol, tf, apiKey) {
+  const system = `You are the head risk manager at a top prop trading firm. You have been given a chart reading, a bull case, and a bear case. Your ONLY job is to protect capital.
+
+Find every trap, false signal, fake-out, and danger. Challenge both the bull AND bear case. Your goal is to reduce losses, not find trades.
+
+Return ONLY raw JSON.
+
+{
+  "overall_risk": "Very High" or "High" or "Medium" or "Low",
+  "dominant_case": "Bull" or "Bear" or "Neither — too close to call",
+  "case_strength_gap": <0-100 — how much stronger is the dominant case vs the other>,
+  "bull_case_flaws": ["<flaw 1>","<flaw 2>","<flaw 3>"],
+  "bear_case_flaws": ["<flaw 1>","<flaw 2>","<flaw 3>"],
+  "false_signal_risk": "High" or "Medium" or "Low",
+  "false_signal_reason": "<specific reason this could be a trap>",
+  "chop_risk": "High" or "Medium" or "Low",
+  "chop_reason": "<is the market ranging or choppy? Would this signal get chopped out?>",
+  "hidden_dangers": ["<danger 1>","<danger 2>","<danger 3>"],
+  "liquidity_trap_risk": "Yes" or "No" or "Possible",
+  "liquidity_trap_detail": "<is price near a liquidity trap — equal highs/lows being targeted?>",
+  "news_risk": "<any obvious news or session risk to consider>",
+  "minimum_rr_achievable": "<is the minimum 1:2 R:R actually achievable or is there an obstacle in the way?>",
+  "recommendation": "Trade the dominant case" or "Wait for better entry" or "Avoid — too risky" or "Reduce size — high risk",
+  "risk_summary": "<3-4 sentences on overall risk assessment>"
+}`;
+
+  return callClaude(apiKey, system, [
+    { type: 'image', source: { type: 'base64', media_type: mime, data: img } },
+    { type: 'text', text: `Chart: ${JSON.stringify(reading)}\nBull case: ${JSON.stringify(bullCase)}\nBear case: ${JSON.stringify(bearCase)}\n\nAssess all risks. What are the dangers? What could go wrong with both cases?` }
+  ], 1500);
+}
+
+// ═══════════════════════════════════════════════
+// PASS 4 — SUPREME COURT (Final Consensus)
+// Sees everything. Makes the final call.
+// Highest quality signal possible.
+// ═══════════════════════════════════════════════
+async function pass4_supremeCourt(img, mime, reading, bullCase, bearCase, riskAssessment, symbol, tf, apiKey) {
+  const system = `You are the final decision maker — the Chief Trading Officer of the world's most profitable prop firm. You have received:
+1. An objective chart reading
+2. The strongest possible bull case
+3. The strongest possible bear case
+4. A full risk assessment
+
+Your job is to make the single highest-quality trading decision possible. You have all the information. You are objective, unemotional, and focused only on probability and risk-adjusted returns.
+
+STRICT RULES:
+- Only signal BUY if bull_score > bear_score by at least 20 points AND overall_risk is not "Very High" AND false_signal_risk is not "High" AND R:R >= 1:2
+- Only signal SELL if bear_score > bull_score by at least 20 points AND same conditions
+- If the case_strength_gap < 20, return WAIT — too close to call
+- If overall_risk is "Very High", return WAIT
+- If false_signal_risk is "High" AND case_strength_gap < 35, return WAIT
+- If minimum_rr_achievable shows an obstacle, return WAIT
+- Confidence must reflect ALL risks — never above 85 unless it's a textbook perfect setup
+- Signal grade A+ is extremely rare — only for setups where everything perfectly aligns
+
+Return ONLY raw JSON starting with { ending with }.
 
 {
   "verdict": "BUY" or "SELL" or "HOLD" or "WAIT",
-  "confidence": <integer 40-95>,
+  "confidence": <integer 40-92>,
   "signal_grade": "A+" or "A" or "B" or "C" or "D",
+  "decision_reason": "<why this verdict — what tipped the scales>",
+  "bull_score_final": <0-100>,
+  "bear_score_final": <0-100>,
+  "score_gap": <bull minus bear score>,
   "market_phase": "Accumulation" or "Markup" or "Distribution" or "Markdown" or "Consolidation",
   "price_position": "Premium" or "Discount" or "Equilibrium",
-  "bull_case_strength": "Strong" or "Moderate" or "Weak",
-  "bear_case_strength": "Strong" or "Moderate" or "Weak",
-  "winning_case": "Bull" or "Bear" or "Neither",
-  "summary": "<6-7 sentences: (1) overall market structure and phase, (2) price position in range, (3) the specific high-probability setup, (4) why the bull/bear case wins over the other, (5) exact entry and confirmation needed, (6) trade plan, (7) the #1 thing that kills this trade>",
-  "entry": "<exact price or precise entry condition>",
-  "entry_trigger": "<specific confirmation before entering>",
-  "sl": "<exact stop loss price>",
+  "market_bias": "Strongly Bullish" or "Bullish" or "Neutral" or "Bearish" or "Strongly Bearish",
+  "summary": "<7-8 sentence elite summary: market structure and phase, price position in range, which case won and why, the specific setup with all confluences, entry plan, risk management, what kills the trade, and the overall thesis>",
+  "entry": "<exact price or entry condition>",
+  "entry_trigger": "<what must happen before entering>",
+  "sl": "<exact stop loss>",
   "sl_reason": "<structural reason>",
   "tp1": "<first target>",
   "tp1_reason": "<why>",
   "tp2": "<second target>",
   "tp2_reason": "<why>",
-  "tp3": "<third target — full move>",
-  "rr_tp1": "<R:R to TP1>",
-  "rr_tp2": "<R:R to TP2>",
+  "tp3": "<third target>",
+  "rr_tp1": "<R:R>",
+  "rr_tp2": "<R:R>",
   "rrLabel": "Poor" or "Acceptable" or "Good" or "Excellent",
-  "position_size": "<max risk % recommendation>",
-  "market_bias": "Strongly Bullish" or "Bullish" or "Neutral" or "Bearish" or "Strongly Bearish",
-  "confluences": ["<confluence 1>","<confluence 2>","<confluence 3>","<confluence 4>","<confluence 5>"],
+  "position_size": "<max risk % — be conservative if risk is medium/high>",
+  "confluences": ["<top confluence 1>","<top confluence 2>","<top confluence 3>","<top confluence 4>","<top confluence 5>"],
   "key_levels": {
     "major_resistance": "<price>",
     "minor_resistance": "<price>",
@@ -210,105 +236,100 @@ Return ONLY raw JSON. No markdown, no code fences.
     "order_blocks": "<OBs and prices>",
     "fvg": "<fair value gaps>",
     "liquidity_pools": "<where stops rest>",
-    "recent_sweep": "<recent sweep if any>",
+    "recent_sweep": "<recent sweep>",
     "bos_choch": "<most recent BOS/CHOCH>",
     "displacement": "<institutional moves>"
   },
   "factors": [
-    {"name":"Trend","score":<0-100>,"note":"<specific observation>"},
-    {"name":"Volume","score":<0-100>,"note":"<volume analysis>"},
+    {"name":"Trend","score":<0-100>,"note":"<specific>"},
+    {"name":"Volume","score":<0-100>,"note":"<specific>"},
     {"name":"Momentum","score":<0-100>,"note":"<RSI MACD divergence>"},
-    {"name":"Structure","score":<0-100>,"note":"<HH/HL or LH/LL BOS CHOCH>"},
-    {"name":"Price Action","score":<0-100>,"note":"<candles patterns wicks>"},
-    {"name":"Confluence","score":<0-100>,"note":"<count of aligned factors>"},
+    {"name":"Structure","score":<0-100>,"note":"<HH/HL BOS CHOCH>"},
+    {"name":"Price Action","score":<0-100>,"note":"<candles patterns>"},
+    {"name":"Confluence","score":<0-100>,"note":"<how many align>"},
     {"name":"Risk/Reward","score":<0-100>,"note":"<R:R quality>"}
   ],
   "patterns": [{"name":"<pattern>","type":"bull" or "bear" or "neutral","reliability":"Low" or "Medium" or "High","significance":"<why it matters>"}],
   "indicators": {
-    "ema": "<EMA alignment>",
-    "rsi": "<RSI value and divergence>",
-    "macd": "<MACD state>",
-    "volume": "<volume bars>",
-    "other": "<other indicators>"
+    "ema": "<alignment>",
+    "rsi": "<value divergence>",
+    "macd": "<state>",
+    "volume": "<analysis>",
+    "other": "<other>"
   },
-  "risks_acknowledged": ["<risk from devil's advocate 1>","<risk 2>","<risk 3>"],
-  "why_trade_wins": "<specific reasons the bull/bear case is stronger than the opposing case>",
+  "risks_acknowledged": ["<risk 1 from risk manager>","<risk 2>","<risk 3>"],
+  "why_still_valid": "<why the trade is worth taking despite the risks>",
   "invalidation": {
-    "immediate": "<price that immediately kills trade>",
+    "immediate": "<price that kills trade immediately>",
     "warning": "<warning level>",
-    "scenario": "<price action to exit immediately>"
+    "scenario": "<price action to exit>"
   },
-  "trade_management": "<how to manage — stop to BE, partial profits>",
-  "candle_analysis": "<last 5 significant candles story>",
-  "best_case": "<best case path>",
-  "worst_case": "<worst case path>",
-  "fullAnalysis": "<10-12 sentences of elite institutional HTML with <strong> tags. Read like a professional trade report. Cover: complete market structure, all key levels, full SMC/ICT setup with every confluence, why bull/bear case wins, exact entry/SL/TP with reasoning, risks acknowledged and why trade still valid, risk management rules, full trade thesis>"
+  "trade_management": "<how to manage — when to move SL to BE, partial profits, scaling>",
+  "candle_analysis": "<last 5 candles story>",
+  "best_case": "<ideal path if trade works>",
+  "worst_case": "<path if trade fails>",
+  "fullAnalysis": "<12-15 sentences of elite institutional HTML with <strong> tags. This is a full professional trade report. Cover: complete market structure analysis with specific prices, price position in range, full SMC/ICT breakdown, every confluence with specific prices, exact entry/SL/TP with reasons, risks acknowledged and why trade survives them, trade management plan, and the complete trade thesis with confidence assessment>"
 }`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({
-      model: 'claude-opus-4-5',
-      max_tokens: 4000,
-      system,
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageBase64 } },
-        { type: 'text', text: `Make the final trading decision for this ${timeframe || '1H'} ${symbol || ''} chart.
-
-CHART READING (Pass 1):
-${JSON.stringify(chartReading, null, 2)}
-
-DEVIL'S ADVOCATE RISK ASSESSMENT (Pass 2):
-${JSON.stringify(riskAssessment, null, 2)}
-
-You have both sides. Now make the highest-quality final decision. Be objective — let the evidence decide. If the risks outweigh the setup, say WAIT. If the setup is strong enough to overcome the risks, give the signal with full detail.` }
-      ]}]
-    })
-  });
-
-  if (!response.ok) {
-    const e = await response.json().catch(() => ({}));
-    throw new Error(e.error?.message || `Pass 3 API error ${response.status}`);
-  }
-
-  const data = await response.json();
-  const raw  = (data.content || []).map(c => c.text || '').join('').trim();
-  return JSON.parse(raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim());
+  return callClaude(apiKey, system, [
+    { type: 'image', source: { type: 'base64', media_type: mime, data: img } },
+    { type: 'text', text: `Make the final trading decision.\n\nChart reading: ${JSON.stringify(reading)}\nBull case (score: ${bullCase.bull_score}): ${JSON.stringify(bullCase)}\nBear case (score: ${bearCase.bear_score}): ${JSON.stringify(bearCase)}\nRisk assessment: ${JSON.stringify(riskAssessment)}\n\nApply all rules strictly. Only signal if the dominant case wins by 20+ points, risk is not Very High, and R:R >= 1:2. Otherwise return WAIT.` }
+  ], 4500);
 }
 
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 // MAIN ENDPOINT
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 app.post('/api/analyze', async (req, res) => {
   const { imageBase64, imageMime, symbol, timeframe } = req.body;
   if (!imageBase64) return res.status(400).json({ error: 'No image provided' });
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
+  const sym = symbol || 'Unknown';
+  const tf  = timeframe || '1H';
+  const mime = imageMime || 'image/png';
+
   try {
-    console.log(`[NexTrade] Starting 3-pass analysis for ${symbol || 'unknown'} ${timeframe || '1H'}...`);
+    console.log(`\n[NexTrade 4-Pass] Starting analysis: ${sym} ${tf}`);
+    const t0 = Date.now();
 
-    // PASS 1 — Read the chart
-    console.log('[NexTrade] Pass 1: Reading chart...');
-    const chartReading = await pass1_readChart(imageBase64, imageMime, symbol, timeframe, apiKey);
+    // Run Pass 1 first (sequential — others depend on it)
+    console.log('[Pass 1] Objective chart reading...');
+    const reading = await pass1_objectiveReading(imageBase64, mime, sym, tf, apiKey);
+    console.log(`[Pass 1] Done. Trend: ${reading.trend?.direction}, Structure: ${reading.structure?.type}`);
 
-    // PASS 2 — Devil's advocate
-    console.log('[NexTrade] Pass 2: Devil\'s advocate...');
-    const riskAssessment = await pass2_devilsAdvocate(imageBase64, imageMime, chartReading, symbol, timeframe, apiKey);
+    // Run Pass 2A and 2B in PARALLEL (saves time)
+    console.log('[Pass 2A+2B] Running bull and bear analysts in parallel...');
+    const [bullCase, bearCase] = await Promise.all([
+      pass2a_bullAnalyst(imageBase64, mime, reading, sym, tf, apiKey),
+      pass2b_bearAnalyst(imageBase64, mime, reading, sym, tf, apiKey)
+    ]);
+    console.log(`[Pass 2A] Bull score: ${bullCase.bull_score} | [Pass 2B] Bear score: ${bearCase.bear_score}`);
 
-    // PASS 3 — Final verdict
-    console.log('[NexTrade] Pass 3: Final verdict...');
-    const finalResult = await pass3_finalVerdict(imageBase64, imageMime, chartReading, riskAssessment, symbol, timeframe, apiKey);
+    // Pass 3 — Risk assessment (needs both cases)
+    console.log('[Pass 3] Risk manager assessment...');
+    const riskAssessment = await pass3_riskManager(imageBase64, mime, reading, bullCase, bearCase, sym, tf, apiKey);
+    console.log(`[Pass 3] Risk: ${riskAssessment.overall_risk} | False signal: ${riskAssessment.false_signal_risk} | Dominant: ${riskAssessment.dominant_case}`);
 
-    // Attach metadata
-    finalResult._passes = {
-      chart_reading: chartReading,
-      risk_assessment: riskAssessment
+    // Pass 4 — Final verdict (needs everything)
+    console.log('[Pass 4] Supreme court final verdict...');
+    const result = await pass4_supremeCourt(imageBase64, mime, reading, bullCase, bearCase, riskAssessment, sym, tf, apiKey);
+    console.log(`[Pass 4] VERDICT: ${result.verdict} | Grade: ${result.signal_grade} | Confidence: ${result.confidence}%`);
+
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+    console.log(`[NexTrade 4-Pass] Complete in ${elapsed}s\n`);
+
+    // Attach all passes for transparency
+    result._analysis_passes = {
+      pass1_chart_reading: reading,
+      pass2a_bull_case: bullCase,
+      pass2b_bear_case: bearCase,
+      pass3_risk_assessment: riskAssessment,
+      analysis_time_seconds: parseFloat(elapsed)
     };
 
-    console.log(`[NexTrade] Complete. Verdict: ${finalResult.verdict} | Grade: ${finalResult.signal_grade} | Confidence: ${finalResult.confidence}%`);
-    res.json(finalResult);
+    res.json(result);
 
   } catch (err) {
     console.error('[NexTrade] Error:', err.message);
@@ -321,4 +342,7 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`\n  NexTrade AI (3-pass engine) running at http://localhost:${PORT}\n`));
+app.listen(PORT, () => {
+  console.log(`\n  NexTrade AI — 4-Pass Engine`);
+  console.log(`  Running at http://localhost:${PORT}\n`);
+});
