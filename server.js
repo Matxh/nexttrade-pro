@@ -216,7 +216,7 @@ app.post('/api/auth/signup',(req,res)=>{
   const{email,password}=req.body;
   if(!email||!password||password.length<6) return res.status(400).json({error:'Invalid email or password (min 6 chars)'});
   const users=loadUsers(); if(users[email]) return res.status(400).json({error:'Account already exists'});
-  upsertUser(email,{password,plan:'none',active:false});
+  upsertUser(email,{password,plan:'free',active:true});
   res.json({success:true});
 });
 app.post('/api/auth/login',(req,res)=>{
@@ -271,11 +271,9 @@ app.post('/api/analyze',async(req,res)=>{
   const key=process.env.ANTHROPIC_API_KEY;
   if(!key) return res.status(500).json({error:'ANTHROPIC_API_KEY not set'});
 
-  if(email){
-    const user=getUser(email);
-    if(!user||!user.active) return res.status(403).json({error:'SUBSCRIPTION_REQUIRED'});
-    if(!checkDailyLimit(email)) return res.status(429).json({error:'DAILY_LIMIT_REACHED',plan:user.plan});
-    if(charts?.length>1&&user.plan!=='pro') return res.status(403).json({error:'UPGRADE_REQUIRED'});
+  // No subscription required — open access
+  if(charts?.length>1) {
+    // Multi-chart allowed for everyone
   }
 
   let chartList=[];
@@ -327,8 +325,43 @@ app.post('/api/analyze',async(req,res)=>{
 });
 
 // ─────────────────────────────────────────────
-// OTHER ENDPOINTS
+// MANUAL PAYMENT (crypto / bank transfer)
+// Saves pending payment, sends you an email to verify
 // ─────────────────────────────────────────────
+app.post('/api/manual-payment', async(req,res)=>{
+  const{email,plan,type,reference}=req.body;
+  if(!email||!plan||!reference) return res.status(400).json({error:'Missing fields'});
+
+  // Save pending payment to /tmp
+  const pending = safeRead(path.join(TMP,'pending-payments.json'),[]);
+  pending.push({ email, plan, type, reference, submittedAt: new Date().toISOString(), status:'pending' });
+  safeWrite(path.join(TMP,'pending-payments.json'), pending);
+
+  // Email YOU (the owner) to verify and manually activate
+  const sgKey = process.env.SENDGRID_API_KEY;
+  if(sgKey) {
+    const prices = { basic:'$14.99', pro:'$39.99' };
+    const body = `New manual payment received!\n\nEmail: ${email}\nPlan: ${plan} (${prices[plan]||'?'})\nMethod: ${type}\nReference: ${reference}\nTime: ${new Date().toISOString()}\n\nTo activate this account, call this URL:\n${process.env.BASE_URL||'https://nexttrade-pro.vercel.app'}/api/activate-manual?email=${encodeURIComponent(email)}&plan=${plan}&secret=${process.env.ADMIN_SECRET||'changeme'}\n\nOr reply to ${email} to ask for more info.`;
+    try {
+      await fetch('https://api.sendgrid.com/v3/mail/send',{method:'POST',headers:{'Authorization':`Bearer ${sgKey}`,'Content-Type':'application/json'},body:JSON.stringify({personalizations:[{to:[{email:process.env.ADMIN_EMAIL||process.env.FROM_EMAIL||'admin@nexttrade-ai.com'}]}],from:{email:process.env.FROM_EMAIL||'noreply@nexttrade-ai.com',name:'NexTrade AI'},subject:`Manual Payment: ${email} wants ${plan}`,content:[{type:'text/plain',value:body}]})});
+      console.log(`[ManualPayment] Alert sent for ${email} (${plan} via ${type})`);
+    } catch(e) { console.warn('[ManualPayment] Could not send email:', e.message); }
+  }
+
+  console.log(`[ManualPayment] New: ${email} | ${plan} | ${type} | ref: ${reference}`);
+  res.json({success:true});
+});
+
+// Manual activation URL (you open this to activate an account after verifying payment)
+app.get('/api/activate-manual',(req,res)=>{
+  const{email,plan,secret}=req.query;
+  const adminSecret = process.env.ADMIN_SECRET||'changeme';
+  if(secret!==adminSecret) return res.status(403).send('Invalid secret');
+  if(!email||!plan) return res.status(400).send('Missing email or plan');
+  upsertUser(email,{plan,active:true,activatedAt:new Date().toISOString(),activationMethod:'manual'});
+  console.log(`[ManualPayment] ✓ Activated: ${email} → ${plan}`);
+  res.send(`<html><body style="font-family:monospace;background:#06080d;color:#00e5b4;padding:40px"><h2>✓ Account Activated</h2><p>Email: ${email}</p><p>Plan: ${plan}</p><p>Status: Active</p></body></html>`);
+});
 app.post('/api/subscribe',(req,res)=>{
   const{email}=req.body; if(!email||!email.includes('@')) return res.status(400).json({error:'Invalid email'});
   const subs=loadSubs(); if(subs.find(s=>s.email===email)) return res.json({success:true});
