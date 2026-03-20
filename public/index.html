@@ -1472,7 +1472,7 @@ async function runAnalysis(){
     const json=await res.json();
     if(!res.ok){
       if(json.error==='limit_reached'){showErr('Daily limit reached (10/10). <a onclick="startCheckout(\'pro\')" style="color:var(--accent);cursor:pointer">Upgrade to Pro →</a>');}
-      else if(json.error==='subscription_required'){showErr('Subscription required. <a onclick="goTo('pricing')" style="color:var(--accent);cursor:pointer">View plans →</a>');}
+      else if(json.error==='subscription_required'){showErr('Subscription required. <a onclick="goTo(\'pricing\')" style="color:var(--accent);cursor:pointer">View plans →</a>');}
       else throw new Error(json.error||`Server error ${res.status}`);
       $('analyzeBtn').disabled=false;return;
     }
