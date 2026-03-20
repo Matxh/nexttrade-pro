@@ -587,8 +587,8 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
   </a>
   <div class="nav-center">
     <a class="nav-link" onclick="showPage('home')">Home</a>
-    <a class="nav-link" onclick="scrollTo('pricing')">Pricing</a>
-    <a class="nav-link" onclick="scrollTo('how')">How It Works</a>
+    <a class="nav-link" onclick="goTo('pricing')">Pricing</a>
+    <a class="nav-link" onclick="goTo('how')">How It Works</a>
     <a class="nav-link" onclick="showPage('analyzer')">Analyzer</a>
     <a class="nav-link" onclick="showPage('journal')">Journal</a>
   </div>
@@ -618,7 +618,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <h1>Upload Chart.<br><span class="grad">Get Institutional</span><br><span class="dim">Grade Signals.</span></h1>
     <p class="hero-sub">Screenshot any chart from TradingView, MT4, or Binance. Our 4-pass AI analyzes it like a hedge fund — entry, stop loss, take profit, in seconds.</p>
     <div class="hero-ctas">
-      <button class="btn btn-primary btn-xl" onclick="scrollTo('pricing')">Get Started →</button>
+      <button class="btn btn-primary btn-xl" onclick="goTo('pricing')">Get Started →</button>
       <button class="btn btn-ghost btn-lg" onclick="goToAnalyzer()">Try the Analyzer</button>
     </div>
     <div class="hero-trust">
@@ -908,12 +908,12 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <h4>Product</h4>
         <a onclick="showPage('analyzer')">AI Analyzer</a>
         <a onclick="showPage('journal')">Trade Journal</a>
-        <a onclick="scrollTo('pricing')">Pricing</a>
-        <a onclick="scrollTo('how')">How It Works</a>
+        <a onclick="goTo('pricing')">Pricing</a>
+        <a onclick="goTo('how')">How It Works</a>
       </div>
       <div class="footer-col">
         <h4>Support</h4>
-        <a onclick="scrollTo('faq')">FAQ</a>
+        <a onclick="goTo('faq')">FAQ</a>
         <a>Contact Us</a>
         <a>Discord Community</a>
       </div>
@@ -939,7 +939,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <h3>Subscription Required</h3>
       <p>Start a Basic or Pro plan to unlock the AI analyzer. Cancel anytime, no contracts.</p>
       <div class="paywall-btns">
-        <button class="btn btn-primary btn-lg" onclick="scrollTo('pricing');showPage('home')">View Plans →</button>
+        <button class="btn btn-primary btn-lg" onclick="goTo('pricing');showPage('home')">View Plans →</button>
         <button class="btn btn-ghost btn-lg" onclick="showAuth('login')">Log In</button>
       </div>
     </div>
@@ -1344,7 +1344,7 @@ function showPage(id){
   if(id==='analyzer')updateAnalyzerGate();
 }
 
-function scrollTo(id){
+function goTo(id){
   showPage('home');
   setTimeout(()=>{
     const el=document.getElementById(id);
@@ -1472,7 +1472,7 @@ async function runAnalysis(){
     const json=await res.json();
     if(!res.ok){
       if(json.error==='limit_reached'){showErr('Daily limit reached (10/10). <a onclick="startCheckout(\'pro\')" style="color:var(--accent);cursor:pointer">Upgrade to Pro →</a>');}
-      else if(json.error==='subscription_required'){showErr('Subscription required. <a onclick="scrollTo(\'pricing\');showPage(\'home\')" style="color:var(--accent);cursor:pointer">View plans →</a>');}
+      else if(json.error==='subscription_required'){showErr('Subscription required. <a onclick="goTo('pricing')" style="color:var(--accent);cursor:pointer">View plans →</a>');}
       else throw new Error(json.error||`Server error ${res.status}`);
       $('analyzeBtn').disabled=false;return;
     }
