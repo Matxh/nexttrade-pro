@@ -790,17 +790,15 @@ let currentModule = -1; // -1 = landing
 // Modules 1-5 + completion = PAID ($9.99)
 // Replace PAYPAL_LINK with your actual PayPal.me link
 
-const PAYPAL_LINK = 'https://www.paypal.com/paypalme/YOURPAYPALNAME/9.99';
 const COURSE_KEY  = 'nt_course_unlocked';
 
 function hasAccess() {
-  return localStorage.getItem(COURSE_KEY) === 'true';
+  return true; // FREE for now — paywall added later
 }
 
 function unlockCourse() {
   localStorage.setItem(COURSE_KEY, 'true');
   document.getElementById('paywallModal').style.display = 'none';
-  // Re-attempt navigation to the module they wanted
   goToModule(pendingModule);
 }
 
