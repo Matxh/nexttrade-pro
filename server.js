@@ -85,6 +85,7 @@ function authMiddleware(req, res, next) {
 
 function requirePlan(req, res, next) {
   const user = req.user;
+  if (isWhitelisted(user)) return next(); // owner/team bypass
   if (!user.plan || user.subscriptionStatus !== 'active') {
     return res.status(403).json({
       error: 'subscription_required',
@@ -103,6 +104,16 @@ function requirePlan(req, res, next) {
     }
   }
   next();
+}
+
+// ── WHITELIST — free access for owner & team ──
+// Add emails to WHITELISTED_EMAILS env var (comma-separated) or hard-code below
+const WHITELIST = new Set([
+  ...(process.env.WHITELISTED_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+]);
+
+function isWhitelisted(user) {
+  return WHITELIST.has(user.email.toLowerCase());
 }
 
 // ── STRIPE ──
@@ -175,7 +186,13 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 });
 
 function safeUser(u) {
-  return { id: u.id, email: u.email, plan: u.plan, subscriptionStatus: u.subscriptionStatus };
+  const whitelisted = isWhitelisted(u);
+  return {
+    id: u.id,
+    email: u.email,
+    plan: whitelisted ? 'pro' : u.plan,
+    subscriptionStatus: whitelisted ? 'active' : u.subscriptionStatus
+  };
 }
 
 // ─────────────────────────────────────────────
