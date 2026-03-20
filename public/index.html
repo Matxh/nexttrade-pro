@@ -591,7 +591,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <a class="nav-link" onclick="goTo('how')">How It Works</a>
     <a class="nav-link" onclick="showPage('analyzer')">Analyzer</a>
     <a class="nav-link" onclick="showPage('journal')">Journal</a>
-    <a class="nav-link" onclick="showPage('course')">Free Course</a>
   </div>
   <div class="nav-right">
     <div class="live-pill"><div class="pulse"></div>AI Online</div>
@@ -909,7 +908,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <h4>Product</h4>
         <a onclick="showPage('analyzer')">AI Analyzer</a>
         <a onclick="showPage('journal')">Trade Journal</a>
-        <a onclick="showPage('course')">Free Course</a>
         <a onclick="goTo('pricing')">Pricing</a>
         <a onclick="goTo('how')">How It Works</a>
       </div>
@@ -1110,172 +1108,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         </table>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- ════════ COURSE PAGE ════════ -->
-<div class="page" id="page-course">
-  <div class="app-wrap" style="max-width:860px">
-    <div class="app-header">
-      <div style="flex:1">
-        <div class="app-title">Free Course — How to Get the Best Signals</div>
-        <div class="app-sub">Master PriceAction AI in minutes · Learn what separates A+ signals from noise</div>
-      </div>
-    </div>
-
-    <!-- MODULE 1 -->
-    <div class="j-panel" style="margin-bottom:20px">
-      <div class="j-head"><span class="j-title">📸 Module 1 — How to Screenshot Your Chart</span></div>
-      <div style="padding:20px;line-height:1.8;color:var(--text2);font-size:14px">
-        <p style="margin-bottom:12px">The quality of your screenshot directly affects analysis accuracy. Follow these rules:</p>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--accent);font-weight:700;margin-bottom:4px">✓ Use TradingView (recommended)</div>
-            <div>Go full screen on your chart. Hide any panels or toolbars that cover price. Make sure candles fill the whole screen with at least 100–200 candles visible.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--accent);font-weight:700;margin-bottom:4px">✓ Show key indicators on the chart</div>
-            <div>Add EMA 20, 50, 200 if you use them. Volume bars at the bottom help the AI detect displacement candles and institutional activity.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--red);font-weight:700;margin-bottom:4px">✗ Don't crop too tight</div>
-            <div>The AI needs to see the full price range — recent swing highs and lows must be visible. Cropping removes context and lowers accuracy.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--red);font-weight:700;margin-bottom:4px">✗ Avoid dark overlapping drawings</div>
-            <div>If your chart is covered in colored lines and drawings, the AI may misread the structure. Use a clean chart with minimal drawings.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODULE 2 -->
-    <div class="j-panel" style="margin-bottom:20px">
-      <div class="j-head"><span class="j-title">📊 Module 2 — Which Timeframes to Upload</span></div>
-      <div style="padding:20px;line-height:1.8;color:var(--text2);font-size:14px">
-        <p style="margin-bottom:16px">Multi-timeframe (MTF) analysis is the single biggest accuracy multiplier. The AI scores alignment 0–100 — the higher the score, the higher the signal quality.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-          <div style="background:var(--accent-dim);border:1px solid rgba(0,229,180,.2);border-radius:8px;padding:16px">
-            <div style="color:var(--accent);font-weight:800;font-size:13px;margin-bottom:8px">BEST COMBO — Swing Trading</div>
-            <div style="font-family:var(--mono);font-size:12px;line-height:2">Chart 1: Daily (HTF bias)<br>Chart 2: 4H (structure)<br>Chart 3: 1H (entry timing)</div>
-          </div>
-          <div style="background:var(--blue-dim,rgba(61,158,255,.08));border:1px solid rgba(61,158,255,.2);border-radius:8px;padding:16px">
-            <div style="color:var(--blue);font-weight:800;font-size:13px;margin-bottom:8px">BEST COMBO — Day Trading</div>
-            <div style="font-family:var(--mono);font-size:12px;line-height:2">Chart 1: 4H (HTF bias)<br>Chart 2: 1H (structure)<br>Chart 3: 15M (entry timing)</div>
-          </div>
-        </div>
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-          <div style="color:var(--amber);font-weight:700;margin-bottom:4px">Pro tip: Always start with the highest timeframe</div>
-          <div>The AI uses the highest timeframe chart as THE LAW. If the Daily is bearish, it won't issue a Long signal no matter what the 15M says. This is how institutions trade — top-down always.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODULE 3 -->
-    <div class="j-panel" style="margin-bottom:20px">
-      <div class="j-head"><span class="j-title">🎯 Module 3 — Understanding Signal Grades</span></div>
-      <div style="padding:20px;line-height:1.8;color:var(--text2);font-size:14px">
-        <p style="margin-bottom:16px">Every signal is graded A+ through D based on 12 quality gates. Only trade A+ and A signals for the highest probability outcomes.</p>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div style="display:flex;align-items:center;gap:14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 16px">
-            <div style="width:36px;height:36px;border-radius:8px;background:rgba(0,230,118,.15);color:#00e676;font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0">A+</div>
-            <div><div style="color:var(--text);font-weight:600">Elite Setup</div><div style="font-size:13px">All 12 gates pass · 6+ confluences · R:R 1:3+ · Alignment ≥80 · Fresh OB · Excellent session. <strong style="color:#00e676">Trade full size.</strong></div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 16px">
-            <div style="width:36px;height:36px;border-radius:8px;background:rgba(0,230,118,.1);color:#00e676;font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0">A</div>
-            <div><div style="color:var(--text);font-weight:600">High Quality</div><div style="font-size:13px">All 12 gates pass · 4-5 confluences · R:R 1:2.5+ · Alignment ≥70. <strong style="color:#00e676">Trade normal size (1% risk).</strong></div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 16px">
-            <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,179,0,.1);color:var(--amber);font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0">B</div>
-            <div><div style="color:var(--text);font-weight:600">Decent Setup</div><div style="font-size:13px">All 12 gates pass · 3 confluences · R:R 1:2.5 · Alignment ≥65. <strong style="color:var(--amber)">Trade half size (0.5% risk) or skip.</strong></div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 16px">
-            <div style="width:36px;height:36px;border-radius:8px;background:var(--red-dim);color:var(--red);font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0">C/D</div>
-            <div><div style="color:var(--text);font-weight:600">Skip These</div><div style="font-size:13px">One or more gates failed. Low conviction or poor R:R. <strong style="color:var(--red)">Do not trade. Wait for a better setup.</strong></div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 16px">
-            <div style="width:36px;height:36px;border-radius:8px;background:var(--accent-dim);color:var(--accent);font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">WAIT</div>
-            <div><div style="color:var(--text);font-weight:600">Wait Signal — This is NOT a failure</div><div style="font-size:13px">The AI detected setup conditions but one or more gates didn't pass. <strong style="color:var(--accent)">WAIT signals save you from bad trades.</strong> Respect them.</div></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODULE 4 -->
-    <div class="j-panel" style="margin-bottom:20px">
-      <div class="j-head"><span class="j-title">📋 Module 4 — Reading the Analysis Output</span></div>
-      <div style="padding:20px;line-height:1.8;color:var(--text2);font-size:14px">
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--text);font-weight:700;margin-bottom:6px">Verdict Ring (top center)</div>
-            <div>BUY = green, SELL = red, WAIT = amber. The percentage is confidence (40–95%). The grade is A+/A/B/C/D. Focus on grade first — a 95% confidence C grade is worse than a 75% confidence A+.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--text);font-weight:700;margin-bottom:6px">Entry, SL, TP levels</div>
-            <div>Entry is exact — use a limit order at that price. Stop Loss is placed below the order block (for longs) — this is a hard invalidation level, not flexible. TP1 is your first exit (take 50% here and move stop to breakeven). TP2/TP3 are runners.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--text);font-weight:700;margin-bottom:6px">Quality Gates</div>
-            <div>Scroll down to see which of the 12 gates passed (✓) and which failed (✗). If a setup is WAIT, the gate that failed tells you exactly what's wrong — fix that condition (wait for session, wait for news to pass, etc.) and re-analyze.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--text);font-weight:700;margin-bottom:6px">Smart Money section</div>
-            <div>This shows the raw ICT/SMC data: order blocks, fair value gaps, liquidity pools, last BOS/CHOCH, and displacement. Use this to understand WHY the AI made its decision, not just what it decided.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODULE 5 -->
-    <div class="j-panel" style="margin-bottom:20px">
-      <div class="j-head"><span class="j-title">💰 Module 5 — Trade Management & Risk</span></div>
-      <div style="padding:20px;line-height:1.8;color:var(--text2);font-size:14px">
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--accent);font-weight:700;margin-bottom:4px">The 1% rule</div>
-            <div>Never risk more than 1% of your account per trade. On A+ signals you can go to 2%. On B signals, 0.5% max. This ensures one bad trade can't hurt you.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--accent);font-weight:700;margin-bottom:4px">Partial exits at TP1</div>
-            <div>Take 50% of your position off at TP1. Move your stop to breakeven (entry price). This way you're now in a risk-free trade and can let the remaining 50% run to TP2/TP3.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--accent);font-weight:700;margin-bottom:4px">Trailing stop after TP1</div>
-            <div>After TP1 is hit, trail your stop below each new higher low (for longs) or above each new lower high (for shorts). This locks in profit as price moves in your favor.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--red);font-weight:700;margin-bottom:4px">Immediate invalidation</div>
-            <div>If price closes beyond the invalidation level shown in the analysis — exit immediately. No hoping. The setup is structurally broken at that point.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODULE 6 -->
-    <div class="j-panel" style="margin-bottom:20px">
-      <div class="j-head"><span class="j-title">📓 Module 6 — Using the Trade Journal</span></div>
-      <div style="padding:20px;line-height:1.8;color:var(--text2);font-size:14px">
-        <p style="margin-bottom:14px">The journal is the most underused feature. Traders who log every trade improve 2–3x faster than those who don't.</p>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--text);font-weight:700;margin-bottom:4px">Auto-logging</div>
-            <div>Every BUY/SELL signal is automatically saved to your journal. You don't have to do anything — just come back after the trade and log the outcome.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--text);font-weight:700;margin-bottom:4px">Log outcomes honestly</div>
-            <div>After each trade closes, mark it Win or Loss and enter your actual R:R achieved. The journal will show your win rate by grade — this tells you which grades to focus on.</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-            <div style="color:var(--text);font-weight:700;margin-bottom:4px">Use the grade breakdown</div>
-            <div>After 20+ trades, check your win rate by grade. If your A+ win rate is 80% but your B win rate is 45%, the data is telling you to only trade A+ and A. Let the journal make the decision for you.</div>
-          </div>
-        </div>
-        <div style="margin-top:20px;text-align:center">
-          <button class="btn btn-primary btn-lg" onclick="showPage('analyzer')">Start Analyzing →</button>
-        </div>
-      </div>
-    </div>
-
   </div>
 </div>
 
