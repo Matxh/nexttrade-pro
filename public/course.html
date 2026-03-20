@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexTrade AI — Trading Mastery Course</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080a0f;--bg2:#0e1117;--bg3:#141820;--card:#111419;
+  --border:#1a2235;--border2:#243050;
+  --accent:#00ffb3;--accent2:#00c8ff;--gold:#f5c842;
+  --red:#ff4560;--green:#00e676;
+  --text:#e8f0fe;--text2:#6b8aaa;--text3:#334a63;
+  --mono:'DM Mono',monospace;--body:'DM Sans',sans-serif;--display:'Bebas Neue',sans-serif;
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--body);overflow-x:hidden}
+
+/* GRID BG */
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,179,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,179,.018) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes glow{0%,100%{text-shadow:0 0 20px rgba(0,255,179,.4)}50%{text-shadow:0 0 40px rgba(0,255,179,.8),0 0 80px rgba(0,255,179,.3)}}
+@keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* HEADER */
+header{position:sticky;top:0;z-index:100;background:rgba(8,10,15,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:0 40px;height:58px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;background:var(--accent);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#000}
+.logo-text{font-family:var(--display);font-size:22px;letter-spacing:1px;color:var(--text)}
+.logo-text span{color:var(--accent)}
+.header-tag{font-family:var(--mono);font-size:10px;color:var(--accent);background:rgba(0,255,179,.08);border:1px solid rgba(0,255,179,.2);padding:4px 12px;border-radius:20px;letter-spacing:1px}
+
+/* HERO */
+.hero{position:relative;z-index:1;padding:80px 40px 60px;max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr 380px;gap:60px;align-items:center}
+.hero-eyebrow{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:3px;text-transform:uppercase;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.hero-eyebrow::before{content:'';width:24px;height:1px;background:var(--accent)}
+.hero h1{font-family:var(--display);font-size:clamp(52px,6vw,88px);line-height:.95;letter-spacing:2px;margin-bottom:24px;animation:glow 4s ease-in-out infinite}
+.hero h1 em{color:var(--accent);font-style:normal}
+.hero-sub{font-size:16px;color:var(--text2);line-height:1.75;margin-bottom:36px;max-width:480px}
+.hero-cta{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#000;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;border:none;font-family:var(--body);transition:all .2s}
+.hero-cta:hover{background:#00e6a0;transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,255,179,.25)}
+.hero-stats{display:flex;gap:32px;margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}
+.h-stat-num{font-family:var(--display);font-size:36px;color:var(--accent);letter-spacing:1px;line-height:1}
+.h-stat-lbl{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-top:4px}
+
+/* COURSE CARD */
+.course-card{background:var(--card);border:1px solid var(--border2);border-radius:16px;overflow:hidden;position:relative}
+.course-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.cc-head{padding:24px;border-bottom:1px solid var(--border)}
+.cc-tag{font-family:var(--mono);font-size:9px;color:var(--gold);background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.2);padding:3px 10px;border-radius:4px;letter-spacing:1px;display:inline-block;margin-bottom:12px}
+.cc-title{font-size:18px;font-weight:700;margin-bottom:6px}
+.cc-sub{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.cc-modules{padding:16px 24px;display:flex;flex-direction:column;gap:8px}
+.cc-module{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);padding:8px 10px;border-radius:6px;transition:background .15s;cursor:pointer}
+.cc-module:hover{background:rgba(255,255,255,.03)}
+.cc-module-num{font-family:var(--mono);font-size:10px;color:var(--text3);width:20px;flex-shrink:0}
+.cc-module-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;opacity:.4}
+.cc-module.active .cc-module-dot{opacity:1;animation:pulse 2s ease-in-out infinite}
+.cc-module.active{color:var(--text)}
+.cc-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.progress-bar{flex:1;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-right:12px}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .5s ease;width:0%}
+.progress-text{font-family:var(--mono);font-size:10px;color:var(--text3)}
+
+/* MAIN CONTENT */
+.content-wrap{max-width:1100px;margin:0 auto;padding:0 40px 80px;position:relative;z-index:1}
+
+/* MODULE */
+.module{display:none;animation:fadeUp .3s ease}
+.module.active{display:block}
+.module-header{margin-bottom:40px;padding-bottom:28px;border-bottom:1px solid var(--border)}
+.module-num{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:3px;text-transform:uppercase;margin-bottom:12px}
+.module-title{font-family:var(--display);font-size:clamp(36px,4vw,56px);letter-spacing:2px;margin-bottom:12px;line-height:1}
+.module-title em{color:var(--accent);font-style:normal}
+.module-desc{font-size:16px;color:var(--text2);line-height:1.7;max-width:680px}
+
+/* LESSON GRID */
+.lesson-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px}
+.lesson-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px;transition:all .2s;cursor:default}
+.lesson-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.lesson-card.highlight{border-color:rgba(0,255,179,.25);background:rgba(0,255,179,.03)}
+.lesson-card.danger{border-color:rgba(255,69,96,.25);background:rgba(255,69,96,.03)}
+.lesson-card.gold{border-color:rgba(245,200,66,.25);background:rgba(245,200,66,.03)}
+.lc-icon{font-size:28px;margin-bottom:14px}
+.lc-title{font-size:16px;font-weight:700;margin-bottom:8px}
+.lc-body{font-size:13px;color:var(--text2);line-height:1.75}
+.lc-body strong{color:var(--text);font-weight:600}
+
+/* STEPS */
+.steps-list{display:flex;flex-direction:column;gap:0;margin-bottom:32px}
+.step-item{display:flex;gap:20px;padding:24px 0;border-bottom:1px solid var(--border);position:relative}
+.step-item:last-child{border-bottom:none}
+.step-left{display:flex;flex-direction:column;align-items:center;gap:0;flex-shrink:0;width:48px}
+.step-circle{width:48px;height:48px;border-radius:50%;background:var(--bg3);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:20px;color:var(--accent);flex-shrink:0;transition:all .3s}
+.step-item:hover .step-circle{background:rgba(0,255,179,.1);border-color:var(--accent)}
+.step-line{width:2px;flex:1;background:var(--border);margin-top:6px}
+.step-item:last-child .step-line{display:none}
+.step-content{padding-top:10px;flex:1}
+.step-title{font-size:16px;font-weight:700;margin-bottom:8px}
+.step-body{font-size:13px;color:var(--text2);line-height:1.75}
+.step-body strong{color:var(--text);font-weight:600}
+.step-tag{display:inline-block;font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;margin-bottom:8px;letter-spacing:.5px}
+.step-tag.pro{background:rgba(0,255,179,.1);color:var(--accent);border:1px solid rgba(0,255,179,.2)}
+.step-tag.warn{background:rgba(255,69,96,.1);color:var(--red);border:1px solid rgba(255,69,96,.2)}
+.step-tag.gold{background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.2)}
+
+/* RULES BOX */
+.rules-box{background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:28px;margin-bottom:32px;position:relative;overflow:hidden}
+.rules-box::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.rules-title{font-family:var(--display);font-size:22px;letter-spacing:1px;margin-bottom:20px;color:var(--accent)}
+.rules-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rule-item{display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)}
+.rule-check{font-size:14px;flex-shrink:0;margin-top:1px}
+.rule-text{font-size:13px;color:var(--text2);line-height:1.6}
+.rule-text strong{color:var(--text);font-weight:600;display:block;margin-bottom:2px}
+
+/* TABLE */
+.data-table{width:100%;border-collapse:collapse;margin-bottom:32px;background:var(--card);border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+.data-table th{padding:12px 16px;text-align:left;font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid var(--border);font-weight:400;background:rgba(0,0,0,.2)}
+.data-table td{padding:14px 16px;font-size:13px;color:var(--text2);border-bottom:1px solid rgba(26,34,53,.5)}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(255,255,255,.015)}
+.td-good{color:var(--green);font-weight:600}
+.td-bad{color:var(--red);font-weight:600}
+.td-gold{color:var(--gold);font-weight:600}
+.td-mono{font-family:var(--mono);font-size:12px}
+
+/* CALLOUT */
+.callout{border-radius:12px;padding:20px 24px;margin-bottom:24px;display:flex;gap:14px;align-items:flex-start}
+.callout.green{background:rgba(0,230,118,.07);border:1px solid rgba(0,230,118,.2)}
+.callout.red{background:rgba(255,69,96,.07);border:1px solid rgba(255,69,96,.2)}
+.callout.gold{background:rgba(245,200,66,.07);border:1px solid rgba(245,200,66,.2)}
+.callout.blue{background:rgba(0,200,255,.07);border:1px solid rgba(0,200,255,.2)}
+.callout-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+.callout-text{font-size:13px;line-height:1.75;color:var(--text2)}
+.callout-text strong{font-weight:700;display:block;margin-bottom:4px}
+.callout.green .callout-text strong{color:var(--green)}
+.callout.red .callout-text strong{color:var(--red)}
+.callout.gold .callout-text strong{color:var(--gold)}
+.callout.blue .callout-text strong{color:var(--accent2)}
+
+/* NAV BUTTONS */
+.module-nav{display:flex;justify-content:space-between;align-items:center;margin-top:48px;padding-top:32px;border-top:1px solid var(--border)}
+.nav-btn{display:flex;align-items:center;gap:8px;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;border:none;font-family:var(--body)}
+.nav-btn.prev{background:var(--bg2);color:var(--text2);border:1px solid var(--border2)}
+.nav-btn.prev:hover{border-color:var(--border);color:var(--text)}
+.nav-btn.next{background:var(--accent);color:#000}
+.nav-btn.next:hover{background:#00e6a0;transform:translateY(-1px)}
+.nav-btn:disabled{opacity:.3;cursor:not-allowed;transform:none}
+.module-progress{font-family:var(--mono);font-size:11px;color:var(--text3)}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;padding:3px 10px;border-radius:4px;letter-spacing:.5px}
+.badge.green{background:rgba(0,230,118,.1);color:var(--green);border:1px solid rgba(0,230,118,.2)}
+.badge.red{background:rgba(255,69,96,.1);color:var(--red);border:1px solid rgba(255,69,96,.2)}
+.badge.gold{background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.2)}
+.badge.blue{background:rgba(0,200,255,.1);color:var(--accent2);border:1px solid rgba(0,200,255,.2)}
+
+/* CHECKLIST */
+.checklist{display:flex;flex-direction:column;gap:8px;margin-bottom:24px}
+.check-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);line-height:1.6;cursor:pointer;transition:all .15s;user-select:none}
+.check-item:hover{border-color:var(--border2)}
+.check-item.checked{border-color:rgba(0,255,179,.25);background:rgba(0,255,179,.04)}
+.check-item.checked .check-box{background:var(--accent);border-color:var(--accent)}
+.check-item.checked .check-box::after{content:'✓';color:#000;font-size:10px;font-weight:800}
+.check-box{width:18px;height:18px;border-radius:4px;border:1px solid var(--border2);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.check-text strong{color:var(--text);font-weight:600;display:block;margin-bottom:2px}
+
+/* MATH BOX */
+.math-box{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:24px;margin-bottom:24px;font-family:var(--mono)}
+.math-title{font-size:11px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px}
+.math-line{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.math-line:last-child{border-bottom:none;padding-top:12px;font-size:15px}
+.math-label{color:var(--text2)}
+.math-val{color:var(--accent);font-weight:600}
+.math-val.gold{color:var(--gold)}
+.math-val.green{color:var(--green)}
+
+/* COMPLETION */
+.completion{text-align:center;padding:60px 40px;position:relative;overflow:hidden}
+.completion-icon{font-size:64px;margin-bottom:24px;display:block;animation:pulse 2s ease-in-out infinite}
+.completion h2{font-family:var(--display);font-size:56px;letter-spacing:2px;color:var(--accent);margin-bottom:16px;animation:glow 3s ease-in-out infinite}
+.completion p{font-size:16px;color:var(--text2);max-width:520px;margin:0 auto 32px;line-height:1.75}
+.completion-rules{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;max-width:700px;margin:0 auto 36px}
+.cr-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.cr-num{font-family:var(--display);font-size:32px;color:var(--accent);letter-spacing:1px}
+.cr-lbl{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-top:4px}
+
+@media(max-width:900px){
+  .hero{grid-template-columns:1fr;gap:32px}
+  .course-card{display:none}
+  .lesson-grid,.rules-grid{grid-template-columns:1fr}
+  .completion-rules{grid-template-columns:1fr}
+  header{padding:0 20px}
+  .content-wrap,.hero{padding-left:20px;padding-right:20px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">N</div>
+    <span class="logo-text">Nex<span>Trade</span> AI</span>
+  </div>
+  <div class="header-tag">TRADING MASTERY COURSE</div>
+</header>
+
+<!-- PAYWALL MODAL -->
+<div id="paywallModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:500;align-items:center;justify-content:center;backdrop-filter:blur(8px)">
+  <div style="background:#111419;border:1px solid #243050;border-radius:20px;width:460px;max-width:92vw;overflow:hidden;animation:fadeUp .2s ease;position:relative">
+    <div style="height:3px;background:linear-gradient(90deg,#00ffb3,#00c8ff)"></div>
+    <div style="padding:32px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#f5c842;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">🔒 Premium Content</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:40px;letter-spacing:2px;margin-bottom:8px;color:#e8f0fe">UNLOCK FULL COURSE</div>
+      <div style="font-size:14px;color:#6b8aaa;margin-bottom:24px;line-height:1.65">You've seen Module 1 free. Get all 6 modules, the interactive pre-trade checklist, and lifetime access for a one-time payment.</div>
+
+      <!-- What's included -->
+      <div style="background:#0e1117;border:1px solid #1a2235;border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:#334a63;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px">What you get</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#6b8aaa">
+          <div style="display:flex;gap:8px"><span style="color:#00ffb3">✓</span> All 6 trading modules</div>
+          <div style="display:flex;gap:8px"><span style="color:#00ffb3">✓</span> Interactive pre-trade checklist</div>
+          <div style="display:flex;gap:8px"><span style="color:#00ffb3">✓</span> Position sizing calculator</div>
+          <div style="display:flex;gap:8px"><span style="color:#00ffb3">✓</span> Exact entry/exit rules</div>
+          <div style="display:flex;gap:8px"><span style="color:#00ffb3">✓</span> Lifetime access — one-time payment</div>
+        </div>
+      </div>
+
+      <!-- Price -->
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;color:#00ffb3;letter-spacing:2px;line-height:1">$9.99</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:#334a63">one-time payment · lifetime access</div>
+      </div>
+
+      <!-- PayPal button -->
+      <button onclick="buyWithPayPal()" style="width:100%;padding:14px;background:#0070ba;color:#fff;border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px">
+        <span style="font-size:18px">🅿</span> Pay with PayPal
+      </button>
+
+      <!-- Confirmation step (hidden until PayPal opened) -->
+      <div id="confirmStep" style="display:none;margin-top:16px">
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:#6b8aaa;margin-bottom:8px;text-align:center">After paying, enter your PayPal Transaction ID below:</div>
+        <input id="paypalRef" placeholder="PayPal Transaction ID" style="width:100%;background:#0e1117;border:1px solid #1a2235;border-radius:8px;padding:10px 12px;color:#e8f0fe;font-family:'DM Mono',monospace;font-size:12px;outline:none;margin-bottom:8px">
+        <button onclick="submitConfirmation()" style="width:100%;padding:12px;background:#00ffb3;color:#000;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer">Confirm & Unlock →</button>
+      </div>
+
+      <div style="text-align:center;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:#334a63">Secure payment via PayPal · Instant access · Not financial advice</div>
+      <button onclick="document.getElementById('paywallModal').style.display='none'" style="position:absolute;top:16px;right:16px;background:transparent;border:none;color:#334a63;cursor:pointer;font-size:20px">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div>
+    <div class="hero-eyebrow">Free Mini Course</div>
+    <h1>TRADE LIKE A<br><em>PRO.</em></h1>
+    <p class="hero-sub">Everything you need to use NexTrade AI profitably. From setup to signal to profit — the exact playbook used by consistent traders.</p>
+    <button class="hero-cta" onclick="startCourse()">
+      Start Course →
+    </button>
+    <div class="hero-stats">
+      <div><div class="h-stat-num">6</div><div class="h-stat-lbl">Modules</div></div>
+      <div><div class="h-stat-num">~20</div><div class="h-stat-lbl">Minutes</div></div>
+      <div><div class="h-stat-num">A+</div><div class="h-stat-lbl">Signals Only</div></div>
+    </div>
+  </div>
+  <div class="course-card">
+    <div class="cc-head">
+      <div class="cc-tag">COURSE CONTENTS</div>
+      <div class="cc-title">Trading Mastery</div>
+      <div class="cc-sub">6 modules · Complete guide</div>
+    </div>
+    <div class="cc-modules">
+      <div class="cc-module active" onclick="goToModule(0)"><span class="cc-module-num">01</span><div class="cc-module-dot"></div>The Foundation <span style="font-family:var(--mono);font-size:9px;color:var(--accent);margin-left:auto">FREE</span></div>
+      <div class="cc-module" onclick="goToModule(1)"><span class="cc-module-num">02</span><div class="cc-module-dot"></div>Reading Signals <span style="margin-left:auto" id="lock1">🔒</span></div>
+      <div class="cc-module" onclick="goToModule(2)"><span class="cc-module-num">03</span><div class="cc-module-dot"></div>The Analysis Process <span style="margin-left:auto" id="lock2">🔒</span></div>
+      <div class="cc-module" onclick="goToModule(3)"><span class="cc-module-num">04</span><div class="cc-module-dot"></div>Entering Trades <span style="margin-left:auto" id="lock3">🔒</span></div>
+      <div class="cc-module" onclick="goToModule(4)"><span class="cc-module-num">05</span><div class="cc-module-dot"></div>Managing Trades <span style="margin-left:auto" id="lock4">🔒</span></div>
+      <div class="cc-module" onclick="goToModule(5)"><span class="cc-module-num">06</span><div class="cc-module-dot"></div>The Winning Mindset <span style="margin-left:auto" id="lock5">🔒</span></div>
+    </div>
+    <div class="cc-footer">
+      <div class="progress-bar"><div class="progress-fill" id="sideProgress"></div></div>
+      <div class="progress-text" id="sideProgressText">0% complete</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODULES -->
+<div class="content-wrap">
+
+  <!-- MODULE 0 — INTRO (hero/landing) -->
+  <div class="module active" id="mod-landing">
+    <div style="text-align:center;padding:20px 0 60px">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:3px;text-transform:uppercase;margin-bottom:16px">Welcome</div>
+      <h2 style="font-family:var(--display);font-size:48px;letter-spacing:2px;margin-bottom:16px">BEFORE WE START</h2>
+      <p style="font-size:16px;color:var(--text2);max-width:580px;margin:0 auto 40px;line-height:1.75">This course will teach you exactly how to use NexTrade AI to generate consistent profits. Read every module. Follow the rules. Use the journal.</p>
+      <button class="hero-cta" onclick="startCourse()">Begin Module 1 →</button>
+    </div>
+    <div class="lesson-grid">
+      <div class="lesson-card highlight">
+        <div class="lc-icon">🎯</div>
+        <div class="lc-title">What you'll learn</div>
+        <div class="lc-body">How to read AI signals, the exact analysis process, when to enter and exit trades, and how to manage risk so one bad trade never wipes you out.</div>
+      </div>
+      <div class="lesson-card">
+        <div class="lc-icon">⏱</div>
+        <div class="lc-title">How long it takes</div>
+        <div class="lc-body">About 20 minutes to read through once. Then keep it bookmarked and refer back to it whenever you need a reminder of the rules.</div>
+      </div>
+      <div class="lesson-card gold">
+        <div class="lc-icon">💡</div>
+        <div class="lc-title">The most important thing</div>
+        <div class="lc-body"><strong>Discipline beats intelligence every time.</strong> A trader who follows simple rules consistently will always outperform a trader who knows everything but can't control their emotions.</div>
+      </div>
+      <div class="lesson-card danger">
+        <div class="lc-icon">⚠️</div>
+        <div class="lc-title">Honest disclaimer</div>
+        <div class="lc-body">No AI tool guarantees profit. Markets are uncertain. This course teaches you to maximize your probability of success — not to eliminate risk. <strong>Never trade money you can't afford to lose.</strong></div>
+      </div>
+    </div>
+    <div class="module-nav">
+      <div></div>
+      <div class="module-progress">Module 0 of 6</div>
+      <button class="nav-btn next" onclick="startCourse()">Start Module 1 →</button>
+    </div>
+  </div>
+
+  <!-- MODULE 1 — FOUNDATION -->
+  <div class="module" id="mod-0">
+    <div class="module-header">
+      <div class="module-num">Module 01 / 06</div>
+      <div class="module-title">THE <em>FOUNDATION</em></div>
+      <div class="module-desc">Before you analyze a single chart, you need to understand the environment you trade in. The right time, the right session, the right mindset.</div>
+    </div>
+
+    <div class="callout green">
+      <div class="callout-icon">🏆</div>
+      <div class="callout-text"><strong>The Golden Rule</strong>The traders who make consistent money aren't the ones with the best signals — they're the ones still trading 2 years from now because they protected their capital. Your only goal for the first 3 months is to NOT blow your account.</div>
+    </div>
+
+    <div class="lesson-grid">
+      <div class="lesson-card highlight">
+        <div class="lc-icon">🕐</div>
+        <div class="lc-title">Best Trading Sessions</div>
+        <div class="lc-body">
+          <strong>London Open (8am–12pm UTC)</strong> — High liquidity, major moves start here. EUR/GBP pairs most active.<br><br>
+          <strong>London/NY Overlap (12pm–5pm UTC)</strong> — HIGHEST liquidity of the day. Best time to trade any asset.<br><br>
+          <span style="color:var(--red)">Avoid: Asia session, end of NY, weekends.</span>
+        </div>
+      </div>
+      <div class="lesson-card danger">
+        <div class="lc-icon">🚫</div>
+        <div class="lc-title">Never Trade These</div>
+        <div class="lc-body">
+          <strong style="color:var(--red)">Fridays</strong> — Positions being closed, sharp reversals common.<br><br>
+          <strong style="color:var(--red)">Before major news</strong> — NFP, CPI, FOMC, Fed announcements. Check an economic calendar first.<br><br>
+          <strong style="color:var(--red)">After 3 losses in a row</strong> — Stop for the day. Come back tomorrow.
+        </div>
+      </div>
+    </div>
+
+    <table class="data-table">
+      <thead><tr><th>Asset</th><th>Best Timeframe</th><th>Best Session</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="td-mono">BTC / ETH</td><td class="td-good">1H or 4H</td><td>NY/London Overlap</td><td>24/7 but best during NY hours</td></tr>
+        <tr><td class="td-mono">EUR/USD</td><td class="td-good">4H or 1H</td><td>London Open</td><td>Most liquid forex pair</td></tr>
+        <tr><td class="td-mono">GBP/USD</td><td class="td-good">1H</td><td>London Open</td><td>Volatile — respect key levels</td></tr>
+        <tr><td class="td-mono">NVDA / AAPL</td><td class="td-good">Daily or 4H</td><td>NY Session</td><td>US market hours only</td></tr>
+        <tr><td class="td-mono">SPX / NAS</td><td class="td-good">1H or 4H</td><td>NY Open (2:30pm UTC)</td><td>NY open creates big moves</td></tr>
+        <tr><td class="td-mono">GOLD</td><td class="td-good">4H or 1H</td><td>London Open</td><td>Safe haven — watch USD news</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout gold">
+      <div class="callout-icon">💡</div>
+      <div class="callout-text"><strong>Pro Tip: Stick to 2-3 Markets</strong>Don't try to trade everything. Pick 2-3 assets you understand and focus on them. You'll learn their personality, their key levels, and their behavior patterns over time. Specialization beats diversification for traders.</div>
+    </div>
+
+    <div style="background:linear-gradient(135deg,rgba(0,255,179,.08),rgba(0,200,255,.08));border:1px solid rgba(0,255,179,.25);border-radius:14px;padding:28px;margin-bottom:32px;text-align:center">
+      <div style="font-size:28px;margin-bottom:12px">🔒</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;margin-bottom:8px;color:#e8f0fe">5 More Modules Waiting</div>
+      <div style="font-size:13px;color:#6b8aaa;margin-bottom:20px;line-height:1.7">Reading signals · Exact analysis process · Entry rules · Trade management · The winning mindset + interactive checklist</div>
+      <button onclick="showPaywall()" style="background:#00ffb3;color:#000;border:none;border-radius:8px;padding:13px 32px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer">Unlock Full Course — $9.99 →</button>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#334a63;margin-top:10px">One-time payment · Lifetime access · PayPal</div>
+    </div>
+
+    <div class="module-nav">
+      <button class="nav-btn prev" onclick="goToModule(-1)" disabled>← Previous</button>
+      <div class="module-progress" id="progress-0">Module 1 of 6</div>
+      <button class="nav-btn next" onclick="goToModule(1)">Next Module →</button>
+    </div>
+  </div>
+
+  <!-- MODULE 2 — READING SIGNALS -->
+  <div class="module" id="mod-1">
+    <div class="module-header">
+      <div class="module-num">Module 02 / 06</div>
+      <div class="module-title">READING <em>SIGNALS</em></div>
+      <div class="module-desc">Not every signal is worth trading. This module teaches you exactly which signals to act on and which to ignore completely.</div>
+    </div>
+
+    <div class="callout blue">
+      <div class="callout-icon">🤖</div>
+      <div class="callout-text"><strong>How the 4-Pass Engine Works</strong>NexTrade AI runs 4 separate AI analyses on every chart: Pass 1 reads chart structure, Pass 2 reads Smart Money Concepts, Pass 3 finds the best entry, Pass 4 confirms and sharpens everything. The final signal is the result of all 4 agreeing.</div>
+    </div>
+
+    <h3 style="font-size:18px;font-weight:700;margin-bottom:16px">Signal Grades — Your Most Important Filter</h3>
+
+    <div class="rules-box">
+      <div class="rules-title">GRADE SYSTEM</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="rule-item" style="border-color:rgba(0,230,118,.3);background:rgba(0,230,118,.05)">
+          <span style="font-size:20px">🥇</span>
+          <div class="rule-text"><strong style="color:var(--green)">A+ Grade — TRADE THIS</strong>4+ confluences perfectly aligned. Strong trend, key level, clean entry, excellent R:R. These are the setups institutional traders wait for.</div>
+        </div>
+        <div class="rule-item" style="border-color:rgba(0,230,118,.2)">
+          <span style="font-size:20px">✅</span>
+          <div class="rule-text"><strong style="color:var(--green)">A Grade — TRADE THIS</strong>3 strong confluences, clear trend, decent R:R above 1:2. Solid setups worth taking with normal position size.</div>
+        </div>
+        <div class="rule-item">
+          <span style="font-size:20px">⚠️</span>
+          <div class="rule-text"><strong style="color:var(--gold)">B Grade — SKIP or PAPER TRADE</strong>2 confluences, identifiable direction but setup isn't clean. If you take these, use half your normal size. Better to wait.</div>
+        </div>
+        <div class="rule-item" style="border-color:rgba(255,69,96,.2);background:rgba(255,69,96,.03)">
+          <span style="font-size:20px">❌</span>
+          <div class="rule-text"><strong style="color:var(--red)">C and D Grade — NEVER TRADE</strong>Weak or marginal setup. The AI is showing you the analysis but this is NOT a trade. Ignore it completely.</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="font-size:18px;font-weight:700;margin-bottom:16px;margin-top:32px">Other Filters to Check</h3>
+    <div class="lesson-grid">
+      <div class="lesson-card">
+        <div class="lc-icon">📊</div>
+        <div class="lc-title">Confidence Score</div>
+        <div class="lc-body">Only trade signals with <strong>70%+ confidence</strong>. Below 70% means the AI isn't sure enough. Combined with grade — you want A/A+ AND 70%+ confidence.</div>
+      </div>
+      <div class="lesson-card">
+        <div class="lc-icon">⚡</div>
+        <div class="lc-title">Risk/Reward</div>
+        <div class="lc-body">Check the R:R label. <strong>Good or Excellent only.</strong> If TP1 R:R is below 1:2, skip the trade no matter how good everything else looks.</div>
+      </div>
+      <div class="lesson-card highlight">
+        <div class="lc-icon">🎯</div>
+        <div class="lc-title">Market Bias Match</div>
+        <div class="lc-body">The signal verdict must match the market bias. Don't take a BUY signal if the market bias says <strong>Strongly Bearish</strong>. They must align.</div>
+      </div>
+      <div class="lesson-card gold">
+        <div class="lc-icon">⏳</div>
+        <div class="lc-title">When You Get WAIT</div>
+        <div class="lc-body">WAIT means no good setup right now. Try a <strong>different asset</strong>, come back in <strong>1-2 hours</strong>, or wait for the next session. Never force a trade.</div>
+      </div>
+    </div>
+
+    <div class="module-nav">
+      <button class="nav-btn prev" onclick="goToModule(0)">← Previous</button>
+      <div class="module-progress">Module 2 of 6</div>
+      <button class="nav-btn next" onclick="goToModule(2)">Next Module →</button>
+    </div>
+  </div>
+
+  <!-- MODULE 3 — ANALYSIS PROCESS -->
+  <div class="module" id="mod-2">
+    <div class="module-header">
+      <div class="module-num">Module 03 / 06</div>
+      <div class="module-title">THE ANALYSIS <em>PROCESS</em></div>
+      <div class="module-desc">The exact step-by-step process to follow every single time you open the analyzer. Follow this exactly and you'll never miss a setup.</div>
+    </div>
+
+    <div class="steps-list">
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">1</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-tag pro">BEFORE ANALYZING</div>
+          <div class="step-title">Check the session and day</div>
+          <div class="step-body">Confirm you're in <strong>London Open or London/NY Overlap.</strong> Confirm it's not Friday. If conditions aren't right, close the analyzer and come back later. This step alone eliminates 30% of bad trades.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">2</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-tag pro">ON TRADINGVIEW</div>
+          <div class="step-title">Take 3 clean screenshots</div>
+          <div class="step-body">Open your asset. Remove clutter — no messy drawings covering price. Take screenshots of:<br><br>
+          <strong>Daily chart</strong> → save this for slot 3<br>
+          <strong>4H chart</strong> → save this for slot 2<br>
+          <strong>1H chart</strong> → save this for slot 1<br><br>
+          Clean candlesticks give the AI the best read. One moving average is fine — don't add 10 indicators.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">3</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-tag pro">IN NEXTTRADE AI</div>
+          <div class="step-title">Upload and configure</div>
+          <div class="step-body">
+          1. Type your <strong>symbol</strong> in the box (BTC, EURUSD, NVDA)<br>
+          2. Select <strong>1H</strong> as timeframe<br>
+          3. Drop Daily into slot 3, 4H into slot 2, 1H into slot 1<br>
+          4. Hit <strong>Analyze Charts</strong><br>
+          5. Wait 20-30 seconds for the 4-pass analysis</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">4</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-tag gold">READING THE RESULT</div>
+          <div class="step-title">Apply your filters in order</div>
+          <div class="step-body">
+          Check these in this exact order:<br><br>
+          ✓ <strong>Grade</strong> — must be A+ or A<br>
+          ✓ <strong>Confidence</strong> — must be 70%+<br>
+          ✓ <strong>Market Bias</strong> — must match the verdict<br>
+          ✓ <strong>R:R Label</strong> — must be Good or Excellent<br><br>
+          If ANY of these fail → close the signal, try a different asset or come back later.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">5</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-tag warn">IF NO GOOD SIGNAL</div>
+          <div class="step-title">What to do when there's nothing to trade</div>
+          <div class="step-body">This will happen often — and that's good. It means the system is working.<br><br>
+          Try in this order: <strong>different asset → 1H on another pair → come back in 1-2 hours → wait for next session.</strong><br><br>
+          Patience is your edge. Most retail traders lose because they trade too much.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout green">
+      <div class="callout-icon">✅</div>
+      <div class="callout-text"><strong>Pro Tip: Screenshot Your Charts Cleanly</strong>The cleaner the chart, the better the AI reads it. Plain candlesticks with maybe one EMA gives the best results. Avoid having drawings, indicators, and tools cluttering the chart when you screenshot.</div>
+    </div>
+
+    <div class="module-nav">
+      <button class="nav-btn prev" onclick="goToModule(1)">← Previous</button>
+      <div class="module-progress">Module 3 of 6</div>
+      <button class="nav-btn next" onclick="goToModule(3)">Next Module →</button>
+    </div>
+  </div>
+
+  <!-- MODULE 4 — ENTERING TRADES -->
+  <div class="module" id="mod-3">
+    <div class="module-header">
+      <div class="module-num">Module 04 / 06</div>
+      <div class="module-title">ENTERING <em>TRADES</em></div>
+      <div class="module-desc">You have a valid A+ or A signal. Now what? This module covers exactly how to enter, where to set your stop, and how much to risk.</div>
+    </div>
+
+    <div class="callout red">
+      <div class="callout-icon">🛑</div>
+      <div class="callout-text"><strong>Never Chase Entries</strong>The AI gives you an entry trigger — a specific price or price action that confirms the trade. Wait for that trigger. Don't just market order in because you're excited. Chasing entries ruins your R:R and puts you in at a worse price.</div>
+    </div>
+
+    <div class="steps-list">
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">1</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-title">Wait for the entry trigger</div>
+          <div class="step-body">The AI specifies an <strong>entry trigger</strong> — this might be "close above resistance," "retest of order block," or "break of consolidation." Wait for exactly this to happen before entering. If the trigger never fires, the trade never happens. That's fine.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">2</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-title">Calculate your position size</div>
+          <div class="step-body">This is the most important step. Risk <strong>maximum 1% of your account</strong> per trade — no exceptions.<br><br>
+          <strong>Formula:</strong> Account size × 0.01 ÷ stop loss distance in pips/points = position size<br><br>
+          Example: $1000 account, 50 pip stop → risk $10 → position size accordingly. On Friday or in uncertain conditions, risk 0.5%.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">3</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-title">Set your stop loss immediately</div>
+          <div class="step-body">The AI gives you an exact stop loss price with a structural reason. Set it <strong>the moment you enter</strong> — not after. Place it exactly where the AI says, not closer (you'll get stopped out by noise) and not further (you'll risk more than 1%).</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">4</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-title">Set your take profit levels</div>
+          <div class="step-body">Set <strong>TP1 and TP2</strong> as limit orders immediately. Don't manage it manually while watching — emotions will make you exit too early or too late.<br><br>
+          TP1 = take 50% off your position automatically<br>
+          TP2 = close remaining 50%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="math-box">
+      <div class="math-title">Position Sizing Example — $1,000 Account</div>
+      <div class="math-line"><span class="math-label">Account size</span><span class="math-val">$1,000</span></div>
+      <div class="math-line"><span class="math-label">Max risk per trade (1%)</span><span class="math-val">$10</span></div>
+      <div class="math-line"><span class="math-label">Stop loss distance</span><span class="math-val">50 pips</span></div>
+      <div class="math-line"><span class="math-label">Position size</span><span class="math-val">0.02 lots (micro)</span></div>
+      <div class="math-line"><span class="math-label">TP1 at 1:2 R:R</span><span class="math-val green">+$20 (close 50%)</span></div>
+      <div class="math-line"><span class="math-label">TP2 at 1:4 R:R</span><span class="math-val green">+$40 (close remaining)</span></div>
+      <div class="math-line"><span class="math-label">Total if both hit</span><span class="math-val gold">+$30 on $10 risked</span></div>
+    </div>
+
+    <div class="module-nav">
+      <button class="nav-btn prev" onclick="goToModule(2)">← Previous</button>
+      <div class="module-progress">Module 4 of 6</div>
+      <button class="nav-btn next" onclick="goToModule(4)">Next Module →</button>
+    </div>
+  </div>
+
+  <!-- MODULE 5 — MANAGING TRADES -->
+  <div class="module" id="mod-4">
+    <div class="module-header">
+      <div class="module-num">Module 05 / 06</div>
+      <div class="module-title">MANAGING <em>TRADES</em></div>
+      <div class="module-desc">Most traders know how to enter. Few know how to manage. This is where consistent profits come from.</div>
+    </div>
+
+    <div class="rules-box">
+      <div class="rules-title">THE TRADE MANAGEMENT RULES</div>
+      <div class="rules-grid">
+        <div class="rule-item">
+          <span class="rule-check">✅</span>
+          <div class="rule-text"><strong>When TP1 hits → move SL to breakeven</strong>The moment price reaches TP1, move your stop loss to your entry price. The trade is now risk-free. You've locked in profit and can't lose.</div>
+        </div>
+        <div class="rule-item">
+          <span class="rule-check">✅</span>
+          <div class="rule-text"><strong>Close 50% at TP1</strong>Take half your position off at TP1. Lock in real profit. Let the other half run to TP2 with a free trade.</div>
+        </div>
+        <div class="rule-item">
+          <span class="rule-check">❌</span>
+          <div class="rule-text"><strong>Never move SL further away</strong>If the trade goes against you, your stop loss exits you. Never move it further to avoid being stopped out. That turns a small loss into a big one.</div>
+        </div>
+        <div class="rule-item">
+          <span class="rule-check">❌</span>
+          <div class="rule-text"><strong>Never add to a losing trade</strong>If price is going against you, do not add more. Ever. Your analysis was wrong — adding more just makes the loss bigger.</div>
+        </div>
+        <div class="rule-item">
+          <span class="rule-check">✅</span>
+          <div class="rule-text"><strong>Exit if no movement in 4-6 hours</strong>If price hasn't moved in the expected direction within 4-6 hours, exit the trade. The setup has failed. Cut it and look for a new opportunity.</div>
+        </div>
+        <div class="rule-item">
+          <span class="rule-check">✅</span>
+          <div class="rule-text"><strong>Log every trade in the journal</strong>Every single trade — win or loss — goes in the journal. This data is more valuable than any signal. After 20 trades it will show you exactly what's working.</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="font-size:18px;font-weight:700;margin:32px 0 16px">The Journal — Your Most Valuable Tool</h3>
+    <div class="lesson-grid">
+      <div class="lesson-card highlight">
+        <div class="lc-icon">📓</div>
+        <div class="lc-title">What to track</div>
+        <div class="lc-body">After every trade: mark Win or Loss, enter the actual R:R achieved. After 20-30 trades, the journal shows your win rate by grade — this tells you which signals actually work for YOU.</div>
+      </div>
+      <div class="lesson-card gold">
+        <div class="lc-icon">📈</div>
+        <div class="lc-title">What to look for</div>
+        <div class="lc-body">If A+ signals are hitting 65%+ win rate → only trade A+. If a specific session shows better results → focus there. The data customizes the system to YOUR trading.</div>
+      </div>
+    </div>
+
+    <div class="callout gold">
+      <div class="callout-icon">💡</div>
+      <div class="callout-text"><strong>The Math of 1:2 R:R at 50% Win Rate</strong>You only need to win 50% of trades with a 1:2 R:R to be profitable. Every win pays $2, every loss costs $1. At 50% you net $0.50 per trade. At 65% win rate you net $1.30 per trade. You don't need to be right most of the time — just make sure wins are bigger than losses.</div>
+    </div>
+
+    <div class="module-nav">
+      <button class="nav-btn prev" onclick="goToModule(3)">← Previous</button>
+      <div class="module-progress">Module 5 of 6</div>
+      <button class="nav-btn next" onclick="goToModule(5)">Next Module →</button>
+    </div>
+  </div>
+
+  <!-- MODULE 6 — MINDSET -->
+  <div class="module" id="mod-5">
+    <div class="module-header">
+      <div class="module-num">Module 06 / 06</div>
+      <div class="module-title">THE WINNING <em>MINDSET</em></div>
+      <div class="module-desc">The final and most important module. Everything else means nothing if you can't control your emotions and follow your rules.</div>
+    </div>
+
+    <div class="callout red">
+      <div class="callout-icon">🧠</div>
+      <div class="callout-text"><strong>The Hard Truth</strong>80% of traders lose money. Not because they don't know technical analysis. Because they can't follow their own rules when money is on the line. Emotions — fear and greed — make them deviate from their system. This module is about preventing that.</div>
+    </div>
+
+    <div class="steps-list">
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">1</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-title">Only trade money you can afford to lose</div>
+          <div class="step-body">The moment you're trading scared money — money you need for rent, food, or bills — your decision making breaks down completely. Fear makes you close winners too early and hold losers too long. Start with an amount where losing it all wouldn't change your life.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">2</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-title">Wait 30 minutes after a loss before analyzing again</div>
+          <div class="step-body">Revenge trading is the fastest way to blow an account. After a loss, your brain wants to immediately "get the money back." This leads to taking bad setups, over-sizing, and breaking every rule. Wait at least 30 minutes. Go for a walk. The market will always be there.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">3</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-title">Stop after 3 losses in a row</div>
+          <div class="step-body">Three consecutive losses means one of two things: the market is in a condition the AI doesn't read well today, or you're not executing properly. Either way, stop trading for the day. Come back tomorrow with fresh eyes. Continuing usually leads to a 4th and 5th loss.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">4</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-title">Paper trade for the first 30 trades</div>
+          <div class="step-body">Before risking real money, run the system for 30 trades using paper trading (fake money). Track everything in the journal. See your actual win rate. Prove to yourself the system works before you commit real capital. Most people skip this step and regret it.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-left"><div class="step-circle">5</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <div class="step-title">Think like a sniper, not a machine gun</div>
+          <div class="step-body">You might only get 3-5 A+ or A grade signals per week. That feels like not enough — but it's exactly right. One clean A+ trade at 1:3 R:R is worth more than five B grade trades. Quality over quantity. Wait for the perfect shot. Professional traders pass on 70% of setups.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lesson-grid" style="margin-top:16px">
+      <div class="lesson-card highlight">
+        <div class="lc-icon">🎯</div>
+        <div class="lc-title">The Long Game</div>
+        <div class="lc-body">Compounding 2-4% per week turns $1,000 into $50,000+ in a year. But only if you protect capital. One bad week of revenge trading can wipe months of gains. Small consistent wins beat big risky bets every time.</div>
+      </div>
+      <div class="lesson-card gold">
+        <div class="lc-icon">⭐</div>
+        <div class="lc-title">Your Edge</div>
+        <div class="lc-body">The AI gives you an analytical edge. Your discipline turns that edge into profit. Neither one works without the other. A disciplined trader with a simple system beats an undisciplined trader with perfect signals every time.</div>
+      </div>
+    </div>
+
+    <!-- FINAL CHECKLIST -->
+    <h3 style="font-size:18px;font-weight:700;margin:32px 0 16px">Pre-Trade Checklist — Run This Every Time</h3>
+    <div class="checklist" id="checklist">
+      <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div><div class="check-text"><strong>Right session?</strong>London Open or London/NY Overlap. Not Friday.</div></div>
+      <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div><div class="check-text"><strong>Uploaded 3 timeframes?</strong>Daily (slot 3) + 4H (slot 2) + 1H (slot 1).</div></div>
+      <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div><div class="check-text"><strong>Grade A+ or A?</strong>If B, C, or D — skip. No exceptions.</div></div>
+      <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div><div class="check-text"><strong>Confidence 70%+?</strong>Below 70% is not enough conviction.</div></div>
+      <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div><div class="check-text"><strong>R:R Good or Excellent?</strong>Minimum 1:2 to TP1.</div></div>
+      <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div><div class="check-text"><strong>Market bias matches verdict?</strong>BUY signal in bullish bias only.</div></div>
+      <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div><div class="check-text"><strong>Position sized at 1% max?</strong>Calculate before entering, not after.</div></div>
+      <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div><div class="check-text"><strong>Stop loss set immediately on entry?</strong>Never enter without a stop.</div></div>
+      <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div><div class="check-text"><strong>Not in revenge mode?</strong>If you've had 3 losses today, stop trading.</div></div>
+    </div>
+
+    <div class="module-nav">
+      <button class="nav-btn prev" onclick="goToModule(4)">← Previous</button>
+      <div class="module-progress">Module 6 of 6</div>
+      <button class="nav-btn next" onclick="showCompletion()">Complete Course →</button>
+    </div>
+  </div>
+
+  <!-- COMPLETION -->
+  <div class="module" id="mod-complete">
+    <div class="completion">
+      <span class="completion-icon">🏆</span>
+      <h2>COURSE COMPLETE</h2>
+      <p>You now have everything you need. The AI gives you the edge. Your discipline turns it into profit. Go apply what you learned — start with paper trading and build from there.</p>
+      <div class="completion-rules">
+        <div class="cr-item"><div class="cr-num">A+/A</div><div class="cr-lbl">Grades Only</div></div>
+        <div class="cr-item"><div class="cr-num">1%</div><div class="cr-lbl">Max Risk</div></div>
+        <div class="cr-item"><div class="cr-num">1:2+</div><div class="cr-lbl">Min R:R</div></div>
+      </div>
+      <button class="hero-cta" onclick="goToModule(0)">Review Course Again</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let currentModule = -1; // -1 = landing
+
+// ── PAYWALL ──
+// Module 0 = FREE preview
+// Modules 1-5 + completion = PAID ($9.99)
+// Replace PAYPAL_LINK with your actual PayPal.me link
+
+const PAYPAL_LINK = 'https://www.paypal.com/paypalme/YOURPAYPALNAME/9.99';
+const COURSE_KEY  = 'nt_course_unlocked';
+
+function hasAccess() {
+  return localStorage.getItem(COURSE_KEY) === 'true';
+}
+
+function unlockCourse() {
+  localStorage.setItem(COURSE_KEY, 'true');
+  document.getElementById('paywallModal').style.display = 'none';
+  // Re-attempt navigation to the module they wanted
+  goToModule(pendingModule);
+}
+
+let pendingModule = 1;
+
+function startCourse() {
+  document.querySelector('.hero').style.display = 'none';
+  goToModule(0);
+}
+
+function goToModule(idx) {
+  // Module 0 is always free — everything else requires payment
+  if(idx > 0 && idx < 6 && !hasAccess()) {
+    pendingModule = idx;
+    showPaywall();
+    return;
+  }
+  if(idx === 6 && !hasAccess()) {
+    pendingModule = idx;
+    showPaywall();
+    return;
+  }
+
+  document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+
+  if(idx === -1) {
+    document.getElementById('mod-landing').classList.add('active');
+    currentModule = -1;
+    return;
+  }
+  if(idx === 6) {
+    document.getElementById('mod-complete').classList.add('active');
+    currentModule = 6;
+    updateProgress(100);
+    return;
+  }
+  document.getElementById('mod-'+idx).classList.add('active');
+  currentModule = idx;
+  window.scrollTo({top:0, behavior:'smooth'});
+  updateSidebar(idx);
+  updateProgress(Math.round((idx+1)/6*100));
+}
+
+function showPaywall() {
+  document.getElementById('paywallModal').style.display = 'flex';
+}
+
+function buyWithPayPal() {
+  window.open(PAYPAL_LINK, '_blank');
+  // Show confirmation input after opening PayPal
+  document.getElementById('confirmStep').style.display = 'block';
+}
+
+function submitConfirmation() {
+  const ref = document.getElementById('paypalRef').value.trim();
+  if(!ref) { alert('Please enter your PayPal transaction ID.'); return; }
+  // Store unlock locally — in production you'd verify server-side
+  unlockCourse();
+  alert('✓ Payment confirmed! Welcome to the full course.');
+}
+
+// Demo unlock button (remove in production)
+function demoUnlock() {
+  unlockCourse();
+}
+
+function showCompletion() { goToModule(6); }
+
+function updateSidebar(active) {
+  document.querySelectorAll('.cc-module').forEach((m,i) => {
+    m.classList.toggle('active', i === active);
+  });
+}
+
+function updateProgress(pct) {
+  const fill = document.getElementById('sideProgress');
+  const text = document.getElementById('sideProgressText');
+  if(fill) fill.style.width = pct + '%';
+  if(text) text.textContent = pct + '% complete';
+}
+
+function toggleCheck(el) {
+  el.classList.toggle('checked');
+}
+
+// Check on load if already paid
+window.addEventListener('load', () => {
+  if(hasAccess()) {
+    removeLocks();
+  }
+});
+
+function removeLocks() {
+  for(let i=1;i<=5;i++){
+    const el = document.getElementById('lock'+i);
+    if(el) el.textContent = '✓';
+  }
+}
+</script>
+</body>
+</html>
