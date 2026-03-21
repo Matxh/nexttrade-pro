@@ -2,7 +2,6 @@
   "version": 2,
   "builds": [{ "src": "server.js", "use": "@vercel/node" }],
   "routes": [
-    { "src": "/sitemap.xml", "dest": "/public/sitemap.xml" },
     { "src": "/(.*)", "dest": "server.js" }
   ]
 }
