@@ -1735,5 +1735,279 @@ async function deleteTrade(id){
 updateAnalyzeBar();
 initAuth();
 </script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+  /* ── POPUP OVERLAY ── */
+  #pa-overlay {
+    position: fixed; inset: 0; z-index: 99999;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 1.5rem;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.35s ease;
+  }
+  #pa-overlay.pa-show {
+    opacity: 1; pointer-events: all;
+  }
+
+  /* ── POPUP CARD ── */
+  #pa-card {
+    background: #0f0f0f;
+    border: 1.5px solid rgba(0,255,106,0.4);
+    border-radius: 6px;
+    max-width: 480px; width: 100%;
+    padding: 2.5rem 2.2rem 2rem;
+    position: relative;
+    box-shadow:
+      0 0 60px rgba(0,255,106,0.1),
+      0 0 120px rgba(0,255,106,0.05),
+      inset 0 1px 0 rgba(0,255,106,0.08);
+    transform: translateY(24px);
+    transition: transform 0.4s cubic-bezier(0.25,1,0.5,1);
+  }
+  #pa-overlay.pa-show #pa-card {
+    transform: translateY(0);
+  }
+
+  #pa-card::before {
+    content: '';
+    position: absolute; top: -80px; left: 50%; transform: translateX(-50%);
+    width: 300px; height: 300px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,255,106,0.07) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  #pa-close {
+    position: absolute; top: 0.9rem; right: 1rem;
+    background: none; border: none; cursor: pointer;
+    color: #3a5a3a; font-size: 1.2rem; line-height: 1;
+    transition: color 0.2s;
+    font-family: monospace;
+  }
+  #pa-close:hover { color: #00ff6a; }
+
+  #pa-card .pa-eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem; letter-spacing: 0.3em;
+    color: #00ff6a; text-transform: uppercase;
+    margin-bottom: 0.7rem; display: block;
+  }
+
+  #pa-card h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2rem, 6vw, 2.8rem);
+    line-height: 0.92; letter-spacing: 0.03em;
+    color: #ffffff; margin-bottom: 0.7rem;
+  }
+  #pa-card h2 span { color: #00ff6a; }
+
+  #pa-card .pa-body {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem; color: #4a6e4a;
+    line-height: 1.8; letter-spacing: 0.04em;
+    margin-bottom: 1.4rem;
+  }
+  #pa-card .pa-body strong { color: #ffffff; }
+
+  #pa-card .pa-price-row {
+    display: flex; align-items: center; gap: 0.9rem;
+    margin-bottom: 0.4rem;
+  }
+  #pa-card .pa-old {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem; color: #3a5a3a;
+    text-decoration: line-through; letter-spacing: 0.04em;
+  }
+  #pa-card .pa-new {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3.8rem; line-height: 1; letter-spacing: 0.02em;
+    color: #00ff6a;
+    text-shadow: 0 0 30px rgba(0,255,106,0.35);
+  }
+  #pa-card .pa-today {
+    background: #00ff6a; color: #080808;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.85rem; letter-spacing: 0.18em;
+    padding: 0.25rem 0.7rem; align-self: flex-start; margin-top: 0.5rem;
+  }
+  #pa-card .pa-sublabel {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem; color: #3a5a3a;
+    letter-spacing: 0.14em; margin-bottom: 1.4rem;
+    text-transform: uppercase;
+  }
+
+  #pa-card .pa-features {
+    list-style: none; margin-bottom: 1.6rem;
+    display: flex; flex-direction: column; gap: 0.45rem;
+  }
+  #pa-card .pa-features li {
+    font-family: 'DM Mono', monospace;
+    display: flex; gap: 0.6rem; align-items: flex-start;
+    font-size: 0.68rem; color: #e0e0e0; line-height: 1.4;
+  }
+  #pa-card .pa-features li::before {
+    content: '✓'; color: #00ff6a; flex-shrink: 0; font-size: 0.72rem;
+  }
+
+  #pa-card .pa-countdown {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0.5rem; margin-bottom: 1.2rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem; letter-spacing: 0.2em; color: #ff3a3a;
+    text-transform: uppercase;
+  }
+  #pa-card .pa-countdown .pa-cdot {
+    width: 5px; height: 5px; background: #ff3a3a; border-radius: 50%;
+    animation: cdpulse 1s ease-in-out infinite;
+  }
+  @keyframes cdpulse {
+    0%,100% { opacity:1; } 50% { opacity:0.3; }
+  }
+  #pa-timer { font-weight: 500; color: #ff3a3a; }
+
+  #pa-card .pa-btn {
+    display: block; width: 100%;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.15rem; letter-spacing: 0.3em; text-transform: uppercase;
+    background: #00ff6a; color: #080808;
+    border: none; padding: 1rem; cursor: pointer; text-decoration: none;
+    text-align: center;
+    box-shadow: 0 0 28px rgba(0,255,106,0.28);
+    transition: background 0.2s, box-shadow 0.2s, transform 0.12s;
+  }
+  #pa-card .pa-btn:hover {
+    background: #1aff7a;
+    box-shadow: 0 0 48px rgba(0,255,106,0.45);
+    transform: translateY(-2px);
+  }
+  #pa-card .pa-btn:active { transform: scale(0.99); }
+
+  #pa-card .pa-dismiss {
+    display: block; text-align: center; margin-top: 0.9rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem; color: #2e4d2e; letter-spacing: 0.14em;
+    cursor: pointer; text-decoration: underline;
+    text-underline-offset: 3px; transition: color 0.2s;
+    background: none; border: none;
+  }
+  #pa-card .pa-dismiss:hover { color: #4a6e4a; }
+
+  #pa-card .pa-guarantee {
+    text-align: center; margin-top: 0.7rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.56rem; color: #2e4d2e; letter-spacing: 0.1em;
+  }
+
+  @media (max-width: 500px) {
+    #pa-card { padding: 2rem 1.5rem 1.6rem; }
+    #pa-card h2 { font-size: 2.2rem; }
+    #pa-card .pa-new { font-size: 3rem; }
+  }
+  </style>
+
+  <!-- POPUP HTML -->
+  <div id="pa-overlay" role="dialog" aria-modal="true" aria-label="Special Offer">
+    <div id="pa-card">
+      <button id="pa-close" aria-label="Close offer">✕</button>
+
+      <span class="pa-eyebrow">Limited Time Offer</span>
+      <h2>Trade Smarter.<br><span>Start Profiting.</span></h2>
+      <p class="pa-body">
+        Get the complete <strong>PriceActionAI course</strong> — 7 modules, live trade walkthroughs, risk management system, and private Discord community. Everything you need to stop losing and start trading with a real edge.
+      </p>
+
+      <div class="pa-price-row">
+        <div class="pa-old">$297</div>
+        <div class="pa-new">$149</div>
+        <div class="pa-today">Today</div>
+      </div>
+      <p class="pa-sublabel">One-time payment · Lifetime access · Instant start</p>
+
+      <ul class="pa-features">
+        <li>7 modules — price action, structure, setups &amp; more</li>
+        <li>Risk management system that protects your account</li>
+        <li>Live trade walkthroughs across forex, crypto &amp; stocks</li>
+        <li>Private Discord community &amp; ongoing chart reviews</li>
+        <li>All future updates included — free</li>
+      </ul>
+
+      <div class="pa-countdown">
+        <div class="pa-cdot"></div>
+        Offer expires in &nbsp;<span id="pa-timer">14:59</span>
+      </div>
+
+      <a href="https://discord.gg/WUtP5zCC" target="_blank" rel="noopener" class="pa-btn">
+        Enroll Now — $149 →
+      </a>
+      <button class="pa-dismiss" id="pa-dismiss">No thanks, I'll keep losing money</button>
+      <p class="pa-guarantee">🛡 30-day money-back guarantee · No questions asked</p>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var overlay  = document.getElementById('pa-overlay');
+    var closeBtn = document.getElementById('pa-close');
+    var dismiss  = document.getElementById('pa-dismiss');
+    var timerEl  = document.getElementById('pa-timer');
+
+    function showPopup() {
+      if (sessionStorage.getItem('pa_dismissed')) return;
+      overlay.classList.add('pa-show');
+      startTimer();
+    }
+
+    function hidePopup() {
+      overlay.classList.remove('pa-show');
+      sessionStorage.setItem('pa_dismissed', '1');
+    }
+
+    // Show after 8 seconds
+    setTimeout(showPopup, 8000);
+
+    // Show on exit intent
+    document.addEventListener('mouseleave', function (e) {
+      if (e.clientY < 10) showPopup();
+    });
+
+    // Show after scrolling 60%
+    window.addEventListener('scroll', function () {
+      var scrolled = window.scrollY / (document.body.scrollHeight - window.innerHeight);
+      if (scrolled > 0.6) showPopup();
+    }, { passive: true });
+
+    closeBtn.addEventListener('click', hidePopup);
+    dismiss.addEventListener('click', hidePopup);
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) hidePopup();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') hidePopup();
+    });
+
+    function startTimer() {
+      var key = 'pa_timer_end';
+      var end = sessionStorage.getItem(key);
+      if (!end) {
+        end = Date.now() + 15 * 60 * 1000;
+        sessionStorage.setItem(key, end);
+      }
+      end = parseInt(end, 10);
+
+      var interval = setInterval(function () {
+        var remaining = Math.max(0, end - Date.now());
+        var mins = Math.floor(remaining / 60000);
+        var secs = Math.floor((remaining % 60000) / 1000);
+        timerEl.textContent =
+          String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+        if (remaining === 0) clearInterval(interval);
+      }, 1000);
+    }
+  })();
+  </script>
 </body>
 </html>
