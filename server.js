@@ -92,16 +92,20 @@ function requirePlan(req, res, next) {
       message: 'An active subscription is required to run analyses.'
     });
   }
-  if (user.plan === 'basic') {
-    const today = new Date().toISOString().split('T')[0];
-    const usage = user.dailyUsage || { date: '', count: 0 };
-    if (usage.date !== today) { usage.date = today; usage.count = 0; }
-    if (usage.count >= 10) {
-      return res.status(403).json({
-        error: 'limit_reached',
-        message: 'Daily limit of 10 analyses reached. Upgrade to Pro for unlimited access.'
-      });
-    }
+  const today = new Date().toISOString().split('T')[0];
+  const usage = user.dailyUsage || { date: '', count: 0 };
+  if (usage.date !== today) { usage.date = today; usage.count = 0; }
+  if (user.plan === 'basic' && usage.count >= 10) {
+    return res.status(403).json({
+      error: 'limit_reached',
+      message: 'Daily limit of 10 analyses reached. Upgrade to Pro for more access.'
+    });
+  }
+  if (user.plan === 'pro' && usage.count >= 30) {
+    return res.status(403).json({
+      error: 'limit_reached',
+      message: 'Daily limit of 30 analyses reached. Resets at midnight UTC.'
+    });
   }
   next();
 }
@@ -697,10 +701,10 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
     console.log(`[Pass 3] ✓ VERDICT:${result.verdict} | Grade:${result.signal_grade} | Conf:${result.confidence}% | ${elapsed}s total`);
 
-    // Track daily usage for basic plan
+    // Track daily usage for all plans
     const user  = req.user;
     const users = req.users;
-    if (user.plan === 'basic') {
+    if (!isWhitelisted(user)) {
       const today = new Date().toISOString().split('T')[0];
       const usage = user.dailyUsage || { date:'', count:0 };
       if (usage.date !== today) { usage.date = today; usage.count = 0; }
