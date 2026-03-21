@@ -393,14 +393,14 @@ async function sendEmailAlert(signal) {
   if (!['A+','A'].includes(signal.signal_grade)) return;
   const SENDGRID_KEY = process.env.SENDGRID_API_KEY;
   if (!SENDGRID_KEY) { console.log('[Email] No SENDGRID_API_KEY — skipping'); return; }
-  const subject = `NexTrade AI Signal: ${signal.verdict} ${signal.symbol} — Grade ${signal.signal_grade} (${signal.confidence}% confidence)`;
-  const body = `New ${signal.signal_grade} Grade Signal from NexTrade AI\n\nAsset: ${signal.symbol} ${signal.tf}\nSignal: ${signal.verdict}\nConfidence: ${signal.confidence}%\nGrade: ${signal.signal_grade}\n\nEntry: ${signal.entry}\nStop Loss: ${signal.sl}\nTP1: ${signal.tp1}\nTP2: ${signal.tp2 || 'N/A'}\nRisk/Reward: ${signal.rr_tp1 || 'N/A'}\n\nSummary:\n${signal.summary}\n\n---\nNot financial advice. Educational use only.\nNexTrade AI — nexttrade-pro.vercel.app`.trim();
+  const subject = `PriceAction AI Signal: ${signal.verdict} ${signal.symbol} — Grade ${signal.signal_grade} (${signal.confidence}% confidence)`;
+  const body = `New ${signal.signal_grade} Grade Signal from PriceAction AI\n\nAsset: ${signal.symbol} ${signal.tf}\nSignal: ${signal.verdict}\nConfidence: ${signal.confidence}%\nGrade: ${signal.signal_grade}\n\nEntry: ${signal.entry}\nStop Loss: ${signal.sl}\nTP1: ${signal.tp1}\nTP2: ${signal.tp2 || 'N/A'}\nRisk/Reward: ${signal.rr_tp1 || 'N/A'}\n\nSummary:\n${signal.summary}\n\n---\nNot financial advice. Educational use only.\nPriceAction AI — nexttrade-pro.vercel.app`.trim();
   for (const sub of subs) {
     try {
       await fetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${SENDGRID_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personalizations:[{ to:[{ email:sub.email }] }], from:{ email: process.env.FROM_EMAIL||'signals@nexttrade-ai.com', name:'NexTrade AI' }, subject, content:[{ type:'text/plain', value:body }] })
+        body: JSON.stringify({ personalizations:[{ to:[{ email:sub.email }] }], from:{ email: process.env.FROM_EMAIL||'signals@priceaction-ai.com', name:'PriceAction AI' }, subject, content:[{ type:'text/plain', value:body }] })
       });
     } catch (err) { console.error(`[Email] Failed for ${sub.email}:`, err.message); }
   }
@@ -655,7 +655,7 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
   const tf  = timeframe || chartList[0]?.label || '1H';
 
   try {
-    console.log(`\n[NexTrade] ═══ ${sym} ${tf} — ${chartList.length} chart(s) — user:${req.user.email} ═══`);
+    console.log(`\n[PriceAction] ═══ ${sym} ${tf} — ${chartList.length} chart(s) — user:${req.user.email} ═══`);
     const t0 = Date.now();
 
     // ── Phase 1: Fetch external data (parallel) ──
@@ -722,7 +722,7 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
     result._meta = { analysis_time_seconds:parseFloat(elapsed), charts_analyzed:chartList.length, live_price:livePrice, market_context:mktCtx, win_stats:winStats };
     res.json(result);
   } catch (err) {
-    console.error('[NexTrade] Error:', err.message);
+    console.error('[PriceAction] Error:', err.message);
     res.status(500).json({ error: err.message || 'Analysis failed' });
   }
 });
@@ -783,7 +783,7 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`\n  ╔══════════════════════════════════════════╗`);
-  console.log(`  ║   NexTrade AI — Auth + Stripe Edition    ║`);
+  console.log(`  ║   PriceAction AI — Auth + Stripe Edition    ║`);
   console.log(`  ║   Payments: ${stripe ? 'ACTIVE ✓' : 'DISABLED (no key)'}              ║`);
   console.log(`  ║   http://localhost:${PORT}                  ║`);
   console.log(`  ╚══════════════════════════════════════════╝\n`);
