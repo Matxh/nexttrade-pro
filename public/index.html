@@ -533,6 +533,11 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 /* ── DEMO CARD upgrade ── */
 .demo-card { box-shadow: 0 0 80px rgba(0,229,180,.1), 0 20px 60px rgba(0,0,0,.4); }
 
+/* ── CALCULATOR ── */
+.calc-grade-btn{padding:8px 18px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+.calc-grade-btn.active{background:var(--accent);color:#000;border-color:var(--accent)}
+.calc-grade-btn:hover:not(.active){border-color:var(--accent);color:var(--accent)}
+
 /* ── AUTH MODAL upgrade ── */
 .modal { box-shadow: 0 24px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(0,229,180,.08); }
 
@@ -595,6 +600,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <a class="nav-link" onclick="goTo('how')">How It Works</a>
     <a class="nav-link" onclick="showPage('analyzer')">Analyzer</a>
     <a class="nav-link" onclick="showPage('journal')">Journal</a>
+    <a class="nav-link" onclick="showPage('calculator')">Risk Calc</a>
   </div>
   <div class="nav-right">
     <div class="live-pill"><div class="pulse"></div>AI Online</div>
@@ -912,6 +918,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <h4>Product</h4>
         <a onclick="showPage('analyzer')">AI Analyzer</a>
         <a onclick="showPage('journal')">Trade Journal</a>
+        <a onclick="showPage('calculator')">Risk Calculator</a>
         <a onclick="goTo('pricing')">Pricing</a>
         <a onclick="goTo('how')">How It Works</a>
       </div>
@@ -1110,6 +1117,93 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
           <thead><tr><th>Symbol</th><th>Signal</th><th>Grade</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP1</th><th>R:R</th><th>Date</th><th>Outcome</th><th>Actual R:R</th><th>Actions</th></tr></thead>
           <tbody id="journalBody"><tr><td colspan="12" class="no-trades">No trades logged yet.</td></tr></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ CALCULATOR PAGE ════════ -->
+<div class="page" id="page-calculator">
+  <div class="app-wrap" style="max-width:600px">
+    <div class="app-header">
+      <div style="flex:1">
+        <div class="app-title">Position Size Calculator</div>
+        <div class="app-sub">Calculate exact position size based on your account and signal grade</div>
+      </div>
+    </div>
+
+    <div class="j-panel" style="margin-bottom:20px">
+      <div class="j-head"><span class="j-title">Account Settings</span></div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
+        <div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Account Size ($)</div>
+          <input id="calcAccount" type="number" placeholder="10000" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;color:var(--text);font-size:16px;font-family:var(--mono);outline:none" oninput="calcPosition()">
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Signal Grade</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="calc-grade-btn active" onclick="setGrade(this,'2')">A+ (2%)</button>
+            <button class="calc-grade-btn" onclick="setGrade(this,'1')">A (1%)</button>
+            <button class="calc-grade-btn" onclick="setGrade(this,'0.5')">B (0.5%)</button>
+            <button class="calc-grade-btn" onclick="setGrade(this,'0')">C/D (0%)</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Entry Price</div>
+          <input id="calcEntry" type="number" placeholder="83400" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;color:var(--text);font-size:16px;font-family:var(--mono);outline:none" oninput="calcPosition()">
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Stop Loss Price</div>
+          <input id="calcSL" type="number" placeholder="82900" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;color:var(--text);font-size:16px;font-family:var(--mono);outline:none" oninput="calcPosition()">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="calcFunded" onchange="calcPosition()" style="width:16px;height:16px;accent-color:var(--accent)">
+          <label for="calcFunded" style="font-size:14px;color:var(--text2);cursor:pointer">Funded account mode (halve all risk %)</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="j-panel" id="calcResult" style="margin-bottom:20px;display:none">
+      <div class="j-head"><span class="j-title">Result</span></div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Risk Amount</div>
+            <div id="calcRiskAmt" style="font-size:28px;font-weight:900;color:var(--accent);font-family:var(--mono)">$0</div>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Risk %</div>
+            <div id="calcRiskPct" style="font-size:28px;font-weight:900;color:var(--accent);font-family:var(--mono)">0%</div>
+          </div>
+        </div>
+        <div style="background:var(--accent-dim);border:1px solid rgba(0,229,180,.3);border-radius:8px;padding:20px;text-align:center">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Position Size</div>
+          <div id="calcPosSize" style="font-size:42px;font-weight:900;color:var(--accent);font-family:var(--mono)">0</div>
+          <div id="calcPosSub" style="font-family:var(--mono);font-size:11px;color:var(--text2);margin-top:4px">units / coins</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">SL Distance</div>
+          <div id="calcSLDist" style="font-size:22px;font-weight:700;color:var(--text);font-family:var(--mono)">0 points</div>
+        </div>
+        <div id="calcWarning" style="display:none;background:var(--red-dim);border:1px solid rgba(255,61,90,.3);border-radius:8px;padding:14px;text-align:center;color:var(--red);font-weight:600;font-size:14px"></div>
+      </div>
+    </div>
+
+    <div class="j-panel">
+      <div class="j-head"><span class="j-title">Risk % by Grade</span></div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+          <span style="color:#00e676;font-weight:800;font-family:var(--mono)">A+</span><span style="color:var(--text2);font-size:14px">2% risk — elite setup</span><span style="color:var(--accent);font-family:var(--mono);font-weight:700">2%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+          <span style="color:#00e676;font-weight:800;font-family:var(--mono)">A</span><span style="color:var(--text2);font-size:14px">1% risk — high quality</span><span style="color:var(--accent);font-family:var(--mono);font-weight:700">1%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+          <span style="color:var(--amber);font-weight:800;font-family:var(--mono)">B</span><span style="color:var(--text2);font-size:14px">0.5% risk — reduced size</span><span style="color:var(--accent);font-family:var(--mono);font-weight:700">0.5%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+          <span style="color:var(--red);font-weight:800;font-family:var(--mono)">C/D</span><span style="color:var(--text2);font-size:14px">0% — do not trade</span><span style="color:var(--red);font-family:var(--mono);font-weight:700">SKIP</span>
+        </div>
       </div>
     </div>
   </div>
@@ -1357,6 +1451,57 @@ function goTo(id){
 }
 
 function toggleFaq(el){el.classList.toggle('open');}
+
+// ── POSITION SIZE CALCULATOR ──
+let calcRiskPct = 2;
+function setGrade(btn, pct) {
+  document.querySelectorAll('.calc-grade-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  calcRiskPct = parseFloat(pct);
+  calcPosition();
+}
+function calcPosition() {
+  const account = parseFloat($('calcAccount').value);
+  const entry   = parseFloat($('calcEntry').value);
+  const sl      = parseFloat($('calcSL').value);
+  const funded  = $('calcFunded').checked;
+  const result  = $('calcResult');
+  const warning = $('calcWarning');
+
+  if (!account || !entry || !sl || calcRiskPct === 0) {
+    if (calcRiskPct === 0) {
+      result.style.display = '';
+      $('calcRiskAmt').textContent = '$0';
+      $('calcRiskPct').textContent = '0%';
+      $('calcPosSize').textContent = 'SKIP';
+      $('calcPosSub').textContent = 'Do not trade C/D signals';
+      $('calcSLDist').textContent = '—';
+      warning.style.display = '';
+      warning.textContent = 'C and D grade signals should not be traded. Wait for an A+ or A setup.';
+    } else {
+      result.style.display = 'none';
+    }
+    return;
+  }
+
+  const riskPct    = funded ? calcRiskPct / 2 : calcRiskPct;
+  const riskAmt    = account * (riskPct / 100);
+  const slDistance = Math.abs(entry - sl);
+  const posSize    = riskAmt / slDistance;
+
+  result.style.display = '';
+  $('calcRiskAmt').textContent = '$' + riskAmt.toFixed(2);
+  $('calcRiskPct').textContent = riskPct + '%';
+  $('calcPosSize').textContent = posSize.toFixed(4);
+  $('calcPosSub').textContent  = 'units / coins / lots';
+  $('calcSLDist').textContent  = slDistance.toFixed(2) + ' points';
+
+  warning.style.display = 'none';
+  if (riskPct > 2) {
+    warning.style.display = '';
+    warning.textContent = 'Warning: Never risk more than 2% per trade.';
+  }
+}
 
 // ── TF & SLOTS ──
 function setTF(btn,t){document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');tf=t;}
