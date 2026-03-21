@@ -778,6 +778,16 @@ app.delete('/api/trades/:id', authMiddleware, (req, res) => {
   res.json({ success:true });
 });
 
+app.get('/sitemap.xml', (req, res) => {
+  res.setHeader('Content-Type', 'application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://priceaction.ai/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://priceaction.ai/#pricing</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://priceaction.ai/#how</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+</urlset>`);
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
