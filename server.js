@@ -26,36 +26,45 @@ const SONNET  = 'claude-sonnet-4-6';
 const OPUS    = 'claude-opus-4-6';
 
 // ─────────────────────────────────────────────
-// FILE STORAGE — uses /tmp (writable on Vercel)
-// No MongoDB needed — simple JSON files
+// VERCEL KV STORAGE — persistent across deploys
 // ─────────────────────────────────────────────
-const TMP = '/tmp';
-const FILES = {
-  users:  path.join(TMP, 'pa_users.json'),
-  trades: path.join(TMP, 'pa_trades.json'),
-  subs:   path.join(TMP, 'pa_subs.json'),
-};
+const { kv } = require('@vercel/kv');
 
-function read(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
-  catch { return fallback; }
+async function getUserByEmail(email) {
+  try { return await kv.get('user:' + email.toLowerCase()); } catch { return null; }
 }
-function write(file, data) {
-  try { fs.writeFileSync(file, JSON.stringify(data, null, 2)); return true; }
-  catch(e) { console.warn('[Storage] Write failed:', e.message); return false; }
+async function getUserById(id) {
+  try {
+    const email = await kv.get('userid:' + id);
+    if (!email) return null;
+    return await kv.get('user:' + email);
+  } catch { return null; }
 }
-
-function getUsers()  { return read(FILES.users,  {}); }
-function getTrades() { return read(FILES.trades, []); }
-function getSubs()   { return read(FILES.subs,   []); }
-
-function saveUsers(u)  { write(FILES.users,  u); }
-function saveTrades(t) { write(FILES.trades, t); }
-function saveSubs(s)   { write(FILES.subs,   s); }
-
-function getUserByEmail(email) { const u = getUsers(); return u[email.toLowerCase()] || null; }
-function getUserById(id) { const u = getUsers(); return Object.values(u).find(u => u.id === id) || null; }
-function saveUser(user) { const u = getUsers(); u[user.email.toLowerCase()] = user; saveUsers(u); }
+async function saveUser(user) {
+  try {
+    await kv.set('user:' + user.email.toLowerCase(), user);
+    await kv.set('userid:' + user.id, user.email.toLowerCase());
+  } catch(e) { console.warn('[KV] saveUser failed:', e.message); }
+}
+async function getAllUsers() {
+  try {
+    const keys = await kv.keys('user:*');
+    if (!keys.length) return [];
+    return await Promise.all(keys.map(k => kv.get(k)));
+  } catch { return []; }
+}
+async function getTrades() {
+  try { return await kv.get('trades') || []; } catch { return []; }
+}
+async function saveTrades(t) {
+  try { await kv.set('trades', t); } catch(e) { console.warn('[KV] saveTrades failed:', e.message); }
+}
+async function getSubs() {
+  try { return await kv.get('subs') || []; } catch { return []; }
+}
+async function saveSubs(s) {
+  try { await kv.set('subs', s); } catch(e) { console.warn('[KV] saveSubs failed:', e.message); }
+}
 
 // ─────────────────────────────────────────────
 // AUTH HELPERS
@@ -112,11 +121,11 @@ function isWhitelisted(user) { return WHITELIST.has((user.email || '').toLowerCa
 // ─────────────────────────────────────────────
 // MIDDLEWARE
 // ─────────────────────────────────────────────
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const token   = (req.headers.authorization || '').replace('Bearer ', '').trim();
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Unauthorized — please log in' });
-  const user = getUserById(payload.userId);
+  const user = await getUserById(payload.userId);
   if (!user) return res.status(401).json({ error: 'Account not found' });
   req.user = user;
   next();
@@ -159,7 +168,7 @@ try {
 // PING
 // ─────────────────────────────────────────────
 app.get('/api/ping', (req, res) => res.json({ ok: true }));
-app.get('/api/dbping', (req, res) => res.json({ ok: true, storage: '/tmp file storage — no DB needed' }));
+app.get('/api/dbping', (req, res) => res.json({ ok: true, storage: 'Vercel KV — persistent storage' }));
 
 // ─────────────────────────────────────────────
 // AUTH ENDPOINTS
@@ -169,7 +178,7 @@ app.post('/api/auth/signup', async (req, res) => {
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Invalid email' });
   if (!password || password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
-  const existing = getUserByEmail(email);
+  const existing = await getUserByEmail(email);
   if (existing) return res.status(400).json({ error: 'Email already registered — please log in' });
 
   const passwordHash = await hashPassword(password);
@@ -194,7 +203,7 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-  const user = getUserByEmail(email);
+  const user = await getUserByEmail(email);
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
   const valid = await verifyPassword(password, user.passwordHash);
@@ -293,8 +302,8 @@ app.post('/api/webhook', async (req, res) => {
           const sub  = await stripe.subscriptions.retrieve(session.subscription);
           const pid  = sub.items.data[0]?.price?.id;
           const plan = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro' : 'basic';
-          const user = getUserById(userId);
-          if (user) { Object.assign(user, { plan, stripeCustomerId: session.customer, stripeSubscriptionId: session.subscription, subscriptionStatus: 'active' }); saveUser(user); }
+          const user = await getUserById(userId);
+          if (user) { Object.assign(user, { plan, stripeCustomerId: session.customer, stripeSubscriptionId: session.subscription, subscriptionStatus: 'active' }); await saveUser(user); }
           console.log(`[Webhook] checkout.session.completed → ${userId} now on ${plan}`);
         }
         break;
@@ -304,23 +313,23 @@ app.post('/api/webhook', async (req, res) => {
         const pid  = sub.items.data[0]?.price?.id;
         const plan = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro' : 'basic';
         const status = sub.status === 'active' ? 'active' : sub.status;
-        const users = getUsers();
-        const user  = Object.values(users).find(u => u.stripeSubscriptionId === sub.id || u.stripeCustomerId === sub.customer);
-        if (user) { Object.assign(user, { plan, subscriptionStatus: status }); saveUser(user); }
+        const allUsers1 = await getAllUsers();
+        const user1  = allUsers1.find(u => u.stripeSubscriptionId === sub.id || u.stripeCustomerId === sub.customer);
+        if (user1) { Object.assign(user1, { plan, subscriptionStatus: status }); await saveUser(user1); }
         break;
       }
       case 'customer.subscription.deleted': {
         const sub  = event.data.object;
-        const users = getUsers();
-        const user  = Object.values(users).find(u => u.stripeSubscriptionId === sub.id || u.stripeCustomerId === sub.customer);
-        if (user) { Object.assign(user, { plan: null, subscriptionStatus: 'canceled', stripeSubscriptionId: null }); saveUser(user); }
+        const allUsers2 = await getAllUsers();
+        const user2  = allUsers2.find(u => u.stripeSubscriptionId === sub.id || u.stripeCustomerId === sub.customer);
+        if (user2) { Object.assign(user2, { plan: null, subscriptionStatus: 'canceled', stripeSubscriptionId: null }); await saveUser(user2); }
         break;
       }
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
-        const users   = getUsers();
-        const user    = Object.values(users).find(u => u.stripeCustomerId === invoice.customer);
-        if (user) { user.subscriptionStatus = 'past_due'; saveUser(user); }
+        const allUsers3 = await getAllUsers();
+        const user3 = allUsers3.find(u => u.stripeCustomerId === invoice.customer);
+        if (user3) { user3.subscriptionStatus = 'past_due'; await saveUser(user3); }
         break;
       }
     }
@@ -583,8 +592,7 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
     console.log(`\n[PriceAction] ═══ ${sym} ${tf} — ${chartList.length} chart(s) — ${req.user.email} ═══`);
     const t0 = Date.now();
 
-    const [livePrice] = await Promise.all([fetchLivePrice(sym).catch(() => null)]);
-    const allTrades   = getTrades();
+    const [livePrice, allTrades] = await Promise.all([fetchLivePrice(sym).catch(() => null), getTrades()]);
     const winStats    = getWinStats(allTrades);
     const mktCtx      = getMarketContext(sym);
 
@@ -619,15 +627,15 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
       if (usage.date !== today) { usage.date = today; usage.count = 0; }
       usage.count++;
       user.dailyUsage = usage;
-      saveUser(user);
+      await saveUser(user);
     }
 
     // Save trade to journal
     if (result.verdict === 'BUY' || result.verdict === 'SELL') {
-      const trades  = getTrades();
+      const trades  = await getTrades();
       const tradeId = Date.now().toString();
       trades.push({ id:tradeId, symbol:sym, timeframe:tf, verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null, userId:user.id });
-      saveTrades(trades);
+      await saveTrades(trades);
       result._trade_id = tradeId;
     }
 
@@ -642,44 +650,45 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
 // ─────────────────────────────────────────────
 // EMAIL SUBSCRIPTION
 // ─────────────────────────────────────────────
-app.post('/api/subscribe', (req, res) => {
+app.post('/api/subscribe', async (req, res) => {
   const { email } = req.body;
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Invalid email' });
-  const subs = getSubs();
+  const subs = await getSubs();
   if (subs.find(s => s.email === email)) return res.json({ success:true, message:'Already subscribed' });
   subs.push({ email, active:true, subscribedAt:new Date().toISOString() });
-  saveSubs(subs);
+  await saveSubs(subs);
   res.json({ success:true });
 });
 
 // ─────────────────────────────────────────────
 // TRADE JOURNAL
 // ─────────────────────────────────────────────
-app.get('/api/trades', authMiddleware, (req, res) => {
-  const trades = getTrades().filter(t => !t.userId || t.userId === req.user.id);
-  res.json(trades);
+app.get('/api/trades', authMiddleware, async (req, res) => {
+  const trades = await getTrades();
+  res.json(trades.filter(t => !t.userId || t.userId === req.user.id));
 });
 
-app.get('/api/stats', authMiddleware, (req, res) => {
-  const trades = getTrades();
+app.get('/api/stats', authMiddleware, async (req, res) => {
+  const trades = await getTrades();
   res.json(getWinStats(trades) || { message:'No completed trades yet' });
 });
 
-app.post('/api/trades/:id/outcome', authMiddleware, (req, res) => {
+app.post('/api/trades/:id/outcome', authMiddleware, async (req, res) => {
   const { outcome, actual_rr, notes } = req.body;
-  const trades = getTrades();
+  const trades = await getTrades();
   const trade  = trades.find(t => t.id === req.params.id);
   if (!trade) return res.status(404).json({ error: 'Trade not found' });
   trade.outcome   = outcome;
   trade.actual_rr = actual_rr;
   trade.notes     = notes || '';
   trade.closed_at = new Date().toISOString();
-  saveTrades(trades);
+  await saveTrades(trades);
   res.json({ success:true, stats:getWinStats(trades) });
 });
 
-app.delete('/api/trades/:id', authMiddleware, (req, res) => {
-  saveTrades(getTrades().filter(t => t.id !== req.params.id));
+app.delete('/api/trades/:id', authMiddleware, async (req, res) => {
+  const trades = await getTrades();
+  await saveTrades(trades.filter(t => t.id !== req.params.id));
   res.json({ success:true });
 });
 
