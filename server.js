@@ -170,7 +170,8 @@ app.post('/api/auth/signup', async (req, res) => {
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Invalid email' });
   if (!password || password.length < 8)  return res.status(400).json({ error: 'Password must be at least 8 characters' });
 
-  const d = await getDb();
+  let d;
+  try { d = await getDb(); } catch(e) { return res.status(500).json({ error: 'DB connection failed: ' + e.message }); }
   const existing = await d.collection('users').findOne({ email: email.toLowerCase() });
   if (existing) return res.status(400).json({ error: 'Email already registered — please log in' });
 
