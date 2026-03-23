@@ -1031,6 +1031,31 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <input type="file" id="fileInput0" accept="image/*" style="display:none" onchange="onFileSelect(event,0)">
     <input type="file" id="fileInput1" accept="image/*" style="display:none" onchange="onFileSelect(event,1)">
     <input type="file" id="fileInput2" accept="image/*" style="display:none" onchange="onFileSelect(event,2)">
+    <!-- SESSION TIMER -->
+    <div id="sessionTimer" style="display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 18px;margin-bottom:10px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px;">
+        <div id="sessionDot" style="width:10px;height:10px;border-radius:50%;background:#666;flex-shrink:0;transition:background .5s;"></div>
+        <div>
+          <div id="sessionLabel" style="font-size:13px;font-weight:700;color:var(--text);font-family:var(--sans);">Checking session…</div>
+          <div id="sessionSub" style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:1px;"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="text-align:center;">
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;">NY Time</div>
+          <div id="nyTime" style="font-size:16px;font-weight:700;color:var(--accent);font-family:var(--mono);">--:--</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;">Best Window</div>
+          <div id="nextWindow" style="font-size:12px;font-weight:600;color:var(--text2);font-family:var(--mono);">--</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;">Recommended</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text2);font-family:var(--mono);">ES · NQ · CL</div>
+        </div>
+      </div>
+    </div>
+
     <div class="analyze-bar">
       <div class="analyze-info">
         <strong id="analyze-status">Upload at least 1 chart to begin</strong>
@@ -1759,6 +1784,89 @@ async function deleteTrade(id){
 // ── INIT ──
 updateAnalyzeBar();
 initAuth();
+
+// ── SESSION TIMER ──────────────────────────────────────────
+function updateSessionTimer() {
+  const now = new Date();
+  const ny = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const h = ny.getHours(), m = ny.getMinutes();
+  const totalMins = h * 60 + m;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hh = h % 12 || 12;
+  const mm = String(m).padStart(2,'0');
+  document.getElementById('nyTime').textContent = `${hh}:${mm} ${ampm}`;
+
+  const dot   = document.getElementById('sessionDot');
+  const label = document.getElementById('sessionLabel');
+  const sub   = document.getElementById('sessionSub');
+  const win   = document.getElementById('nextWindow');
+
+  // Windows: Best = 9:30-11:30, Good = 14:00-16:00
+  const best1Start = 9*60+30, best1End = 11*60+30;
+  const best2Start = 14*60,   best2End = 16*60;
+  const premarket  = totalMins >= 4*60 && totalMins < best1Start;
+  const inBest1    = totalMins >= best1Start && totalMins < best1End;
+  const midday     = totalMins >= best1End && totalMins < best2Start;
+  const inBest2    = totalMins >= best2Start && totalMins < best2End;
+  const afterClose = totalMins >= best2End && totalMins < 20*60;
+  const overnight  = totalMins >= 20*60 || totalMins < 4*60;
+
+  if (inBest1) {
+    dot.style.background = '#00e5b4';
+    dot.style.boxShadow  = '0 0 8px #00e5b4';
+    label.textContent    = '🟢 BEST WINDOW OPEN — Trade Now';
+    label.style.color    = '#00e5b4';
+    sub.textContent      = 'NY Open 9:30–11:30am · Highest volume & accuracy · ES · NQ · CL';
+    const minsLeft = best1End - totalMins;
+    win.textContent = `${minsLeft}m left`;
+    win.style.color = '#00e5b4';
+  } else if (inBest2) {
+    dot.style.background = '#00e5b4';
+    dot.style.boxShadow  = '0 0 8px #00e5b4';
+    label.textContent    = '🟢 GOOD WINDOW OPEN — Trade Now';
+    label.style.color    = '#00e5b4';
+    sub.textContent      = 'NY Afternoon 2:00–4:00pm · Second best window · ES · NQ · CL';
+    const minsLeft = best2End - totalMins;
+    win.textContent = `${minsLeft}m left`;
+    win.style.color = '#00e5b4';
+  } else if (premarket) {
+    dot.style.background = '#f59e0b';
+    dot.style.boxShadow  = '0 0 6px #f59e0b';
+    label.textContent    = '🟡 Pre-Market — Wait for 9:30am';
+    label.style.color    = '#f59e0b';
+    sub.textContent      = 'Market opens soon · Avoid trading now · Low liquidity';
+    const minsLeft = best1Start - totalMins;
+    win.textContent = `Opens in ${minsLeft}m`;
+    win.style.color = '#f59e0b';
+  } else if (midday) {
+    dot.style.background = '#f59e0b';
+    dot.style.boxShadow  = '0 0 6px #f59e0b';
+    label.textContent    = '🟡 Midday Chop — Wait for 2:00pm';
+    label.style.color    = '#f59e0b';
+    sub.textContent      = 'Low volume, choppy price action · Not ideal for trading';
+    const minsLeft = best2Start - totalMins;
+    win.textContent = `Next in ${minsLeft}m`;
+    win.style.color = '#f59e0b';
+  } else if (afterClose) {
+    dot.style.background = '#ef4444';
+    dot.style.boxShadow  = 'none';
+    label.textContent    = '🔴 Market Closed — Done for Today';
+    label.style.color    = '#ef4444';
+    sub.textContent      = 'Next best window: Tomorrow 9:30am EST';
+    win.textContent = 'Tomorrow';
+    win.style.color = '#ef4444';
+  } else {
+    dot.style.background = '#666';
+    dot.style.boxShadow  = 'none';
+    label.textContent    = '⚫ Overnight — Market Closed';
+    label.style.color    = 'var(--text2)';
+    sub.textContent      = 'Next best window: 9:30am EST';
+    win.textContent = '9:30am EST';
+    win.style.color = 'var(--text3)';
+  }
+}
+updateSessionTimer();
+setInterval(updateSessionTimer, 30000);
 </script>
 
 </body>

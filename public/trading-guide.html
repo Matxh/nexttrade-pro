@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>PriceAction AI — Trading Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0a0a0f;font-family:'Inter',sans-serif;padding:40px 20px;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;}
+  .card{background:#111118;border:1px solid #1e1e2e;border-radius:20px;width:100%;max-width:900px;overflow:hidden;}
+  .header{background:linear-gradient(135deg,#0d1f1a 0%,#0a0a0f 100%);border-bottom:1px solid #1e1e2e;padding:32px 40px;display:flex;align-items:center;gap:16px;}
+  .logo{width:44px;height:44px;background:linear-gradient(135deg,#00e5b4,#00b48a);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;}
+  .header-text h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px;}
+  .header-text p{font-size:13px;color:#6b7280;margin-top:2px;font-family:'JetBrains Mono',monospace;}
+  .badge{margin-left:auto;background:rgba(0,229,180,.1);border:1px solid rgba(0,229,180,.2);color:#00e5b4;font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;font-family:'JetBrains Mono',monospace;letter-spacing:1px;}
+  .body{padding:32px 40px;display:flex;flex-direction:column;gap:28px;}
+
+  /* SECTION */
+  .section-title{font-size:11px;font-weight:700;color:#00e5b4;letter-spacing:2px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+  .section-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#1e1e2e,transparent);}
+
+  /* STEP CARDS */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .step-card{background:#0d1117;border:1px solid #1e1e2e;border-radius:14px;padding:20px;position:relative;overflow:hidden;}
+  .step-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+  .step-card.s1::before{background:linear-gradient(90deg,#6366f1,#818cf8);}
+  .step-card.s2::before{background:linear-gradient(90deg,#f59e0b,#fbbf24);}
+  .step-card.s3::before{background:linear-gradient(90deg,#00e5b4,#00b48a);}
+  .step-num{font-size:11px;font-weight:700;letter-spacing:1px;font-family:'JetBrains Mono',monospace;margin-bottom:10px;}
+  .step-card.s1 .step-num{color:#818cf8;}
+  .step-card.s2 .step-num{color:#fbbf24;}
+  .step-card.s3 .step-num{color:#00e5b4;}
+  .step-tf{font-size:32px;font-weight:900;color:#fff;letter-spacing:-1px;line-height:1;}
+  .step-name{font-size:12px;color:#6b7280;margin-top:4px;font-family:'JetBrains Mono',monospace;}
+  .step-role{font-size:13px;font-weight:600;color:#e2e8f0;margin-top:12px;}
+  .step-desc{font-size:12px;color:#6b7280;margin-top:4px;line-height:1.5;}
+  .step-action{display:inline-block;margin-top:10px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;}
+  .s1 .step-action{background:rgba(99,102,241,.15);color:#818cf8;}
+  .s2 .step-action{background:rgba(245,158,11,.15);color:#fbbf24;}
+  .s3 .step-action{background:rgba(0,229,180,.15);color:#00e5b4;}
+
+  /* FUTURES */
+  .futures{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .future-card{background:#0d1117;border:1px solid #1e1e2e;border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:6px;}
+  .future-card.best{border-color:rgba(0,229,180,.3);background:rgba(0,229,180,.03);}
+  .future-top{display:flex;align-items:center;gap:10px;}
+  .future-symbol{font-size:24px;font-weight:900;color:#fff;font-family:'JetBrains Mono',monospace;}
+  .future-tag{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;margin-left:auto;}
+  .best .future-tag{background:rgba(0,229,180,.15);color:#00e5b4;}
+  .future-tag.good{background:rgba(99,102,241,.15);color:#818cf8;}
+  .future-tag.alt{background:rgba(245,158,11,.15);color:#fbbf24;}
+  .future-name{font-size:12px;color:#6b7280;font-family:'JetBrains Mono',monospace;}
+  .future-why{font-size:12px;color:#94a3b8;line-height:1.5;margin-top:4px;}
+
+  /* HOURS */
+  .hours{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .hour-card{background:#0d1117;border:1px solid #1e1e2e;border-radius:14px;padding:18px 20px;}
+  .hour-card.prime{border-color:rgba(0,229,180,.3);background:rgba(0,229,180,.03);}
+  .hour-card.second{border-color:rgba(99,102,241,.2);}
+  .hour-badge{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:8px;}
+  .prime .hour-badge{color:#00e5b4;}
+  .second .hour-badge{color:#818cf8;}
+  .hour-time{font-size:26px;font-weight:900;color:#fff;letter-spacing:-0.5px;line-height:1;}
+  .hour-tz{font-size:12px;color:#6b7280;font-family:'JetBrains Mono',monospace;margin-top:2px;}
+  .hour-why{font-size:12px;color:#94a3b8;margin-top:10px;line-height:1.5;}
+  .hour-dots{display:flex;gap:4px;margin-top:10px;}
+  .hdot{width:8px;height:8px;border-radius:50%;}
+  .prime .hdot{background:#00e5b4;}
+  .second .hdot{background:#818cf8;}
+
+  /* RULE BOX */
+  .rule-box{background:rgba(0,229,180,.04);border:1px solid rgba(0,229,180,.15);border-radius:14px;padding:20px 24px;}
+  .rule-title{font-size:13px;font-weight:700;color:#00e5b4;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .rules{display:flex;flex-direction:column;gap:8px;}
+  .rule{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#e2e8f0;line-height:1.5;}
+  .rule-num{width:20px;height:20px;border-radius:50%;background:rgba(0,229,180,.15);color:#00e5b4;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-family:'JetBrains Mono',monospace;}
+
+  /* FOOTER */
+  .footer{border-top:1px solid #1e1e2e;padding:20px 40px;display:flex;align-items:center;justify-content:space-between;}
+  .footer-logo{font-size:14px;font-weight:700;color:#fff;}
+  .footer-logo span{color:#00e5b4;}
+  .footer-url{font-size:12px;color:#6b7280;font-family:'JetBrains Mono',monospace;}
+
+  /* DOWNLOAD BTN */
+  .download-wrap{position:fixed;bottom:24px;right:24px;}
+  .dl-btn{background:#00e5b4;color:#000;border:none;border-radius:10px;padding:12px 20px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,229,180,.3);}
+  .dl-btn:hover{background:#00ccaa;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="logo">📊</div>
+    <div class="header-text">
+      <h1>PriceAction AI — Trading Guide</h1>
+      <p>priceaction.it.com · Day Trading Setup</p>
+    </div>
+    <div class="badge">DAY TRADING</div>
+  </div>
+
+  <div class="body">
+
+    <!-- TIMEFRAMES -->
+    <div>
+      <div class="section-title">Step 1 — Upload These 3 Timeframes</div>
+      <div class="steps">
+        <div class="step-card s1">
+          <div class="step-num">SLOT 1 — PRIMARY</div>
+          <div class="step-tf">4H</div>
+          <div class="step-name">4 Hour Chart</div>
+          <div class="step-role">The Boss — Sets Direction</div>
+          <div class="step-desc">Determines if we're in an uptrend or downtrend. The AI will ONLY take trades in this direction.</div>
+          <span class="step-action">Trend Direction</span>
+        </div>
+        <div class="step-card s2">
+          <div class="step-num">SLOT 2 — CONTEXT</div>
+          <div class="step-tf">1H</div>
+          <div class="step-name">1 Hour Chart</div>
+          <div class="step-role">The Manager — Finds the Zone</div>
+          <div class="step-desc">Identifies key support/resistance levels, order blocks, and fair value gaps where price may react.</div>
+          <span class="step-action">Key Level / Zone</span>
+        </div>
+        <div class="step-card s3">
+          <div class="step-num">SLOT 3 — ENTRY</div>
+          <div class="step-tf">15m</div>
+          <div class="step-name">15 Minute Chart</div>
+          <div class="step-role">The Worker — Pulls the Trigger</div>
+          <div class="step-desc">Where you actually place the trade. Entry, stop loss, and take profit are all drawn on this chart.</div>
+          <span class="step-action">Execute Trade Here</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- FUTURES -->
+    <div>
+      <div class="section-title">Step 2 — Best Futures to Trade</div>
+      <div class="futures">
+        <div class="future-card best">
+          <div class="future-top">
+            <div class="future-symbol">ES</div>
+            <span class="future-tag">BEST</span>
+          </div>
+          <div class="future-name">S&P 500 Futures</div>
+          <div class="future-why">Most liquid market in the world. Cleanest price action, most accurate AI signals. Use MES for smaller accounts (1/10th size).</div>
+        </div>
+        <div class="future-card">
+          <div class="future-top">
+            <div class="future-symbol">NQ</div>
+            <span class="future-tag good">GREAT</span>
+          </div>
+          <div class="future-name">Nasdaq 100 Futures</div>
+          <div class="future-why">Bigger moves than ES. Great for day trading. Very popular with retail traders. Use MNQ for smaller accounts.</div>
+        </div>
+        <div class="future-card">
+          <div class="future-top">
+            <div class="future-symbol">CL</div>
+            <span class="future-tag alt">GOOD</span>
+          </div>
+          <div class="future-name">Crude Oil Futures</div>
+          <div class="future-why">Strong trending moves. Very clear levels. Best during NY open. More volatile than ES/NQ.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HOURS -->
+    <div>
+      <div class="section-title">Step 3 — Only Trade These Hours (EST)</div>
+      <div class="hours">
+        <div class="hour-card prime">
+          <div class="hour-badge">⭐ Prime Window</div>
+          <div class="hour-time">9:30 – 11:30am</div>
+          <div class="hour-tz">Eastern Time (EST)</div>
+          <div class="hour-why">NY market open. Highest volume, biggest moves, most accurate signals. This is when institutions trade — follow the smart money.</div>
+          <div class="hour-dots">
+            <div class="hdot"></div><div class="hdot"></div><div class="hdot"></div><div class="hdot"></div><div class="hdot"></div>
+          </div>
+        </div>
+        <div class="hour-card second">
+          <div class="hour-badge">✦ Second Window</div>
+          <div class="hour-time">2:00 – 4:00pm</div>
+          <div class="hour-tz">Eastern Time (EST)</div>
+          <div class="hour-why">NY afternoon session. Second best window. Good volume returns after midday chop. Avoid 11:30am–2:00pm (low liquidity).</div>
+          <div class="hour-dots">
+            <div class="hdot"></div><div class="hdot"></div><div class="hdot"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RULES -->
+    <div class="rule-box">
+      <div class="rule-title">⚡ The 5 Rules for Best Accuracy</div>
+      <div class="rules">
+        <div class="rule"><div class="rule-num">1</div>Always upload all 3 timeframes (4H + 1H + 15m) — never just one chart</div>
+        <div class="rule"><div class="rule-num">2</div>Only trade during the prime window (9:30–11:30am EST) for highest accuracy</div>
+        <div class="rule"><div class="rule-num">3</div>Slot 1 (4H) sets the direction — never trade against it no matter what</div>
+        <div class="rule"><div class="rule-num">4</div>Place your actual trade on the 15m chart (Slot 3) — that's your entry timeframe</div>
+        <div class="rule"><div class="rule-num">5</div>If the AI says WAIT or HOLD — do not trade, wait for the next setup</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-logo">Price<span>Action</span> AI</div>
+    <div class="footer-url">priceaction.it.com</div>
+  </div>
+</div>
+
+<div class="download-wrap">
+  <button class="dl-btn" onclick="window.print()">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 11v3h10v-3M8 1v9M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Save as PDF
+  </button>
+</div>
+</body>
+</html>
