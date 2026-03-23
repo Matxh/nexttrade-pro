@@ -428,7 +428,7 @@ Return ONLY valid raw JSON:
     ...charts.map((c, i) => [{ type:'text', text:`Chart ${i+1}:` }, img(c.base64, c.mime)]).flat(),
     { type:'text', text:`Read all ${n} chart${n>1?'s':''} for ${sym}. Report exact prices.` }
   ];
-  return claude(key, HAIKU, sys, content, 3000);
+  return claude(key, SONNET, sys, content, 3000);
 }
 
 // ─────────────────────────────────────────────
