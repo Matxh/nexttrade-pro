@@ -1175,8 +1175,8 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
       <div style="overflow-x:auto">
         <table class="j-table">
-          <thead><tr><th>Symbol</th><th>Signal</th><th>Grade</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP1</th><th>R:R</th><th>Date</th><th>Outcome</th><th>Actual R:R</th><th>Actions</th></tr></thead>
-          <tbody id="journalBody"><tr><td colspan="12" class="no-trades">No trades logged yet.</td></tr></tbody>
+          <thead><tr><th>Symbol</th><th>Signal</th><th>Grade</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP1</th><th>R:R</th><th>Date</th><th>Time Open</th><th>Outcome</th><th>Actual R:R</th><th>Actions</th></tr></thead>
+          <tbody id="journalBody"><tr><td colspan="13" class="no-trades">No trades logged yet.</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1768,8 +1768,10 @@ function renderJournalTable(){
   $('journalBody').innerHTML=trades.map(t=>{
     const date=new Date(t.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     const gc=(t.grade||'B').replace('+','p');
-    return `<tr><td class="j-sym">${t.symbol}</td><td><span class="j-badge ${t.verdict}">${t.verdict}</span></td><td><span class="j-badge ${gc}">${t.grade||'?'}</span></td><td>${t.confidence||'?'}%</td><td style="color:var(--blue)">${t.entry||'—'}</td><td style="color:var(--red)">${t.sl||'—'}</td><td style="color:var(--green)">${t.tp1||'—'}</td><td>${t.rr_tp1||'—'}</td><td style="font-size:10px">${date}</td><td><select class="oc-sel" onchange=""><option value="" ${!t.outcome?'selected':''}>Open</option><option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option><option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option></select></td><td><input class="rr-inp" type="number" step="0.1" placeholder="R:R" value="${t.actual_rr||''}" id="rr_${t.id}"></td><td><button class="save-b" onclick="saveTrade('${t.id}',this)">Save</button><button class="del-b" onclick="deleteTrade('${t.id}')">✕</button></td></tr>`;
+    const timerCell = t.outcome ? `<td style="font-size:10px;color:var(--text3)">—</td>` : `<td><span class="trade-timer" data-start="${t.timestamp}" id="timer_${t.id}">…</span></td>`;
+    return `<tr><td class="j-sym">${t.symbol}</td><td><span class="j-badge ${t.verdict}">${t.verdict}</span></td><td><span class="j-badge ${gc}">${t.grade||'?'}</span></td><td>${t.confidence||'?'}%</td><td style="color:var(--blue)">${t.entry||'—'}</td><td style="color:var(--red)">${t.sl||'—'}</td><td style="color:var(--green)">${t.tp1||'—'}</td><td>${t.rr_tp1||'—'}</td><td style="font-size:10px">${date}</td>${timerCell}<td><select class="oc-sel" onchange=""><option value="" ${!t.outcome?'selected':''}>Open</option><option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option><option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option></select></td><td><input class="rr-inp" type="number" step="0.1" placeholder="R:R" value="${t.actual_rr||''}" id="rr_${t.id}"></td><td><button class="save-b" onclick="saveTrade('${t.id}',this)">Save</button><button class="del-b" onclick="deleteTrade('${t.id}')">✕</button></td></tr>`;
   }).join('');
+  startTradeTimers();
 }
 
 async function saveTrade(id,btn){
@@ -1789,6 +1791,36 @@ async function deleteTrade(id){
 // ── INIT ──
 updateAnalyzeBar();
 initAuth();
+
+// ── TRADE TIMER ──────────────────────────────────────────
+let tradeTimerInterval = null;
+function startTradeTimers() {
+  if (tradeTimerInterval) clearInterval(tradeTimerInterval);
+  updateTradeTimers();
+  tradeTimerInterval = setInterval(updateTradeTimers, 60000);
+}
+function updateTradeTimers() {
+  document.querySelectorAll('.trade-timer').forEach(el => {
+    const start = new Date(el.dataset.start);
+    const mins = Math.floor((Date.now() - start) / 60000);
+    const h = Math.floor(mins / 60), m = mins % 60;
+    const label = h > 0 ? `${h}h ${m}m` : `${m}m`;
+    el.textContent = label;
+    if (mins >= 120) {
+      el.style.color = '#ef4444';
+      el.style.fontWeight = '700';
+      el.title = '⚠️ Over 2 hours — consider closing this trade!';
+      el.textContent = label + ' ⚠️';
+    } else if (mins >= 60) {
+      el.style.color = '#f59e0b';
+      el.style.fontWeight = '600';
+      el.title = 'Approaching 2 hour limit';
+    } else {
+      el.style.color = '#00e5b4';
+      el.style.fontWeight = '600';
+    }
+  });
+}
 
 // ── SESSION TIMER ──────────────────────────────────────────
 function updateSessionTimer() {
