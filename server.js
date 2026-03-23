@@ -1,25 +1,11 @@
-
 require('dotenv').config();
 const express  = require('express');
 const fetch    = require('node-fetch');
 const path     = require('path');
 const fs       = require('fs');
 const crypto   = require('crypto');
-const { MongoClient } = require('mongodb');
 
 const app = express();
-
-// ── MONGODB ──
-const MONGO_URI = process.env.MONGODB_URI;
-let db;
-async function getDb() {
-  if (!db) {
-    const client = new MongoClient(MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000 });
-    await client.connect();
-    db = client.db('nexttrade');
-  }
-  return db;
-}
 
 // ── CORS ──
 app.use((req, res, next) => {
@@ -30,47 +16,51 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Stripe webhook needs raw body BEFORE json middleware ──
 app.use('/api/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
-// Model routing: speed where it doesn't matter, power where it does
-const HAIKU  = 'claude-haiku-4-5-20251001'; // Pass 1A + 1B (fast, parallel)
-const SONNET = 'claude-sonnet-4-6';          // Pass 2 — entry precision
-const OPUS   = 'claude-opus-4-6';            // Pass 3 — final verdict (max accuracy)
+const HAIKU   = 'claude-haiku-4-5-20251001';
+const SONNET  = 'claude-sonnet-4-6';
+const OPUS    = 'claude-opus-4-6';
 
-// ── DB HELPERS ──
-async function loadUsers()  { const d = await getDb(); return d.collection('users').find().toArray(); }
-async function saveUsers(users) {
-  const d = await getDb();
-  const col = d.collection('users');
-  for (const u of users) await col.replaceOne({ id: u.id }, u, { upsert: true });
+// ─────────────────────────────────────────────
+// FILE STORAGE — uses /tmp (writable on Vercel)
+// No MongoDB needed — simple JSON files
+// ─────────────────────────────────────────────
+const TMP = '/tmp';
+const FILES = {
+  users:  path.join(TMP, 'pa_users.json'),
+  trades: path.join(TMP, 'pa_trades.json'),
+  subs:   path.join(TMP, 'pa_subs.json'),
+};
+
+function read(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch { return fallback; }
 }
-async function saveUser(u) {
-  const d = await getDb();
-  await d.collection('users').replaceOne({ id: u.id }, u, { upsert: true });
-}
-async function loadTrades() { const d = await getDb(); return d.collection('trades').find().toArray(); }
-async function saveTrades(trades) {
-  const d = await getDb();
-  const col = d.collection('trades');
-  for (const t of trades) await col.replaceOne({ id: t.id }, t, { upsert: true });
-}
-async function saveTrade(t) {
-  const d = await getDb();
-  await d.collection('trades').replaceOne({ id: t.id }, t, { upsert: true });
-}
-async function loadSubs()  { const d = await getDb(); return d.collection('subs').find().toArray(); }
-async function saveSubs(subs) {
-  const d = await getDb();
-  const col = d.collection('subs');
-  for (const s of subs) await col.replaceOne({ email: s.email }, s, { upsert: true });
+function write(file, data) {
+  try { fs.writeFileSync(file, JSON.stringify(data, null, 2)); return true; }
+  catch(e) { console.warn('[Storage] Write failed:', e.message); return false; }
 }
 
-// ── AUTH HELPERS ──
-const JWT_SECRET = process.env.JWT_SECRET || 'nexttrade-change-me-in-vercel';
+function getUsers()  { return read(FILES.users,  {}); }
+function getTrades() { return read(FILES.trades, []); }
+function getSubs()   { return read(FILES.subs,   []); }
+
+function saveUsers(u)  { write(FILES.users,  u); }
+function saveTrades(t) { write(FILES.trades, t); }
+function saveSubs(s)   { write(FILES.subs,   s); }
+
+function getUserByEmail(email) { const u = getUsers(); return u[email.toLowerCase()] || null; }
+function getUserById(id) { const u = getUsers(); return Object.values(u).find(u => u.id === id) || null; }
+function saveUser(user) { const u = getUsers(); u[user.email.toLowerCase()] = user; saveUsers(u); }
+
+// ─────────────────────────────────────────────
+// AUTH HELPERS
+// ─────────────────────────────────────────────
+const JWT_SECRET = process.env.JWT_SECRET || 'priceaction-change-me-in-vercel';
 
 function signToken(payload) {
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -80,7 +70,7 @@ function signToken(payload) {
 
 function verifyToken(token) {
   if (!token) return null;
-  const dot  = token.lastIndexOf('.');
+  const dot = token.lastIndexOf('.');
   if (dot < 0) return null;
   const data = token.slice(0, dot);
   const sig  = token.slice(dot + 1);
@@ -89,7 +79,7 @@ function verifyToken(token) {
   try { return JSON.parse(Buffer.from(data, 'base64url').toString()); } catch { return null; }
 }
 
-function hashPassword(password) {
+async function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
   return new Promise((resolve, reject) => {
     crypto.scrypt(password, salt, 64, (err, key) => {
@@ -99,7 +89,7 @@ function hashPassword(password) {
   });
 }
 
-function verifyPassword(password, stored) {
+async function verifyPassword(password, stored) {
   const [salt, key] = stored.split(':');
   return new Promise((resolve, reject) => {
     crypto.scrypt(password, salt, 64, (err, derived) => {
@@ -109,57 +99,50 @@ function verifyPassword(password, stored) {
   });
 }
 
-// ── MIDDLEWARE ──
+// ─────────────────────────────────────────────
+// WHITELIST — free access for owner & team
+// ─────────────────────────────────────────────
+const WHITELIST = new Set([
+  ...(process.env.WHITELISTED_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean),
+  'llakorr10@gmail.com',
+  'matthewbrouard20@gmail.com'
+]);
+function isWhitelisted(user) { return WHITELIST.has((user.email || '').toLowerCase()); }
+
+// ─────────────────────────────────────────────
+// MIDDLEWARE
+// ─────────────────────────────────────────────
 function authMiddleware(req, res, next) {
   const token   = (req.headers.authorization || '').replace('Bearer ', '').trim();
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Unauthorized — please log in' });
-  getDb().then(d => d.collection('users').findOne({ id: payload.userId })).then(user => {
-    if (!user) return res.status(401).json({ error: 'Account not found' });
-    req.user = user;
-    next();
-  }).catch(() => res.status(500).json({ error: 'DB error' }));
+  const user = getUserById(payload.userId);
+  if (!user) return res.status(401).json({ error: 'Account not found' });
+  req.user = user;
+  next();
 }
 
 function requirePlan(req, res, next) {
   const user = req.user;
-  if (isWhitelisted(user)) return next(); // owner/team bypass
+  if (isWhitelisted(user)) return next();
   if (!user.plan || user.subscriptionStatus !== 'active') {
-    return res.status(403).json({
-      error: 'subscription_required',
-      message: 'An active subscription is required to run analyses.'
-    });
+    return res.status(403).json({ error: 'subscription_required', message: 'An active subscription is required.' });
   }
   const today = new Date().toISOString().split('T')[0];
   const usage = user.dailyUsage || { date: '', count: 0 };
   if (usage.date !== today) { usage.date = today; usage.count = 0; }
   if (user.plan === 'basic' && usage.count >= 10) {
-    return res.status(403).json({
-      error: 'limit_reached',
-      message: 'Daily limit of 10 analyses reached. Upgrade to Pro for more access.'
-    });
+    return res.status(403).json({ error: 'limit_reached', message: 'Daily limit of 10 analyses reached. Upgrade to Pro.' });
   }
   if (user.plan === 'pro' && usage.count >= 30) {
-    return res.status(403).json({
-      error: 'limit_reached',
-      message: 'Daily limit of 30 analyses reached. Resets at midnight UTC.'
-    });
+    return res.status(403).json({ error: 'limit_reached', message: 'Daily limit of 30 analyses reached. Resets at midnight UTC.' });
   }
   next();
 }
 
-// ── WHITELIST — free access for owner & team ──
-// Add emails to WHITELISTED_EMAILS env var (comma-separated) or hard-code below
-const WHITELIST = new Set([
-  ...(process.env.WHITELISTED_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean),
-  'llakorr10@gmail.com'
-]);
-
-function isWhitelisted(user) {
-  return WHITELIST.has(user.email.toLowerCase());
-}
-
-// ── STRIPE ──
+// ─────────────────────────────────────────────
+// STRIPE
+// ─────────────────────────────────────────────
 let stripe = null;
 try {
   if (process.env.STRIPE_SECRET_KEY) {
@@ -168,7 +151,7 @@ try {
   } else {
     console.log('[Stripe] STRIPE_SECRET_KEY not set — payments disabled');
   }
-} catch (e) {
+} catch(e) {
   console.log('[Stripe] Package not installed — run: npm install stripe');
 }
 
@@ -176,14 +159,7 @@ try {
 // PING
 // ─────────────────────────────────────────────
 app.get('/api/ping', (req, res) => res.json({ ok: true }));
-app.get('/api/dbping', async (req, res) => {
-  try {
-    await getDb();
-    res.json({ ok: true, db: 'connected' });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
+app.get('/api/dbping', (req, res) => res.json({ ok: true, storage: '/tmp file storage — no DB needed' }));
 
 // ─────────────────────────────────────────────
 // AUTH ENDPOINTS
@@ -191,11 +167,9 @@ app.get('/api/dbping', async (req, res) => {
 app.post('/api/auth/signup', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Invalid email' });
-  if (!password || password.length < 8)  return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  if (!password || password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
-  let d;
-  try { d = await getDb(); } catch(e) { return res.status(500).json({ error: 'DB connection failed: ' + e.message }); }
-  const existing = await d.collection('users').findOne({ email: email.toLowerCase() });
+  const existing = getUserByEmail(email);
   if (existing) return res.status(400).json({ error: 'Email already registered — please log in' });
 
   const passwordHash = await hashPassword(password);
@@ -210,9 +184,8 @@ app.post('/api/auth/signup', async (req, res) => {
     dailyUsage: { date: '', count: 0 },
     createdAt: new Date().toISOString()
   };
-  await d.collection('users').insertOne(user);
+  saveUser(user);
   console.log(`[Auth] New signup: ${user.email}`);
-
   const token = signToken({ userId: user.id });
   res.json({ token, user: safeUser(user) });
 });
@@ -221,14 +194,13 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-  const d = await getDb();
-  const user = await d.collection('users').findOne({ email: email.toLowerCase() });
+  const user = getUserByEmail(email);
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
   const valid = await verifyPassword(password, user.passwordHash);
-  if (!valid)  return res.status(401).json({ error: 'Invalid email or password' });
+  if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
 
-  console.log(`[Auth] Login: ${user.email} (plan: ${user.plan || 'none'})`);
+  console.log(`[Auth] Login: ${user.email}`);
   const token = signToken({ userId: user.id });
   res.json({ token, user: safeUser(user) });
 });
@@ -259,46 +231,38 @@ app.post('/api/checkout/create', authMiddleware, async (req, res) => {
   const priceId  = plan === 'pro' ? process.env.STRIPE_PRO_PRICE_ID : process.env.STRIPE_BASIC_PRICE_ID;
   if (!priceId)  return res.status(500).json({ error: 'Price ID not configured for this plan' });
 
-  const user    = req.user;
-  const BASE    = process.env.BASE_URL || 'https://nexttrade-pro.vercel.app';
-  const params  = {
+  const user = req.user;
+  const BASE = process.env.BASE_URL || 'https://nexttrade-pro.vercel.app';
+  const params = {
     mode: 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${BASE}/?checkout=success&plan=${plan}`,
     cancel_url:  `${BASE}/?checkout=cancel`,
-    metadata:    { userId: user.id },
+    metadata: { userId: user.id },
     subscription_data: { metadata: { userId: user.id } },
     allow_promotion_codes: true,
   };
-  if (user.stripeCustomerId) {
-    params.customer = user.stripeCustomerId;
-  } else {
-    params.customer_email = user.email;
-  }
+  if (user.stripeCustomerId) params.customer = user.stripeCustomerId;
+  else params.customer_email = user.email;
 
   try {
     const session = await stripe.checkout.sessions.create(params);
     res.json({ url: session.url });
-  } catch (err) {
+  } catch(err) {
     console.error('[Stripe] Checkout error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/api/checkout/portal', authMiddleware, async (req, res) => {
-  if (!stripe) return res.status(500).json({ error: 'Stripe is not configured on the server' });
+  if (!stripe) return res.status(500).json({ error: 'Stripe is not configured' });
   const user = req.user;
   if (!user.stripeCustomerId) return res.status(400).json({ error: 'No subscription found' });
-
-  const BASE    = process.env.BASE_URL || 'https://nexttrade-pro.vercel.app';
+  const BASE = process.env.BASE_URL || 'https://nexttrade-pro.vercel.app';
   try {
-    const session = await stripe.billingPortal.sessions.create({
-      customer:   user.stripeCustomerId,
-      return_url: BASE + '/',
-    });
+    const session = await stripe.billingPortal.sessions.create({ customer: user.stripeCustomerId, return_url: BASE + '/' });
     res.json({ url: session.url });
-  } catch (err) {
-    console.error('[Stripe] Portal error:', err.message);
+  } catch(err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -308,7 +272,6 @@ app.post('/api/checkout/portal', authMiddleware, async (req, res) => {
 // ─────────────────────────────────────────────
 app.post('/api/webhook', async (req, res) => {
   if (!stripe) return res.status(500).send('Stripe not configured');
-
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   let event;
   try {
@@ -317,59 +280,57 @@ app.post('/api/webhook', async (req, res) => {
     } else {
       event = JSON.parse(req.body.toString());
     }
-  } catch (err) {
-    console.error('[Webhook] Parse error:', err.message);
+  } catch(err) {
     return res.status(400).send('Webhook error: ' + err.message);
   }
 
-  const d = await getDb();
-  const col = d.collection('users');
-
   try {
-    switch (event.type) {
+    switch(event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const userId  = session.metadata?.userId;
         if (userId && session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription);
-          const pid = sub.items.data[0]?.price?.id;
+          const sub  = await stripe.subscriptions.retrieve(session.subscription);
+          const pid  = sub.items.data[0]?.price?.id;
           const plan = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro' : 'basic';
-          await col.updateOne({ id: userId }, { $set: { plan, stripeCustomerId: session.customer, stripeSubscriptionId: session.subscription, subscriptionStatus: 'active' } });
-          console.log(`[Webhook] checkout.session.completed → userId=${userId} now on ${plan}`);
+          const user = getUserById(userId);
+          if (user) { Object.assign(user, { plan, stripeCustomerId: session.customer, stripeSubscriptionId: session.subscription, subscriptionStatus: 'active' }); saveUser(user); }
+          console.log(`[Webhook] checkout.session.completed → ${userId} now on ${plan}`);
         }
         break;
       }
       case 'customer.subscription.updated': {
-        const sub = event.data.object;
-        const pid = sub.items.data[0]?.price?.id;
+        const sub  = event.data.object;
+        const pid  = sub.items.data[0]?.price?.id;
         const plan = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro' : 'basic';
         const status = sub.status === 'active' ? 'active' : sub.status;
-        await col.updateOne({ $or: [{ stripeSubscriptionId: sub.id }, { stripeCustomerId: sub.customer }] }, { $set: { plan, subscriptionStatus: status } });
-        console.log(`[Webhook] subscription.updated → plan=${plan} status=${status}`);
+        const users = getUsers();
+        const user  = Object.values(users).find(u => u.stripeSubscriptionId === sub.id || u.stripeCustomerId === sub.customer);
+        if (user) { Object.assign(user, { plan, subscriptionStatus: status }); saveUser(user); }
         break;
       }
       case 'customer.subscription.deleted': {
-        const sub = event.data.object;
-        await col.updateOne({ $or: [{ stripeSubscriptionId: sub.id }, { stripeCustomerId: sub.customer }] }, { $set: { plan: null, subscriptionStatus: 'canceled', stripeSubscriptionId: null } });
-        console.log(`[Webhook] subscription.deleted → access revoked`);
+        const sub  = event.data.object;
+        const users = getUsers();
+        const user  = Object.values(users).find(u => u.stripeSubscriptionId === sub.id || u.stripeCustomerId === sub.customer);
+        if (user) { Object.assign(user, { plan: null, subscriptionStatus: 'canceled', stripeSubscriptionId: null }); saveUser(user); }
         break;
       }
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
-        await col.updateOne({ stripeCustomerId: invoice.customer }, { $set: { subscriptionStatus: 'past_due' } });
-        console.log(`[Webhook] payment_failed → marked past_due`);
+        const users   = getUsers();
+        const user    = Object.values(users).find(u => u.stripeCustomerId === invoice.customer);
+        if (user) { user.subscriptionStatus = 'past_due'; saveUser(user); }
         break;
       }
     }
-  } catch (err) {
-    console.error('[Webhook] Handler error:', err.message);
-  }
+  } catch(err) { console.error('[Webhook] Handler error:', err.message); }
 
   res.json({ received: true });
 });
 
 // ─────────────────────────────────────────────
-// LIVE PRICE FETCHER
+// LIVE PRICE
 // ─────────────────────────────────────────────
 async function fetchLivePrice(symbol) {
   if (!symbol || symbol === 'Unknown') return null;
@@ -377,7 +338,7 @@ async function fetchLivePrice(symbol) {
   const sources = [
     async () => {
       const coinMap = { BTC:'bitcoin',ETH:'ethereum',SOL:'solana',BNB:'binancecoin',XRP:'ripple',ADA:'cardano',DOGE:'dogecoin',AVAX:'avalanche-2',MATIC:'matic-network',DOT:'polkadot',LINK:'chainlink',UNI:'uniswap',ATOM:'cosmos',LTC:'litecoin' };
-      const base = sym.replace('USDT','').replace('USD','').replace('BUSD','');
+      const base   = sym.replace('USDT','').replace('USD','').replace('BUSD','');
       const coinId = coinMap[base]; if (!coinId) return null;
       const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true`, { timeout:5000 });
       const d = await r.json(); if (!d[coinId]) return null;
@@ -386,7 +347,7 @@ async function fetchLivePrice(symbol) {
     async () => {
       const pairs = { EURUSD:'EUR',GBPUSD:'GBP',USDJPY:'USD',AUDUSD:'AUD',USDCAD:'USD' };
       if (!pairs[sym]) return null;
-      const base = sym.substring(0,3), quote = sym.substring(3,6);
+      const base  = sym.substring(0,3), quote = sym.substring(3,6);
       const r = await fetch(`https://open.er-api.com/v6/latest/${base}`, { timeout:5000 });
       const d = await r.json(); if (!d.rates?.[quote]) return null;
       return { price: d.rates[quote].toFixed(5), source:'ExchangeRate-API' };
@@ -396,53 +357,28 @@ async function fetchLivePrice(symbol) {
   return null;
 }
 
-// ─────────────────────────────────────────────
-// MARKET CONTEXT
-// ─────────────────────────────────────────────
 function getMarketContext(symbol) {
-  const ctx = { session:'', risk_events:[], market_hours:'' };
+  const ctx  = { session:'', risk_events:[], market_hours:'' };
   const hour = new Date().getUTCHours();
   const day  = new Date().getDay();
-  if (hour >= 22 || hour < 8)   ctx.session = 'Asia Session (22:00-08:00 UTC) — Lower liquidity';
-  else if (hour >= 8 && hour < 12)  ctx.session = 'London Session Open (08:00-12:00 UTC) — High liquidity, major moves start here';
-  else if (hour >= 12 && hour < 17) ctx.session = 'London/NY Overlap (12:00-17:00 UTC) — HIGHEST liquidity, best time to trade';
-  else if (hour >= 17 && hour < 20) ctx.session = 'New York Session (17:00-20:00 UTC) — Good liquidity';
-  else ctx.session = 'End of NY / Pre-Asia (20:00-22:00 UTC) — Low liquidity, avoid new positions';
-  if (day === 1) ctx.market_hours = 'Monday — Watch for gaps, lower volume early';
-  else if (day === 5) ctx.market_hours = 'Friday — End of week, close positions before weekend';
-  else if (day === 0 || day === 6) ctx.market_hours = 'Weekend — Crypto open but low institutional volume';
-  else ctx.market_hours = 'Mid-week — Optimal trading conditions';
+  if (hour >= 22 || hour < 8)        ctx.session = 'Asia Session (22:00-08:00 UTC) — Lower liquidity';
+  else if (hour >= 8 && hour < 12)   ctx.session = 'London Session Open (08:00-12:00 UTC) — High liquidity';
+  else if (hour >= 12 && hour < 17)  ctx.session = 'London/NY Overlap (12:00-17:00 UTC) — HIGHEST liquidity';
+  else if (hour >= 17 && hour < 20)  ctx.session = 'New York Session (17:00-20:00 UTC) — Good liquidity';
+  else                                ctx.session = 'End of NY / Pre-Asia (20:00-22:00 UTC) — Low liquidity';
+  if (day === 1)       ctx.market_hours = 'Monday — Watch for gaps';
+  else if (day === 5)  ctx.market_hours = 'Friday — Close positions before weekend';
+  else if (day === 0 || day === 6) ctx.market_hours = 'Weekend — Low institutional volume';
+  else                 ctx.market_hours = 'Mid-week — Optimal trading conditions';
   const sym = (symbol || '').toUpperCase();
-  if (sym.includes('BTC') || sym.includes('ETH')) ctx.risk_events.push('Crypto: Best signals during NY/London overlap (12:00-17:00 UTC)');
-  if (sym.includes('USD')) ctx.risk_events.push('USD: Watch for NFP (first Friday), CPI (mid-month), FOMC (every 6 weeks)');
-  if (sym.includes('EUR') || sym.includes('GBP')) ctx.risk_events.push('EUR/GBP: ECB/BOE meetings can cause sharp moves');
+  if (sym.includes('BTC') || sym.includes('ETH')) ctx.risk_events.push('Crypto: Best during NY/London overlap');
+  if (sym.includes('USD')) ctx.risk_events.push('USD: Watch for NFP, CPI, FOMC');
+  if (sym.includes('EUR') || sym.includes('GBP')) ctx.risk_events.push('EUR/GBP: Watch ECB/BOE meetings');
   return ctx;
 }
 
 // ─────────────────────────────────────────────
-// EMAIL ALERT SENDER
-// ─────────────────────────────────────────────
-async function sendEmailAlert(signal) {
-  const subs = loadSubs().filter(s => s.active);
-  if (!subs.length) return;
-  if (!['A+','A'].includes(signal.signal_grade)) return;
-  const SENDGRID_KEY = process.env.SENDGRID_API_KEY;
-  if (!SENDGRID_KEY) { console.log('[Email] No SENDGRID_API_KEY — skipping'); return; }
-  const subject = `PriceAction AI Signal: ${signal.verdict} ${signal.symbol} — Grade ${signal.signal_grade} (${signal.confidence}% confidence)`;
-  const body = `New ${signal.signal_grade} Grade Signal from PriceAction AI\n\nAsset: ${signal.symbol} ${signal.tf}\nSignal: ${signal.verdict}\nConfidence: ${signal.confidence}%\nGrade: ${signal.signal_grade}\n\nEntry: ${signal.entry}\nStop Loss: ${signal.sl}\nTP1: ${signal.tp1}\nTP2: ${signal.tp2 || 'N/A'}\nRisk/Reward: ${signal.rr_tp1 || 'N/A'}\n\nSummary:\n${signal.summary}\n\n---\nNot financial advice. Educational use only.\nPriceAction AI — nexttrade-pro.vercel.app`.trim();
-  for (const sub of subs) {
-    try {
-      await fetch('https://api.sendgrid.com/v3/mail/send', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${SENDGRID_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personalizations:[{ to:[{ email:sub.email }] }], from:{ email: process.env.FROM_EMAIL||'signals@priceaction-ai.com', name:'PriceAction AI' }, subject, content:[{ type:'text/plain', value:body }] })
-      });
-    } catch (err) { console.error(`[Email] Failed for ${sub.email}:`, err.message); }
-  }
-}
-
-// ─────────────────────────────────────────────
-// CLAUDE API HELPER
+// CLAUDE HELPER
 // ─────────────────────────────────────────────
 async function claude(apiKey, model, system, content, tokens = 2000) {
   const r = await fetch(API_URL, {
@@ -459,222 +395,176 @@ async function claude(apiKey, model, system, content, tokens = 2000) {
 const img = (b64, mime) => ({ type:'image', source:{ type:'base64', media_type:mime||'image/png', data:b64 } });
 
 // ─────────────────────────────────────────────
-// PASS 1A — CHART STRUCTURE & SMC READING (Haiku — fast)
-// Runs in PARALLEL with Pass 1B
+// PASS 1A — CHART STRUCTURE & SMC (Haiku)
 // ─────────────────────────────────────────────
 async function pass1A(charts, sym, key) {
   const n = charts.length;
-  const sys = `You are an ICT/SMC chart reading machine. Your ONLY job is objective, bias-free reading of price structure and smart money concepts. No trading decisions — pure reading only.
+  const sys = `You are an ICT/SMC chart reading machine. Objective, bias-free reading of price structure and smart money concepts only.
 
-DEFINITIONS YOU MUST APPLY PRECISELY:
-- Order Block (OB): The LAST up-candle (bullish OB) before a strong bearish displacement, or LAST down-candle (bearish OB) before a strong bullish displacement. Must have caused a Break of Structure.
-- Fair Value Gap (FVG): A 3-candle pattern where candle 1's high does NOT overlap candle 3's low (bullish FVG), or candle 1's low does NOT overlap candle 3's high (bearish FVG). Body-to-body, not wick.
-- Break of Structure (BOS): Price closes BEYOND the most recent swing high (bullish BOS) or swing low (bearish BOS) in the DIRECTION of the current trend.
-- Change of Character (CHOCH): First BOS AGAINST the current trend — signals potential reversal.
-- Liquidity: Buy-side liquidity (BSL) = equal highs, prior swing highs, stop clusters above. Sell-side liquidity (SSL) = equal lows, prior swing lows, stops below.
-- Displacement: A strong, impulsive move with large-bodied candles, minimal wicks, closing near extremes. Creates FVGs.
-- Premium Zone: Above the 50% equilibrium of the current trading range. Institutional sellers.
-- Discount Zone: Below the 50% equilibrium. Institutional buyers.
-- Wyckoff Phases: Accumulation (spring/shakeout at lows) / Distribution (upthrust at highs) / Markup / Markdown.
-${n > 1 ? 'CRITICAL MULTI-TF RULE: The HIGHEST timeframe bias is THE LAW. MTF alignment required. If HTF is bearish, you cannot call tradeable_direction Long. Conflicting timeframes = Wait.' : ''}
+DEFINITIONS:
+- Order Block (OB): LAST up-candle before strong bearish displacement, or LAST down-candle before strong bullish displacement. Must have caused a BOS.
+- Fair Value Gap (FVG): 3-candle pattern where candle 1's high doesn't overlap candle 3's low (bullish), or candle 1's low doesn't overlap candle 3's high (bearish).
+- BOS: Price closes beyond most recent swing high (bullish) or swing low (bearish) in direction of trend.
+- CHOCH: First BOS AGAINST current trend — signals potential reversal.
+- Liquidity: BSL = equal highs, prior swing highs above. SSL = equal lows, prior swing lows below.
+- Premium Zone: Above 50% equilibrium. Discount Zone: Below 50% equilibrium.
+${n > 1 ? 'MTF RULE: Highest timeframe bias is law. Conflicting timeframes = Wait.' : ''}
 
-Return ONLY valid raw JSON — no markdown, no explanation:
-{"timeframes":[${charts.map((_,i) => `{"chart_index":${i+1},"detected_tf":"<e.g. 1H>","trend":"Bullish/Bearish/Sideways","structure":"HH+HL/LH+LL/Ranging/Transitioning","wyckoff_phase":"Accumulation/Markup/Distribution/Markdown/Re-accumulation/Unknown","swing_high":"<exact price>","swing_low":"<exact price>","last_bos":"<price and direction>","last_choch":"<price or None>","key_ob":{"type":"Bullish/Bearish/None","zone":"<low>-<high>","caused_by":"<what displacement>","fresh":true},"fvg":{"type":"Bullish/Bearish/None","range":"<low>-<high>","filled_pct":"<0-100>%"},"liquidity":{"bsl":"<price — equal highs or prior swing high>","ssl":"<price — equal lows or prior swing low>","last_swept":"<BSL/SSL/None> at <price>"},"price_position":"Premium/Discount/Equilibrium","bias":"Bullish/Bearish/Neutral","notes":"<2-3 key observations>"}`).join(',')}],
-"htf_bias":"Bullish/Bearish/Neutral",
-"htf_key_ob":{"zone":"<low>-<high>","type":"Bullish/Bearish/None","fresh":true},
-"htf_fvg":"<range or None>",
-"htf_support":"<exact price>","htf_resistance":"<exact price>",
+Return ONLY valid raw JSON:
+{"timeframes":[${charts.map((_,i) => `{"chart_index":${i+1},"detected_tf":"<>","trend":"Bullish/Bearish/Sideways","structure":"HH+HL/LH+LL/Ranging","wyckoff_phase":"Accumulation/Markup/Distribution/Markdown/Unknown","swing_high":"<price>","swing_low":"<price>","last_bos":"<price and direction>","last_choch":"<price or None>","key_ob":{"type":"Bullish/Bearish/None","zone":"<low>-<high>","fresh":true},"fvg":{"type":"Bullish/Bearish/None","range":"<low>-<high>"},"liquidity":{"bsl":"<price>","ssl":"<price>","last_swept":"<BSL/SSL/None>"},"price_position":"Premium/Discount/Equilibrium","bias":"Bullish/Bearish/Neutral","notes":"<key observations>"}`).join(',')}],
+"htf_bias":"Bullish/Bearish/Neutral","htf_key_ob":{"zone":"<low>-<high>","type":"Bullish/Bearish/None","fresh":true},"htf_fvg":"<range or None>",
+"htf_support":"<price>","htf_resistance":"<price>",
 "mtf_alignment":"Perfect Bull/Perfect Bear/Partial Bull/Partial Bear/Mixed/Conflicting",
-"alignment_score":<0-100>,
-"tradeable_direction":"Long/Short/Wait",
-"current_price":"<best estimate from chart>",
-"price_position":"Premium/Discount/Equilibrium",
-"equilibrium":"<exact 50% price of visible range>",
-"range_high":"<highest visible price>","range_low":"<lowest visible price>",
-"displacement_present":true,
-"institutional_bias":"Bullish/Bearish/Neutral",
-"liquidity_target":"<next likely liquidity grab — price and type>",
-"key_levels":[{"price":"<exact>","type":"Resistance/Support/OB/FVG/Liquidity","strength":"Major/Minor","reason":"<specific ICT reason>"}],
-"indicators":{"ema_stack":"<e.g. price above 20/50/200 EMA or below>","rsi":"<value and condition>","macd":"<signal>","volume":"<above/below average, notable spikes>"},
+"alignment_score":<0-100>,"tradeable_direction":"Long/Short/Wait",
+"current_price":"<estimate>","price_position":"Premium/Discount/Equilibrium","equilibrium":"<50% price>",
+"range_high":"<highest price>","range_low":"<lowest price>",
+"institutional_bias":"Bullish/Bearish/Neutral","liquidity_target":"<next likely grab>",
+"key_levels":[{"price":"<exact>","type":"Resistance/Support/OB/FVG/Liquidity","strength":"Major/Minor","reason":"<ICT reason>"}],
+"indicators":{"ema_stack":"<>","rsi":"<>","macd":"<>","volume":"<>"},
 "patterns":[{"name":"<>","type":"bull/bear/neutral","reliability":"Low/Medium/High","location":"<price>"}],
 "reading_confidence":<0-100>,
-"summary":"<5 sentences: HTF bias, current structure phase, key OB/FVG locations, liquidity situation, overall setup quality>"}`;
+"summary":"<5 sentences: HTF bias, structure phase, key OB/FVG, liquidity, setup quality>"}`;
   const content = [
-    ...charts.map((c, i) => [
-      { type:'text', text:`Chart ${i+1} — ${charts.length > 1 ? c.label : sym}:` },
-      img(c.base64, c.mime)
-    ]).flat(),
-    { type:'text', text:`Read all ${n} chart${n>1?'s':''} for ${sym}. Apply ICT/SMC definitions exactly. Report exact prices. No fabrication.` }
+    ...charts.map((c, i) => [{ type:'text', text:`Chart ${i+1}:` }, img(c.base64, c.mime)]).flat(),
+    { type:'text', text:`Read all ${n} chart${n>1?'s':''} for ${sym}. Report exact prices.` }
   ];
   return claude(key, HAIKU, sys, content, 3000);
 }
 
 // ─────────────────────────────────────────────
-// PASS 1B — TIMING & CONTEXT FILTER (Haiku — fast)
-// Runs in PARALLEL with Pass 1A — does NOT need 1A output
+// PASS 1B — TIMING & CONTEXT (Haiku)
 // ─────────────────────────────────────────────
 async function pass1B(charts, sym, livePrice, mktCtx, winStats, key) {
-  const lp = livePrice ? `Live price: $${livePrice.price} (${livePrice.change24h||'?'}% 24h change)` : 'Live price: unavailable';
-  const ws = winStats  ? `Journal stats: ${winStats.winRate}% win rate over ${winStats.total} completed trades. Best grade: ${Object.entries(winStats.byGrade||{}).sort((a,b)=>(b[1].wins/(b[1].wins+b[1].losses||1))-(a[1].wins/(a[1].wins+a[1].losses||1)))[0]?.[0]||'N/A'}.` : 'No journal history yet.';
-  const sys = `You are a trading session and context filter. Assess whether RIGHT NOW is an appropriate time to enter a trade based on session, news risk, and day-of-week conditions. You have NO trading bias — just filter timing.
+  const lp = livePrice ? `Live price: $${livePrice.price} (${livePrice.change24h||'?'}% 24h)` : 'Live price: unavailable';
+  const ws = winStats  ? `Journal: ${winStats.winRate}% win rate / ${winStats.total} trades` : 'No journal history yet.';
+  const sys = `You are a trading session and context filter. Assess if NOW is a good time to trade based on session, news risk, and day-of-week.
 
-SESSION QUALITY RULES:
-- London/NY Overlap (12:00-17:00 UTC): Excellent — highest institutional activity
-- London Open (08:00-12:00 UTC): Good — major moves begin
-- NY Session (17:00-20:00 UTC): Good — continued institutional flow
-- Asia Session (22:00-08:00 UTC): Poor — low institutional volume, choppy
-- End of NY / Pre-Asia (20:00-22:00 UTC): Avoid — dead zone
+SESSION QUALITY:
+- London/NY Overlap (12:00-17:00 UTC): Excellent
+- London Open (08:00-12:00 UTC): Good
+- NY Session (17:00-20:00 UTC): Good
+- Asia Session (22:00-08:00 UTC): Poor
+- End of NY / Pre-Asia (20:00-22:00 UTC): Avoid
 
-DAY RISK RULES:
-- Monday: Caution — gaps possible, volume ramps up slowly
-- Tuesday-Thursday: Low risk — optimal trading days
-- Friday: Medium risk — close positions before weekend, avoid new entries after 17:00 UTC
-- Saturday/Sunday: High risk for non-crypto (markets closed); crypto only with reduced size
-
-NEWS RISK: If it's a major central bank decision day (FOMC, ECB, BOE) or NFP Friday → High. Otherwise assess from context.
+DAY RISK: Monday=Caution, Tue-Thu=Low, Friday=Medium, Weekend=High for non-crypto
 
 Return ONLY valid raw JSON:
-{"session":"<current session name>","session_quality":"Excellent/Good/Poor/Avoid","session_note":"<why>",
-"live_price_note":"<is live price near key level, extended from range, etc>",
-"news_risk":"High/Medium/Low","news_note":"<reason>",
-"day_of_week_risk":"High/Medium/Low","day_note":"<reason>",
-"weekend_risk":false,
-"historical_edge":"<what journal stats suggest about current conditions>",
-"context_score":<0-100>,"context_bias":"Proceed/Caution/Wait/Avoid",
-"risk_multiplier":<0.5-1.5>,
-"summary":"<3 sentences: session quality, news/day risk, overall timing verdict>"}`;
+{"session":"<name>","session_quality":"Excellent/Good/Poor/Avoid","session_note":"<why>",
+"live_price_note":"<is price near key level>","news_risk":"High/Medium/Low","news_note":"<reason>",
+"day_of_week_risk":"High/Medium/Low","day_note":"<reason>","weekend_risk":false,
+"historical_edge":"<what journal stats suggest>","context_score":<0-100>,
+"context_bias":"Proceed/Caution/Wait/Avoid","risk_multiplier":<0.5-1.5>,
+"summary":"<3 sentences: session quality, news/day risk, timing verdict>"}`;
   return claude(key, HAIKU, sys, [
     img(charts[0].base64, charts[0].mime),
-    { type:'text', text:`Asset: ${sym}\n${lp}\nCurrent UTC session: ${mktCtx.session}\nDay: ${mktCtx.market_hours}\nRisk events: ${mktCtx.risk_events.join('; ') || 'None identified'}\n${ws}\n\nIs NOW a good time to trade ${sym}?` }
+    { type:'text', text:`Asset: ${sym}\n${lp}\nSession: ${mktCtx.session}\nDay: ${mktCtx.market_hours}\nRisk events: ${mktCtx.risk_events.join('; ')||'None'}\n${ws}\n\nIs NOW a good time to trade ${sym}?` }
   ], 1000);
 }
 
 // ─────────────────────────────────────────────
-// PASS 2 — PRECISION ENTRY ARCHITECT (Sonnet)
-// Runs after 1A + 1B complete
+// PASS 2 — ENTRY ARCHITECT (Sonnet)
 // ─────────────────────────────────────────────
 async function pass2(charts, sym, reading, ctx, livePrice, key) {
-  const lp = livePrice ? `Live price: $${livePrice.price}` : 'Live price: N/A';
+  const lp  = livePrice ? `Live price: $${livePrice.price}` : 'Live price: N/A';
   const dir = reading.tradeable_direction;
-  const sys = `You are an elite ICT entry specialist. Your job: find the SINGLE best entry setup given the chart reading and context. Entries must be at institutional price levels — NOT random.
+  const sys = `You are an elite ICT entry specialist. Find the SINGLE best entry setup at institutional price levels.
 
-ENTRY HIERARCHY (use highest available):
-1. OB + FVG confluence at discount (longs) or premium (shorts) = A+ entry
-2. Fresh OB alone at key HTF level = A entry
-3. FVG fill at structure level = A entry
-4. Key support/resistance reaction with displacement candle = B entry
-5. Anything else = C/D — do NOT force it
+ENTRY HIERARCHY:
+1. OB + FVG confluence at discount/premium = A+
+2. Fresh OB at HTF level = A
+3. FVG fill at structure level = A
+4. Key S/R with displacement = B
+5. Anything else = C/D
 
-STOP LOSS RULES:
-- Stop goes BELOW the OB low (longs) or ABOVE the OB high (shorts), with a 0.5-1% buffer
-- NEVER place stop at a round number or equal low/high (that's where stops get hunted)
-- Tight stops only when OB is well-defined
-
-TAKE PROFIT RULES:
-- TP1 = nearest liquidity pool (equal highs/lows, prior swing) — must be cleared by price
-- TP2 = next major structural level or HTF OB
-- TP3 = maximum extension / opposite liquidity
-- MINIMUM 1:2.5 R:R to TP1 required. If not achievable → entry_quality must be C or D.
-
-ENTRY TRIGGER:
-- For limit orders: specify the exact candle confirmation needed (e.g. "bullish engulfing on 15m within OB zone", "pin bar rejection at FVG")
-- For market: only if price is currently AT the zone with active displacement
+STOP LOSS: Below OB low (longs) or above OB high (shorts) with 0.5-1% buffer. Never at round numbers.
+TAKE PROFIT: TP1 = nearest liquidity. TP2 = next major structure. TP3 = max extension. MIN 1:2.5 R:R to TP1.
 
 Return ONLY valid raw JSON:
 {"entry_type":"Limit/Stop-Limit/Market/Wait","entry_price":"<exact>","entry_zone":"<low>-<high>",
-"entry_trigger":"<specific candle/pattern confirmation required before entering>",
-"entry_quality":"A+/A/B/C/D",
-"entry_rationale":"<why this specific price — OB, FVG, confluence>",
-"sl_price":"<exact>","sl_reason":"<structural reason — below OB, below swing, etc>",
-"sl_pct":"<% distance from entry>",
-"tp1_price":"<exact>","tp1_reason":"<liquidity target or structure>","tp1_rr":"1:<X.X>",
+"entry_trigger":"<specific candle confirmation needed>","entry_quality":"A+/A/B/C/D",
+"entry_rationale":"<why this price>","sl_price":"<exact>","sl_reason":"<structural reason>","sl_pct":"<% from entry>",
+"tp1_price":"<exact>","tp1_reason":"<>","tp1_rr":"1:<X.X>",
 "tp2_price":"<exact>","tp2_reason":"<>","tp2_rr":"1:<X.X>",
 "tp3_price":"<exact>","tp3_rr":"1:<X.X>",
-"obstacles_to_tp1":"<any S/R, OBs, FVGs between entry and TP1>",
-"obstacles_to_tp2":"<>",
-"trade_management":{"move_to_be":"<when — e.g. after TP1 hit or +1R>","partial_at_tp1":"<% to close>","trail_after_tp1":"<method>","max_hold_time":"<>"},
-"position_size_guidance":"<% account risk — max 1% for B, max 2% for A+>",
-"invalidation":"<exact price that kills the setup>",
-"summary":"<4 sentences: entry location and why, stop rationale, TP targets, trade management>"}`;
+"obstacles_to_tp1":"<S/R between entry and TP1>","obstacles_to_tp2":"<>",
+"trade_management":{"move_to_be":"<when>","partial_at_tp1":"50%","trail_after_tp1":"<method>","max_hold_time":"<>"},
+"position_size_guidance":"<% account risk>","invalidation":"<price that kills setup>",
+"summary":"<4 sentences: entry location, stop rationale, TP targets, trade management>"}`;
   return claude(key, SONNET, sys, [
     img(charts[0].base64, charts[0].mime),
-    { type:'text', text:`Find best ${dir} entry for ${sym}.\n${lp}\nHTF bias: ${reading.htf_bias} | Alignment: ${reading.alignment_score}/100 | Price position: ${reading.price_position}\nKey OB: ${JSON.stringify(reading.htf_key_ob)}\nFVG: ${reading.htf_fvg}\nLiquidity target: ${reading.liquidity_target}\nKey levels: ${JSON.stringify(reading.key_levels?.slice(0,5))}\nContext: ${ctx.context_bias} | Session: ${ctx.session_quality} | Risk: ${ctx.news_risk}` }
+    { type:'text', text:`Find best ${dir} entry for ${sym}.\n${lp}\nHTF bias: ${reading.htf_bias} | Alignment: ${reading.alignment_score}/100 | Position: ${reading.price_position}\nOB: ${JSON.stringify(reading.htf_key_ob)}\nFVG: ${reading.htf_fvg}\nLiquidity target: ${reading.liquidity_target}\nKey levels: ${JSON.stringify(reading.key_levels?.slice(0,5))}\nContext: ${ctx.context_bias} | Session: ${ctx.session_quality}` }
   ], 2500);
 }
 
 // ─────────────────────────────────────────────
-// PASS 3 — FINAL VERDICT + FULL ANALYSIS (Opus — max accuracy)
+// PASS 3 — FINAL VERDICT (Opus)
 // ─────────────────────────────────────────────
 async function pass3(charts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key) {
   const lp = livePrice ? `Live: $${livePrice.price} (${livePrice.change24h||'?'}% 24h)` : 'Live: N/A';
   const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
-  const sys = `You are the Chief Trading Officer of a top-tier hedge fund. You receive a full ICT/SMC analysis and make the FINAL trading decision. You apply 12 strict quality gates. Your reputation depends on only issuing A+ and A signals on genuinely elite setups.
+  const sys = `You are the Chief Trading Officer of a top-tier hedge fund. You receive a full ICT/SMC analysis and make the FINAL trading decision. Apply 12 strict quality gates.
 
-══ 12 QUALITY GATES — ALL must pass for BUY/SELL. ANY failure → WAIT ══
-G1:  MTF alignment_score < 65 → WAIT (need strong agreement across timeframes)
-G2:  tradeable_direction is "Wait" → WAIT (conflicting timeframes)
-G3:  session_quality is "Poor" or "Avoid" → WAIT (wrong session)
-G4:  news_risk is "High" → WAIT (central bank / NFP / major event)
-G5:  day_of_week_risk is "High" → WAIT (weekend, Monday gap risk)
-G6:  entry_quality is "C" or "D" → WAIT (no valid institutional entry found)
-G7:  tp1_rr < 1:2.5 → WAIT (R:R too low for institutional standard)
-G8:  major obstacle (unfilled OB or FVG) between entry and TP1 → WAIT (will act as resistance/support)
-G9:  price_position is "Premium" for Long entries → WAIT (buying at institutional sell zone)
-G10: price_position is "Discount" for Short entries → WAIT (selling at institutional buy zone)
-G11: No displacement candle / no clear entry trigger → WAIT (no institutional footprint)
-G12: context_bias is "Avoid" → WAIT (market timing is wrong)
+12 QUALITY GATES — ALL must pass for BUY/SELL:
+G1:  alignment_score < 65 → WAIT
+G2:  tradeable_direction is "Wait" → WAIT
+G3:  session_quality is "Poor" or "Avoid" → WAIT
+G4:  news_risk is "High" → WAIT
+G5:  day_of_week_risk is "High" → WAIT
+G6:  entry_quality is "C" or "D" → WAIT
+G7:  tp1_rr < 1:2.5 → WAIT
+G8:  major obstacle between entry and TP1 → WAIT
+G9:  price_position is "Premium" for Long → WAIT
+G10: price_position is "Discount" for Short → WAIT
+G11: No displacement candle / no entry trigger → WAIT
+G12: context_bias is "Avoid" → WAIT
 
-══ GRADING ══
-A+: All 12 pass + 6+ confluences + 1:3+ R:R + alignment ≥ 80 + Excellent session + fresh OB
+GRADING:
+A+: All 12 pass + 6+ confluences + 1:3+ R:R + alignment ≥ 80
 A:  All 12 pass + 4-5 confluences + 1:2.5+ R:R + alignment ≥ 70
 B:  All 12 pass + 3 confluences + 1:2.5 R:R + alignment ≥ 65
-C:  Borderline pass — lower conviction, smaller size
+C:  Borderline — lower conviction
 D:  Multiple concerns — WAIT preferred
 
-Return ONLY valid raw JSON (no markdown):
+Return ONLY valid raw JSON:
 {"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A+/A/B/C/D",
-"gates_passed":["G1 ✓ — alignment 78/100","G2 ✓"],"gates_failed":["G8 ✗ — unfilled FVG at 43200 between entry and TP1"],
-"wait_reason":"<specific reason if WAIT, empty string if BUY/SELL>",
-"market_phase":"<Wyckoff phase>","price_position":"Premium/Discount/Equilibrium",
+"gates_passed":["G1 ✓"],"gates_failed":["G8 ✗ — reason"],
+"wait_reason":"<if WAIT>","market_phase":"<Wyckoff>","price_position":"Premium/Discount/Equilibrium",
 "market_bias":"Strongly Bullish/Bullish/Neutral/Bearish/Strongly Bearish",
-"summary":"<10-12 sentences covering: HTF institutional bias and why, MTF alignment details with prices, price position in range and significance, all SMC/ICT confluences with exact prices, gate results summary, session and news context, live price confirmation, exact entry plan with trigger, complete SL/TP levels with structural reasoning, position sizing, full trade thesis and probability assessment>",
-"entry":"<exact price>","entry_trigger":"<specific confirmation needed>","entry_zone":"<low>-<high>","entry_available_now":true,
-"sl":"<exact price>","sl_reason":"<structural reason>",
-"tp1":"<exact price>","tp1_reason":"<liquidity/structure>",
-"tp2":"<exact price>","tp2_reason":"<>",
-"tp3":"<exact price>",
+"summary":"<10-12 sentences: HTF bias, MTF alignment, price position, SMC confluences, gate results, session/news, entry plan, SL/TP levels, position sizing, trade thesis>",
+"entry":"<exact>","entry_trigger":"<confirmation>","entry_zone":"<low>-<high>","entry_available_now":true,
+"sl":"<exact>","sl_reason":"<structural>",
+"tp1":"<exact>","tp1_reason":"<>","tp2":"<exact>","tp2_reason":"<>","tp3":"<exact>",
 "rr_tp1":"1:<X.X>","rr_tp2":"1:<X.X>","rrLabel":"Poor/Acceptable/Good/Excellent",
 "position_size":"<e.g. 1% account risk>",
-"confluences":["<1 — specific with price>","<2>","<3>","<4>","<5>","<6>","<7 if A+>"],
-"key_levels":{"major_resistance":"<price>","minor_resistance":"<price>","equilibrium":"<price>","major_support":"<price>","minor_support":"<price>"},
-"smart_money":{"bullish_ob":"<zone>","bearish_ob":"<zone>","bullish_fvg":"<zone>","bearish_fvg":"<zone>","bsl":"<price>","ssl":"<price>","last_sweep":"<what was swept>","bos_choch":"<latest BOS or CHOCH price and direction>","displacement":"<describe the key displacement>","next_target":"<most likely next liquidity grab>"},
+"confluences":["<1 with price>","<2>","<3>","<4>","<5>"],
+"key_levels":{"major_resistance":"<>","minor_resistance":"<>","equilibrium":"<>","major_support":"<>","minor_support":"<>"},
+"smart_money":{"bullish_ob":"<zone>","bearish_ob":"<zone>","bullish_fvg":"<zone>","bearish_fvg":"<zone>","bsl":"<price>","ssl":"<price>","last_sweep":"<>","bos_choch":"<>","displacement":"<>","next_target":"<>"},
 "factors":[{"name":"HTF Trend","score":<0-100>,"note":"<>"},{"name":"MTF Alignment","score":<0-100>,"note":"<>"},{"name":"Entry Quality","score":<0-100>,"note":"<>"},{"name":"Risk/Reward","score":<0-100>,"note":"<>"},{"name":"Session Timing","score":<0-100>,"note":"<>"},{"name":"SMC Confluence","score":<0-100>,"note":"<>"},{"name":"Price Position","score":<0-100>,"note":"<>"}],
 "patterns":[{"name":"<>","type":"bull/bear/neutral","reliability":"Low/Medium/High","significance":"<>","price":"<>"}],
-"indicators":{"ema":"<stack and significance>","rsi":"<value and divergence if any>","macd":"<signal>","volume":"<notable observations>"},
-"invalidation":{"immediate":"<price that invalidates instantly — close below/above>","warning":"<early warning level>","full_scenario":"<full invalidation scenario>"},
-"trade_management":{"move_to_be":"<condition>","partial_tp1":"<% — typically 50%>","trail_method":"<e.g. trail stop below each new HL>","max_hold":"<time>","scale_in":"<if applicable>"},
-"candle_analysis":"<last 3-5 candles description and what they indicate>",
-"best_case":"<maximum bullish/bearish scenario>","worst_case":"<what happens if setup fails>",
-"fullAnalysis":"<20-25 sentences of elite institutional-grade HTML. Use <strong> for key prices and concepts. Structure: [1-3] Institutional context and HTF bias with exact OB/FVG prices. [4-6] MTF alignment assessment with each timeframe's bias and key level. [7-9] Price position and range analysis — where we are relative to equilibrium, premium/discount zones. [10-13] Full SMC/ICT setup breakdown — OBs, FVGs, liquidity pools, sweep, BOS/CHOCH, displacement candle details. [14-15] All 12 gate results with pass/fail. [16-17] Session, news, and timing context. [18-19] Entry plan — exact price, trigger, zone, rationale. [20-21] SL and all TP levels with structural justification and R:R. [22-23] Position sizing, trade management plan step by step. [24-25] Invalidation levels, probability assessment, and final trade thesis.>"}`;
+"indicators":{"ema":"<>","rsi":"<>","macd":"<>","volume":"<>"},
+"invalidation":{"immediate":"<price>","warning":"<price>","full_scenario":"<>"},
+"trade_management":{"move_to_be":"<condition>","partial_tp1":"50%","trail_method":"<>","max_hold":"<>","scale_in":"<>"},
+"candle_analysis":"<last 3-5 candles>","best_case":"<>","worst_case":"<>",
+"fullAnalysis":"<20-25 sentences elite HTML with strong tags covering: institutional context, HTF bias, MTF alignment, price position, SMC setup, all 12 gates, session/news, entry plan, SL/TP levels, position sizing, trade management, invalidation, probability assessment>"}`;
 
   return claude(key, OPUS, sys, [
     ...charts.map(c => img(c.base64, c.mime)),
-    { type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\n${ws}\n\nPASS 1A (Structure):\n${JSON.stringify(reading)}\n\nPASS 1B (Context):\n${JSON.stringify(ctx)}\n\nPASS 2 (Entry):\n${JSON.stringify(entry)}\n\nApply all 12 gates. Be strict. Only issue BUY/SELL if this is a genuinely elite setup.` }
+    { type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\n${ws}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nApply all 12 gates strictly.` }
   ], 6000);
 }
 
 function getWinStats(allTrades) {
   const trades = (allTrades || []).filter(t => t.outcome);
   if (!trades.length) return null;
-  const wins   = trades.filter(t => t.outcome === 'win').length;
-  const avgRR  = trades.filter(t => t.actual_rr).reduce((s,t) => s + t.actual_rr, 0) / trades.filter(t => t.actual_rr).length || 0;
+  const wins  = trades.filter(t => t.outcome === 'win').length;
+  const avgRR = trades.filter(t => t.actual_rr).reduce((s,t) => s + t.actual_rr, 0) / (trades.filter(t => t.actual_rr).length || 1);
   const byGrade = {};
-  trades.forEach(t => { if (!byGrade[t.grade]) byGrade[t.grade] = { wins:0, losses:0 }; byGrade[t.grade][t.outcome === 'win' ? 'wins' : 'losses']++; });
+  trades.forEach(t => { if (!byGrade[t.grade]) byGrade[t.grade] = { wins:0, losses:0 }; byGrade[t.grade][t.outcome==='win'?'wins':'losses']++; });
   return { total:trades.length, wins, losses:trades.length-wins, winRate:Math.round(wins/trades.length*100), avgRR:avgRR.toFixed(2), byGrade };
 }
 
 // ─────────────────────────────────────────────
-// MAIN ANALYZE ENDPOINT — requires auth + active plan
+// MAIN ANALYZE ENDPOINT
 // ─────────────────────────────────────────────
 app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
   const { charts, imageBase64, imageMime, symbol, timeframe } = req.body;
@@ -682,7 +572,7 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
   if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
   let chartList = [];
-  if (charts && charts.length)  chartList = charts;
+  if (charts && charts.length) chartList = charts;
   else if (imageBase64) chartList = [{ base64:imageBase64, mime:imageMime||'image/png', label:timeframe||'Chart' }];
   else return res.status(400).json({ error: 'No image provided' });
 
@@ -690,28 +580,22 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
   const tf  = timeframe || chartList[0]?.label || '1H';
 
   try {
-    console.log(`\n[PriceAction] ═══ ${sym} ${tf} — ${chartList.length} chart(s) — user:${req.user.email} ═══`);
+    console.log(`\n[PriceAction] ═══ ${sym} ${tf} — ${chartList.length} chart(s) — ${req.user.email} ═══`);
     const t0 = Date.now();
 
-    // ── Phase 1: Fetch external data (parallel) ──
-    const [livePrice, winStats] = await Promise.all([
-      fetchLivePrice(sym).catch(() => null),
-      Promise.resolve(getWinStats())
-    ]);
-    const mktCtx = getMarketContext(sym);
-    console.log(`[Data] ✓ Price:${livePrice ? '$'+livePrice.price : 'N/A'} | Session: ${mktCtx.session.split('(')[0].trim()}`);
+    const [livePrice] = await Promise.all([fetchLivePrice(sym).catch(() => null)]);
+    const allTrades   = getTrades();
+    const winStats    = getWinStats(allTrades);
+    const mktCtx      = getMarketContext(sym);
 
-    // ── Phase 2: Pass 1A + 1B in PARALLEL (both use Haiku — fast) ──
-    console.log('[Pass 1A+1B] Chart structure + context filter running in parallel…');
     const [reading, ctx] = await Promise.all([
       pass1A(chartList, sym, key),
       pass1B(chartList, sym, livePrice, mktCtx, winStats, key)
     ]);
-    console.log(`[Pass 1A] ✓ Bias:${reading.htf_bias} | Alignment:${reading.alignment_score}/100 | Dir:${reading.tradeable_direction} | Conf:${reading.reading_confidence}%`);
-    console.log(`[Pass 1B] ✓ Session:${ctx.session_quality} | News:${ctx.news_risk} | Context:${ctx.context_bias} | Score:${ctx.context_score}/100`);
+    console.log(`[1A] Bias:${reading.htf_bias} Align:${reading.alignment_score} Dir:${reading.tradeable_direction}`);
+    console.log(`[1B] Session:${ctx.session_quality} News:${ctx.news_risk} Bias:${ctx.context_bias}`);
 
-    // ── Phase 3: Entry architecture (Sonnet) — skip if conditions clearly wrong ──
-    let entry = { entry_quality:'D', tp1_rr:'0:0', summary:'Skipped — conditions not met for entry search' };
+    let entry = { entry_quality:'D', tp1_rr:'0:0', summary:'Skipped — conditions not met' };
     const shouldRunEntry = reading.alignment_score >= 55
       && reading.tradeable_direction !== 'Wait'
       && ctx.context_bias !== 'Avoid'
@@ -719,119 +603,97 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
       && ctx.session_quality !== 'Avoid';
 
     if (shouldRunEntry) {
-      console.log('[Pass 2] Entry architecture (Sonnet)…');
       entry = await pass2(chartList, sym, reading, ctx, livePrice, key);
-      console.log(`[Pass 2] ✓ Entry:${entry.entry_price} | SL:${entry.sl_price} | TP1:${entry.tp1_price} | R:R:${entry.tp1_rr} | Quality:${entry.entry_quality}`);
-    } else {
-      console.log('[Pass 2] Skipped — alignment/session/context conditions not met');
+      console.log(`[Pass 2] Entry:${entry.entry_price} SL:${entry.sl_price} Quality:${entry.entry_quality}`);
     }
 
-    // ── Phase 4: Final verdict (Opus — max accuracy) ──
-    console.log('[Pass 3] Final verdict (Opus)…');
     const result  = await pass3(chartList, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key);
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`[Pass 3] ✓ VERDICT:${result.verdict} | Grade:${result.signal_grade} | Conf:${result.confidence}% | ${elapsed}s total`);
+    console.log(`[Pass 3] ${result.verdict} Grade:${result.signal_grade} Conf:${result.confidence}% — ${elapsed}s`);
 
-    // Track daily usage for all plans
+    // Update daily usage
     const user = req.user;
     if (!isWhitelisted(user)) {
       const today = new Date().toISOString().split('T')[0];
       const usage = user.dailyUsage || { date:'', count:0 };
       if (usage.date !== today) { usage.date = today; usage.count = 0; }
       usage.count++;
-      const d = await getDb();
-      await d.collection('users').updateOne({ id: user.id }, { $set: { dailyUsage: usage } });
+      user.dailyUsage = usage;
+      saveUser(user);
     }
 
-    // Auto-save to journal
+    // Save trade to journal
     if (result.verdict === 'BUY' || result.verdict === 'SELL') {
+      const trades  = getTrades();
       const tradeId = Date.now().toString();
-      const trade = { id:tradeId, symbol:sym, timeframe:tf, verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null };
-      const d = await getDb();
-      await d.collection('trades').insertOne(trade);
+      trades.push({ id:tradeId, symbol:sym, timeframe:tf, verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null, userId:user.id });
+      saveTrades(trades);
       result._trade_id = tradeId;
-      sendEmailAlert({ ...result, symbol:sym, tf }).catch(console.error);
     }
 
     result._meta = { analysis_time_seconds:parseFloat(elapsed), charts_analyzed:chartList.length, live_price:livePrice, market_context:mktCtx, win_stats:winStats };
     res.json(result);
-  } catch (err) {
+  } catch(err) {
     console.error('[PriceAction] Error:', err.message);
     res.status(500).json({ error: err.message || 'Analysis failed' });
   }
 });
 
 // ─────────────────────────────────────────────
-// EMAIL SUBSCRIPTION ENDPOINTS
+// EMAIL SUBSCRIPTION
 // ─────────────────────────────────────────────
-app.post('/api/subscribe', async (req, res) => {
+app.post('/api/subscribe', (req, res) => {
   const { email } = req.body;
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Invalid email' });
-  const d = await getDb();
-  const existing = await d.collection('subs').findOne({ email });
-  if (existing) return res.json({ success:true, message:'Already subscribed' });
-  await d.collection('subs').insertOne({ email, active:true, subscribedAt:new Date().toISOString() });
-  res.json({ success:true, message:'Subscribed successfully' });
-});
-
-app.get('/api/subscribers', async (req, res) => {
-  const d = await getDb();
-  const subs = await d.collection('subs').find().toArray();
-  res.json({ total:subs.length, active:subs.filter(s=>s.active).length });
-});
-
-app.delete('/api/subscribe/:email', async (req, res) => {
-  const d = await getDb();
-  await d.collection('subs').updateOne({ email: decodeURIComponent(req.params.email) }, { $set: { active: false } });
+  const subs = getSubs();
+  if (subs.find(s => s.email === email)) return res.json({ success:true, message:'Already subscribed' });
+  subs.push({ email, active:true, subscribedAt:new Date().toISOString() });
+  saveSubs(subs);
   res.json({ success:true });
 });
 
 // ─────────────────────────────────────────────
-// TRADE JOURNAL ENDPOINTS (auth required)
+// TRADE JOURNAL
 // ─────────────────────────────────────────────
-app.get('/api/trades', authMiddleware, async (req, res) => {
-  const d = await getDb();
-  res.json(await d.collection('trades').find().toArray());
+app.get('/api/trades', authMiddleware, (req, res) => {
+  const trades = getTrades().filter(t => !t.userId || t.userId === req.user.id);
+  res.json(trades);
 });
-app.get('/api/stats', authMiddleware, async (req, res) => {
-  const d = await getDb();
-  const trades = await d.collection('trades').find().toArray();
+
+app.get('/api/stats', authMiddleware, (req, res) => {
+  const trades = getTrades();
   res.json(getWinStats(trades) || { message:'No completed trades yet' });
 });
 
-app.post('/api/trades/:id/outcome', authMiddleware, async (req, res) => {
+app.post('/api/trades/:id/outcome', authMiddleware, (req, res) => {
   const { outcome, actual_rr, notes } = req.body;
-  const d = await getDb();
-  const trade = await d.collection('trades').findOne({ id: req.params.id });
+  const trades = getTrades();
+  const trade  = trades.find(t => t.id === req.params.id);
   if (!trade) return res.status(404).json({ error: 'Trade not found' });
-  await d.collection('trades').updateOne({ id: req.params.id }, { $set: { outcome, actual_rr, notes: notes||'', closed_at: new Date().toISOString() } });
-  const trades = await d.collection('trades').find().toArray();
+  trade.outcome   = outcome;
+  trade.actual_rr = actual_rr;
+  trade.notes     = notes || '';
+  trade.closed_at = new Date().toISOString();
+  saveTrades(trades);
   res.json({ success:true, stats:getWinStats(trades) });
 });
 
-app.delete('/api/trades/:id', authMiddleware, async (req, res) => {
-  const d = await getDb();
-  await d.collection('trades').deleteOne({ id: req.params.id });
+app.delete('/api/trades/:id', authMiddleware, (req, res) => {
+  saveTrades(getTrades().filter(t => t.id !== req.params.id));
   res.json({ success:true });
 });
 
 app.get('/sitemap.xml', (req, res) => {
   res.setHeader('Content-Type', 'application/xml');
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://priceaction.ai/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://priceaction.ai/#pricing</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://priceaction.ai/#how</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-</urlset>`);
+  res.send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://nexttrade-pro.vercel.app/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url></urlset>`);
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`\n  ╔══════════════════════════════════════════╗`);
-  console.log(`  ║   PriceAction AI — Auth + Stripe Edition    ║`);
-  console.log(`  ║   Payments: ${stripe ? 'ACTIVE ✓' : 'DISABLED (no key)'}              ║`);
-  console.log(`  ║   http://localhost:${PORT}                  ║`);
-  console.log(`  ╚══════════════════════════════════════════╝\n`);
+  console.log(`\n  PriceAction AI — /tmp storage (no MongoDB needed)`);
+  console.log(`  Pipeline: Haiku(x2 parallel) → Sonnet → Opus`);
+  console.log(`  Stripe: ${stripe ? 'ACTIVE ✓' : 'disabled'}`);
+  console.log(`  http://localhost:${PORT}\n`);
 });
