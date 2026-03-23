@@ -13,7 +13,7 @@ const MONGO_URI = process.env.MONGODB_URI;
 let db;
 async function getDb() {
   if (!db) {
-    const client = new MongoClient(MONGO_URI);
+    const client = new MongoClient(MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000 });
     await client.connect();
     db = client.db('nexttrade');
   }
