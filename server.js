@@ -26,44 +26,67 @@ const SONNET  = 'claude-sonnet-4-6';
 const OPUS    = 'claude-opus-4-6';
 
 // ─────────────────────────────────────────────
-// VERCEL KV STORAGE — persistent across deploys
+// GITHUB STORAGE — persistent across deploys
 // ─────────────────────────────────────────────
-const { kv } = require('@vercel/kv');
+const GH_TOKEN  = process.env.GH_DB_TOKEN;
+const GH_REPO   = 'Matxh/priceaction-db';
+const GH_API    = 'https://api.github.com';
 
-async function getUserByEmail(email) {
-  try { return await kv.get('user:' + email.toLowerCase()); } catch { return null; }
-}
-async function getUserById(id) {
+async function ghRead(file) {
   try {
-    const email = await kv.get('userid:' + id);
-    if (!email) return null;
-    return await kv.get('user:' + email);
+    const r = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${file}`, {
+      headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return { data: JSON.parse(Buffer.from(d.content, 'base64').toString()), sha: d.sha };
   } catch { return null; }
 }
-async function saveUser(user) {
+
+async function ghWrite(file, data, sha) {
   try {
-    await kv.set('user:' + user.email.toLowerCase(), user);
-    await kv.set('userid:' + user.id, user.email.toLowerCase());
-  } catch(e) { console.warn('[KV] saveUser failed:', e.message); }
+    await fetch(`${GH_API}/repos/${GH_REPO}/contents/${file}`, {
+      method: 'PUT',
+      headers: { Authorization: `token ${GH_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `update ${file}`, content: Buffer.from(JSON.stringify(data)).toString('base64'), sha })
+    });
+  } catch(e) { console.warn('[GH] write failed:', e.message); }
+}
+
+async function getUserByEmail(email) {
+  const r = await ghRead('users.json');
+  return r ? (r.data[email.toLowerCase()] || null) : null;
+}
+async function getUserById(id) {
+  const r = await ghRead('users.json');
+  if (!r) return null;
+  return Object.values(r.data).find(u => u.id === id) || null;
+}
+async function saveUser(user) {
+  const r = await ghRead('users.json');
+  const data = r ? r.data : {};
+  data[user.email.toLowerCase()] = user;
+  await ghWrite('users.json', data, r?.sha);
 }
 async function getAllUsers() {
-  try {
-    const keys = await kv.keys('user:*');
-    if (!keys.length) return [];
-    return await Promise.all(keys.map(k => kv.get(k)));
-  } catch { return []; }
+  const r = await ghRead('users.json');
+  return r ? Object.values(r.data) : [];
 }
 async function getTrades() {
-  try { return await kv.get('trades') || []; } catch { return []; }
+  const r = await ghRead('trades.json');
+  return r ? r.data : [];
 }
 async function saveTrades(t) {
-  try { await kv.set('trades', t); } catch(e) { console.warn('[KV] saveTrades failed:', e.message); }
+  const r = await ghRead('trades.json');
+  await ghWrite('trades.json', t, r?.sha);
 }
 async function getSubs() {
-  try { return await kv.get('subs') || []; } catch { return []; }
+  const r = await ghRead('subs.json');
+  return r ? r.data : [];
 }
 async function saveSubs(s) {
-  try { await kv.set('subs', s); } catch(e) { console.warn('[KV] saveSubs failed:', e.message); }
+  const r = await ghRead('subs.json');
+  await ghWrite('subs.json', s, r?.sha);
 }
 
 // ─────────────────────────────────────────────
