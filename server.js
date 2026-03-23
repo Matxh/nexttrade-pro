@@ -172,6 +172,19 @@ try {
 }
 
 // ─────────────────────────────────────────────
+// PING
+// ─────────────────────────────────────────────
+app.get('/api/ping', (req, res) => res.json({ ok: true }));
+app.get('/api/dbping', async (req, res) => {
+  try {
+    await getDb();
+    res.json({ ok: true, db: 'connected' });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────
 // AUTH ENDPOINTS
 // ─────────────────────────────────────────────
 app.post('/api/auth/signup', async (req, res) => {
