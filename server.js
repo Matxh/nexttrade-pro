@@ -490,7 +490,7 @@ Return ONLY valid raw JSON:
 "trade_management":{"move_to_be":"<when>","partial_at_tp1":"50%","trail_after_tp1":"<method>","max_hold_time":"<>"},
 "position_size_guidance":"<% account risk>","invalidation":"<price that kills setup>",
 "summary":"<4 sentences: entry location, stop rationale, TP targets, trade management>"}`;
-  return claude(key, SONNET, sys, [
+  return claude(key, OPUS, sys, [
     img(charts[0].base64, charts[0].mime),
     { type:'text', text:`Find best ${dir} entry for ${sym}.\n${lp}\nHTF bias: ${reading.htf_bias} | Alignment: ${reading.alignment_score}/100 | Position: ${reading.price_position}\nOB: ${JSON.stringify(reading.htf_key_ob)}\nFVG: ${reading.htf_fvg}\nLiquidity target: ${reading.liquidity_target}\nKey levels: ${JSON.stringify(reading.key_levels?.slice(0,5))}\nContext: ${ctx.context_bias} | Session: ${ctx.session_quality}` }
   ], 2500);
