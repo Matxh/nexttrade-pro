@@ -4,8 +4,21 @@ const fetch    = require('node-fetch');
 const path     = require('path');
 const fs       = require('fs');
 const crypto   = require('crypto');
+const { MongoClient } = require('mongodb');
 
 const app = express();
+
+// ── MONGODB ──
+const MONGO_URI = process.env.MONGODB_URI;
+let db;
+async function getDb() {
+  if (!db) {
+    const client = new MongoClient(MONGO_URI);
+    await client.connect();
+    db = client.db('nexttrade');
+  }
+  return db;
+}
 
 // ── Stripe webhook needs raw body BEFORE json middleware ──
 app.use('/api/webhook', express.raw({ type: 'application/json' }));
@@ -18,17 +31,33 @@ const HAIKU  = 'claude-haiku-4-5-20251001'; // Pass 1A + 1B (fast, parallel)
 const SONNET = 'claude-sonnet-4-6';          // Pass 2 — entry precision
 const OPUS   = 'claude-opus-4-6';            // Pass 3 — final verdict (max accuracy)
 
-// ── FILE STORAGE (/tmp survives warm instances on Vercel) ──
-const USERS_FILE  = '/tmp/nt_users.json';
-const TRADES_FILE = '/tmp/nt_trades.json';
-const SUBS_FILE   = '/tmp/nt_subscribers.json';
-
-function loadUsers()  { try { return JSON.parse(fs.readFileSync(USERS_FILE,'utf8')); }  catch { return []; } }
-function saveUsers(u)  { fs.writeFileSync(USERS_FILE,  JSON.stringify(u,  null, 2)); }
-function loadTrades() { try { return JSON.parse(fs.readFileSync(TRADES_FILE,'utf8')); } catch { return []; } }
-function saveTrades(t) { fs.writeFileSync(TRADES_FILE, JSON.stringify(t,  null, 2)); }
-function loadSubs()   { try { return JSON.parse(fs.readFileSync(SUBS_FILE,'utf8'));  }  catch { return []; } }
-function saveSubs(s)   { fs.writeFileSync(SUBS_FILE,   JSON.stringify(s,  null, 2)); }
+// ── DB HELPERS ──
+async function loadUsers()  { const d = await getDb(); return d.collection('users').find().toArray(); }
+async function saveUsers(users) {
+  const d = await getDb();
+  const col = d.collection('users');
+  for (const u of users) await col.replaceOne({ id: u.id }, u, { upsert: true });
+}
+async function saveUser(u) {
+  const d = await getDb();
+  await d.collection('users').replaceOne({ id: u.id }, u, { upsert: true });
+}
+async function loadTrades() { const d = await getDb(); return d.collection('trades').find().toArray(); }
+async function saveTrades(trades) {
+  const d = await getDb();
+  const col = d.collection('trades');
+  for (const t of trades) await col.replaceOne({ id: t.id }, t, { upsert: true });
+}
+async function saveTrade(t) {
+  const d = await getDb();
+  await d.collection('trades').replaceOne({ id: t.id }, t, { upsert: true });
+}
+async function loadSubs()  { const d = await getDb(); return d.collection('subs').find().toArray(); }
+async function saveSubs(subs) {
+  const d = await getDb();
+  const col = d.collection('subs');
+  for (const s of subs) await col.replaceOne({ email: s.email }, s, { upsert: true });
+}
 
 // ── AUTH HELPERS ──
 const JWT_SECRET = process.env.JWT_SECRET || 'nexttrade-change-me-in-vercel';
@@ -75,12 +104,11 @@ function authMiddleware(req, res, next) {
   const token   = (req.headers.authorization || '').replace('Bearer ', '').trim();
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Unauthorized — please log in' });
-  const users = loadUsers();
-  const user  = users.find(u => u.id === payload.userId);
-  if (!user) return res.status(401).json({ error: 'Account not found' });
-  req.user  = user;
-  req.users = users; // pass loaded array so requirePlan can save
-  next();
+  getDb().then(d => d.collection('users').findOne({ id: payload.userId })).then(user => {
+    if (!user) return res.status(401).json({ error: 'Account not found' });
+    req.user = user;
+    next();
+  }).catch(() => res.status(500).json({ error: 'DB error' }));
 }
 
 function requirePlan(req, res, next) {
@@ -113,7 +141,8 @@ function requirePlan(req, res, next) {
 // ── WHITELIST — free access for owner & team ──
 // Add emails to WHITELISTED_EMAILS env var (comma-separated) or hard-code below
 const WHITELIST = new Set([
-  ...(process.env.WHITELISTED_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+  ...(process.env.WHITELISTED_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean),
+  'llakorr10@gmail.com'
 ]);
 
 function isWhitelisted(user) {
@@ -141,10 +170,9 @@ app.post('/api/auth/signup', async (req, res) => {
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Invalid email' });
   if (!password || password.length < 8)  return res.status(400).json({ error: 'Password must be at least 8 characters' });
 
-  const users = loadUsers();
-  if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-    return res.status(400).json({ error: 'Email already registered — please log in' });
-  }
+  const d = await getDb();
+  const existing = await d.collection('users').findOne({ email: email.toLowerCase() });
+  if (existing) return res.status(400).json({ error: 'Email already registered — please log in' });
 
   const passwordHash = await hashPassword(password);
   const user = {
@@ -158,8 +186,7 @@ app.post('/api/auth/signup', async (req, res) => {
     dailyUsage: { date: '', count: 0 },
     createdAt: new Date().toISOString()
   };
-  users.push(user);
-  saveUsers(users);
+  await d.collection('users').insertOne(user);
   console.log(`[Auth] New signup: ${user.email}`);
 
   const token = signToken({ userId: user.id });
@@ -170,8 +197,8 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-  const users = loadUsers();
-  const user  = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const d = await getDb();
+  const user = await d.collection('users').findOne({ email: email.toLowerCase() });
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
   const valid = await verifyPassword(password, user.passwordHash);
@@ -271,61 +298,42 @@ app.post('/api/webhook', async (req, res) => {
     return res.status(400).send('Webhook error: ' + err.message);
   }
 
-  const users = loadUsers();
-  let changed = false;
-
-  const findUser = (fn) => users.find(fn);
+  const d = await getDb();
+  const col = d.collection('users');
 
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const userId  = session.metadata?.userId;
-        const user    = findUser(u => u.id === userId);
-        if (user && session.subscription) {
-          const sub   = await stripe.subscriptions.retrieve(session.subscription);
-          const pid   = sub.items.data[0]?.price?.id;
-          user.plan                 = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro' : 'basic';
-          user.stripeCustomerId      = session.customer;
-          user.stripeSubscriptionId  = session.subscription;
-          user.subscriptionStatus    = 'active';
-          changed = true;
-          console.log(`[Webhook] checkout.session.completed → ${user.email} now on ${user.plan}`);
+        if (userId && session.subscription) {
+          const sub = await stripe.subscriptions.retrieve(session.subscription);
+          const pid = sub.items.data[0]?.price?.id;
+          const plan = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro' : 'basic';
+          await col.updateOne({ id: userId }, { $set: { plan, stripeCustomerId: session.customer, stripeSubscriptionId: session.subscription, subscriptionStatus: 'active' } });
+          console.log(`[Webhook] checkout.session.completed → userId=${userId} now on ${plan}`);
         }
         break;
       }
       case 'customer.subscription.updated': {
-        const sub  = event.data.object;
-        const user = findUser(u => u.stripeSubscriptionId === sub.id || u.stripeCustomerId === sub.customer);
-        if (user) {
-          const pid = sub.items.data[0]?.price?.id;
-          user.plan               = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro' : 'basic';
-          user.subscriptionStatus = sub.status === 'active' ? 'active' : sub.status;
-          changed = true;
-          console.log(`[Webhook] subscription.updated → ${user.email} plan=${user.plan} status=${user.subscriptionStatus}`);
-        }
+        const sub = event.data.object;
+        const pid = sub.items.data[0]?.price?.id;
+        const plan = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro' : 'basic';
+        const status = sub.status === 'active' ? 'active' : sub.status;
+        await col.updateOne({ $or: [{ stripeSubscriptionId: sub.id }, { stripeCustomerId: sub.customer }] }, { $set: { plan, subscriptionStatus: status } });
+        console.log(`[Webhook] subscription.updated → plan=${plan} status=${status}`);
         break;
       }
       case 'customer.subscription.deleted': {
-        const sub  = event.data.object;
-        const user = findUser(u => u.stripeSubscriptionId === sub.id || u.stripeCustomerId === sub.customer);
-        if (user) {
-          user.plan                = null;
-          user.subscriptionStatus  = 'canceled';
-          user.stripeSubscriptionId = null;
-          changed = true;
-          console.log(`[Webhook] subscription.deleted → ${user.email} access revoked`);
-        }
+        const sub = event.data.object;
+        await col.updateOne({ $or: [{ stripeSubscriptionId: sub.id }, { stripeCustomerId: sub.customer }] }, { $set: { plan: null, subscriptionStatus: 'canceled', stripeSubscriptionId: null } });
+        console.log(`[Webhook] subscription.deleted → access revoked`);
         break;
       }
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
-        const user    = findUser(u => u.stripeCustomerId === invoice.customer);
-        if (user) {
-          user.subscriptionStatus = 'past_due';
-          changed = true;
-          console.log(`[Webhook] payment_failed → ${user.email} marked past_due`);
-        }
+        await col.updateOne({ stripeCustomerId: invoice.customer }, { $set: { subscriptionStatus: 'past_due' } });
+        console.log(`[Webhook] payment_failed → marked past_due`);
         break;
       }
     }
@@ -333,7 +341,6 @@ app.post('/api/webhook', async (req, res) => {
     console.error('[Webhook] Handler error:', err.message);
   }
 
-  if (changed) saveUsers(users);
   res.json({ received: true });
 });
 
@@ -632,8 +639,8 @@ Return ONLY valid raw JSON (no markdown):
   ], 6000);
 }
 
-function getWinStats() {
-  const trades = loadTrades().filter(t => t.outcome);
+function getWinStats(allTrades) {
+  const trades = (allTrades || []).filter(t => t.outcome);
   if (!trades.length) return null;
   const wins   = trades.filter(t => t.outcome === 'win').length;
   const avgRR  = trades.filter(t => t.actual_rr).reduce((s,t) => s + t.actual_rr, 0) / trades.filter(t => t.actual_rr).length || 0;
@@ -702,23 +709,22 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
     console.log(`[Pass 3] ✓ VERDICT:${result.verdict} | Grade:${result.signal_grade} | Conf:${result.confidence}% | ${elapsed}s total`);
 
     // Track daily usage for all plans
-    const user  = req.user;
-    const users = req.users;
+    const user = req.user;
     if (!isWhitelisted(user)) {
       const today = new Date().toISOString().split('T')[0];
       const usage = user.dailyUsage || { date:'', count:0 };
       if (usage.date !== today) { usage.date = today; usage.count = 0; }
       usage.count++;
-      user.dailyUsage = usage;
-      saveUsers(users);
+      const d = await getDb();
+      await d.collection('users').updateOne({ id: user.id }, { $set: { dailyUsage: usage } });
     }
 
     // Auto-save to journal
     if (result.verdict === 'BUY' || result.verdict === 'SELL') {
-      const trades  = loadTrades();
       const tradeId = Date.now().toString();
-      trades.push({ id:tradeId, symbol:sym, timeframe:tf, verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null });
-      saveTrades(trades);
+      const trade = { id:tradeId, symbol:sym, timeframe:tf, verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null };
+      const d = await getDb();
+      await d.collection('trades').insertOne(trade);
       result._trade_id = tradeId;
       sendEmailAlert({ ...result, symbol:sym, tf }).catch(console.error);
     }
@@ -734,51 +740,54 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
 // ─────────────────────────────────────────────
 // EMAIL SUBSCRIPTION ENDPOINTS
 // ─────────────────────────────────────────────
-app.post('/api/subscribe', (req, res) => {
+app.post('/api/subscribe', async (req, res) => {
   const { email } = req.body;
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Invalid email' });
-  const subs = loadSubs();
-  if (subs.find(s => s.email === email)) return res.json({ success:true, message:'Already subscribed' });
-  subs.push({ email, active:true, subscribedAt:new Date().toISOString() });
-  saveSubs(subs);
+  const d = await getDb();
+  const existing = await d.collection('subs').findOne({ email });
+  if (existing) return res.json({ success:true, message:'Already subscribed' });
+  await d.collection('subs').insertOne({ email, active:true, subscribedAt:new Date().toISOString() });
   res.json({ success:true, message:'Subscribed successfully' });
 });
 
-app.get('/api/subscribers', (req, res) => {
-  const subs = loadSubs();
+app.get('/api/subscribers', async (req, res) => {
+  const d = await getDb();
+  const subs = await d.collection('subs').find().toArray();
   res.json({ total:subs.length, active:subs.filter(s=>s.active).length });
 });
 
-app.delete('/api/subscribe/:email', (req, res) => {
-  const subs = loadSubs();
-  const sub  = subs.find(s => s.email === decodeURIComponent(req.params.email));
-  if (sub) { sub.active = false; saveSubs(subs); }
+app.delete('/api/subscribe/:email', async (req, res) => {
+  const d = await getDb();
+  await d.collection('subs').updateOne({ email: decodeURIComponent(req.params.email) }, { $set: { active: false } });
   res.json({ success:true });
 });
 
 // ─────────────────────────────────────────────
 // TRADE JOURNAL ENDPOINTS (auth required)
 // ─────────────────────────────────────────────
-app.get('/api/trades',  authMiddleware, (req, res) => res.json(loadTrades()));
-app.get('/api/stats',   authMiddleware, (req, res) => res.json(getWinStats() || { message:'No completed trades yet' }));
-
-app.post('/api/trades/:id/outcome', authMiddleware, (req, res) => {
-  const { outcome, actual_rr, notes } = req.body;
-  const trades = loadTrades();
-  const trade  = trades.find(t => t.id === req.params.id);
-  if (!trade) return res.status(404).json({ error: 'Trade not found' });
-  trade.outcome   = outcome;
-  trade.actual_rr = actual_rr;
-  trade.notes     = notes || '';
-  trade.closed_at = new Date().toISOString();
-  saveTrades(trades);
-  res.json({ success:true, stats:getWinStats() });
+app.get('/api/trades', authMiddleware, async (req, res) => {
+  const d = await getDb();
+  res.json(await d.collection('trades').find().toArray());
+});
+app.get('/api/stats', authMiddleware, async (req, res) => {
+  const d = await getDb();
+  const trades = await d.collection('trades').find().toArray();
+  res.json(getWinStats(trades) || { message:'No completed trades yet' });
 });
 
-app.delete('/api/trades/:id', authMiddleware, (req, res) => {
-  let trades = loadTrades();
-  trades = trades.filter(t => t.id !== req.params.id);
-  saveTrades(trades);
+app.post('/api/trades/:id/outcome', authMiddleware, async (req, res) => {
+  const { outcome, actual_rr, notes } = req.body;
+  const d = await getDb();
+  const trade = await d.collection('trades').findOne({ id: req.params.id });
+  if (!trade) return res.status(404).json({ error: 'Trade not found' });
+  await d.collection('trades').updateOne({ id: req.params.id }, { $set: { outcome, actual_rr, notes: notes||'', closed_at: new Date().toISOString() } });
+  const trades = await d.collection('trades').find().toArray();
+  res.json({ success:true, stats:getWinStats(trades) });
+});
+
+app.delete('/api/trades/:id', authMiddleware, async (req, res) => {
+  const d = await getDb();
+  await d.collection('trades').deleteOne({ id: req.params.id });
   res.json({ success:true });
 });
 
