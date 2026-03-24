@@ -431,26 +431,15 @@ async function claude(apiKey, model, system, content, tokens = 2000) {
   if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${r.status}`); }
   const d   = await r.json();
   const raw = (d.content || []).map(c => c.text || '').join('').trim();
-  function fixJSON(s) {
-    // Strip markdown fences
-    s = s.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
-    // Extract first JSON object if wrapped in text
-    const m = s.match(/\{[\s\S]*\}/);
-    if (m) s = m[0];
-    // Fix trailing commas before } or ]
-    s = s.replace(/,\s*([}\]])/g, '$1');
-    // Fix single quotes to double quotes
-    s = s.replace(/'/g, '"');
-    // Remove control characters
-    s = s.replace(/[\x00-\x1F\x7F]/g, ' ');
-    return s;
-  }
-  try { return JSON.parse(fixJSON(raw)); }
+  const { jsonrepair } = require('jsonrepair');
+  // Strip markdown fences
+  let s = raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
+  // Extract first JSON object if wrapped in text
+  const m = s.match(/\{[\s\S]*\}/);
+  if (m) s = m[0];
+  try { return JSON.parse(jsonrepair(s)); }
   catch(e) {
-    // Last resort: try to extract and fix
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (m) { try { return JSON.parse(fixJSON(m[0])); } catch {} }
-    console.error('[JSON parse failed]', raw.slice(0,300));
+    console.error('[JSON parse failed]', s.slice(0,300));
     throw new Error('JSON parse failed: ' + e.message);
   }
 }
