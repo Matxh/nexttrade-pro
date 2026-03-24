@@ -1275,8 +1275,8 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
           <div id="nextWindow" style="font-size:12px;font-weight:600;color:var(--text2);font-family:var(--mono);">--</div>
         </div>
         <div style="text-align:center;">
-          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;">Recommended</div>
-          <div style="font-size:12px;font-weight:600;color:var(--text2);font-family:var(--mono);">ES · NQ · CL</div>
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;">Mode</div>
+          <div id="sessionModeTag" style="font-size:12px;font-weight:600;color:var(--accent);font-family:var(--mono);">⚡ Scalp</div>
         </div>
       </div>
     </div>
@@ -2429,17 +2429,17 @@ const MODES={
   scalp:{
     slotTF:['1m','5m','15m'],
     label:'⚡ Scalp mode',
-    hint:'Upload 1m (Slot 1), 5m (Slot 2), 15m (Slot 3). Trade lasts 2–15 mins. Best in first 30 min of NY open (9:30–10:00am EST). Execute on 15m chart.'
+    hint:'Upload 1m (Slot 1), 5m (Slot 2), 15m (Slot 3). Trade lasts 2–15 mins. <strong style="color:#00e5b4">PRIME window: 9:30–10:30am EST</strong> (first hour of NY open — max volume, tightest spreads). Secondary: 2:00–3:30pm. <strong style="color:#ef4444">AVOID 11am–2pm midday chop.</strong> Execute on 1m/5m chart.'
   },
   dayTrade:{
     slotTF:['4H','1H','15m'],
     label:'📈 Day Trade mode',
-    hint:'Upload 4H (Slot 1), 1H (Slot 2), 15m (Slot 3). Trade lasts 30 mins–3 hrs. Best 9:30–11:30am EST. Execute on 15m chart.'
+    hint:'Upload 4H (Slot 1), 1H (Slot 2), 15m (Slot 3). Trade lasts 30 mins–3 hrs. <strong style="color:#00e5b4">BEST window: 9:30–11:30am EST</strong> (NY open — ICT prime time). Secondary: 2:00–4:00pm (power hour). <strong style="color:#ef4444">AVOID 11:30am–2:00pm midday chop.</strong> Execute on 15m chart.'
   },
   swing:{
     slotTF:['1D','4H','1H'],
     label:'🌊 Swing mode',
-    hint:'Upload Daily (Slot 1), 4H (Slot 2), 1H (Slot 3). Trade lasts 1–5 days. No overnight risk rules — set wide SL/TP. Execute on 1H chart.'
+    hint:'Upload Daily (Slot 1), 4H (Slot 2), 1H (Slot 3). Trade lasts 1–5 days. <strong style="color:#00e5b4">Best entries: NY Open 9:30–11:30am or daily candle close 3:30–4:00pm.</strong> London Open (3:00–5:00am EST) good for 4H setups. <strong style="color:#ef4444">Do NOT open new swings on Friday afternoon (weekend gap risk).</strong> Execute on 1H chart.'
   }
 };
 function setMode(mode, btn){
@@ -2455,6 +2455,8 @@ function setMode(mode, btn){
   const modeEmoji={scalp:'⚡ Scalp',dayTrade:'📈 Day Trade',swing:'🌊 Swing'};
   if(liveLabel) liveLabel.textContent=`${modeEmoji[mode]} (${tfLabels[mode]})`;
   [0,1,2].forEach(i=>{ if(charts[i]) renderSlot(i); });
+  // Refresh session timer to reflect new mode windows
+  updateSessionTimer();
 }
 const slotTF=['1m','5m','15m'];
 const slotSuggest=[
@@ -2812,84 +2814,219 @@ function updateTradeTimers() {
   });
 }
 
-// ── SESSION TIMER ──────────────────────────────────────────
+// ── SESSION TIMER (mode-aware) ─────────────────────────────
 function updateSessionTimer() {
   const now = new Date();
-  const ny = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const h = ny.getHours(), m = ny.getMinutes();
+  const ny  = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const h   = ny.getHours(), m = ny.getMinutes();
   const totalMins = h * 60 + m;
   const ampm = h >= 12 ? 'PM' : 'AM';
-  const hh = h % 12 || 12;
-  const mm = String(m).padStart(2,'0');
+  const hh   = h % 12 || 12;
+  const mm   = String(m).padStart(2,'0');
+  const day  = ny.getDay(); // 0=Sun, 6=Sat
   document.getElementById('nyTime').textContent = `${hh}:${mm} ${ampm}`;
 
   const dot   = document.getElementById('sessionDot');
   const label = document.getElementById('sessionLabel');
   const sub   = document.getElementById('sessionSub');
   const win   = document.getElementById('nextWindow');
+  const modeTag = document.getElementById('sessionModeTag');
+  const mode  = (typeof tradeMode !== 'undefined') ? tradeMode : 'dayTrade';
 
-  // Windows: Best = 9:30-11:30, Good = 14:00-16:00
-  const best1Start = 9*60+30, best1End = 11*60+30;
-  const best2Start = 14*60,   best2End = 16*60;
-  const premarket  = totalMins >= 4*60 && totalMins < best1Start;
-  const inBest1    = totalMins >= best1Start && totalMins < best1End;
-  const midday     = totalMins >= best1End && totalMins < best2Start;
-  const inBest2    = totalMins >= best2Start && totalMins < best2End;
-  const afterClose = totalMins >= best2End && totalMins < 20*60;
-  const overnight  = totalMins >= 20*60 || totalMins < 4*60;
+  // Update mode tag
+  if (modeTag) {
+    const modeLabels = { scalp:'⚡ Scalp', dayTrade:'📈 Day Trade', swing:'🌊 Swing' };
+    modeTag.textContent = modeLabels[mode] || '📈 Day Trade';
+  }
 
-  if (inBest1) {
-    dot.style.background = '#00e5b4';
-    dot.style.boxShadow  = '0 0 8px #00e5b4';
-    label.textContent    = '🟢 BEST WINDOW OPEN — Trade Now';
-    label.style.color    = '#00e5b4';
-    sub.textContent      = 'NY Open 9:30–11:30am · Highest volume & accuracy · ES · NQ · CL';
-    const minsLeft = best1End - totalMins;
-    win.textContent = `${minsLeft}m left`;
-    win.style.color = '#00e5b4';
-  } else if (inBest2) {
-    dot.style.background = '#00e5b4';
-    dot.style.boxShadow  = '0 0 8px #00e5b4';
-    label.textContent    = '🟢 GOOD WINDOW OPEN — Trade Now';
-    label.style.color    = '#00e5b4';
-    sub.textContent      = 'NY Afternoon 2:00–4:00pm · Second best window · ES · NQ · CL';
-    const minsLeft = best2End - totalMins;
-    win.textContent = `${minsLeft}m left`;
-    win.style.color = '#00e5b4';
-  } else if (premarket) {
-    dot.style.background = '#f59e0b';
-    dot.style.boxShadow  = '0 0 6px #f59e0b';
-    label.textContent    = '🟡 Pre-Market — Wait for 9:30am';
-    label.style.color    = '#f59e0b';
-    sub.textContent      = 'Market opens soon · Avoid trading now · Low liquidity';
-    const minsLeft = best1Start - totalMins;
-    win.textContent = `Opens in ${minsLeft}m`;
-    win.style.color = '#f59e0b';
-  } else if (midday) {
-    dot.style.background = '#f59e0b';
-    dot.style.boxShadow  = '0 0 6px #f59e0b';
-    label.textContent    = '🟡 Midday Chop — Wait for 2:00pm';
-    label.style.color    = '#f59e0b';
-    sub.textContent      = 'Low volume, choppy price action · Not ideal for trading';
-    const minsLeft = best2Start - totalMins;
-    win.textContent = `Next in ${minsLeft}m`;
-    win.style.color = '#f59e0b';
-  } else if (afterClose) {
-    dot.style.background = '#ef4444';
-    dot.style.boxShadow  = 'none';
-    label.textContent    = '🔴 Market Closed — Done for Today';
-    label.style.color    = '#ef4444';
-    sub.textContent      = 'Next best window: Tomorrow 9:30am EST';
-    win.textContent = 'Tomorrow';
-    win.style.color = '#ef4444';
+  const isWeekend = day === 0 || day === 6;
+
+  // ── SCALP windows ──────────────────────────────────────────────
+  // Prime: 9:30–10:30am (NY open first hour — max volatility)
+  // Good:  8:00–9:30am (pre-market futures action) + 2:00–3:30pm (power hour)
+  // Also:  3:00–5:00am (London open — EUR/GBP/forex scalps only)
+  // Avoid: 10:30am–2:00pm (chop), after 4pm, weekends
+  if (mode === 'scalp') {
+    const londonOpen   = totalMins >= 3*60    && totalMins < 5*60;
+    const preMkt       = totalMins >= 8*60    && totalMins < 9*60+30;
+    const nyPrime      = totalMins >= 9*60+30 && totalMins < 10*60+30;
+    const nyGood       = totalMins >= 10*60+30&& totalMins < 11*60;
+    const chop         = totalMins >= 11*60   && totalMins < 14*60;
+    const powerHour    = totalMins >= 14*60   && totalMins < 15*60+30;
+    const closing      = totalMins >= 15*60+30&& totalMins < 16*60;
+    const afterClose   = totalMins >= 16*60   && totalMins < 20*60;
+
+    if (isWeekend) {
+      dot.style.background='#666'; dot.style.boxShadow='none';
+      label.textContent='⚫ Weekend — No Scalp Trades'; label.style.color='var(--text2)';
+      sub.textContent='Scalp only on weekdays · Best: Mon–Fri 9:30–10:30am EST';
+      win.textContent='Monday'; win.style.color='var(--text3)';
+    } else if (nyPrime) {
+      dot.style.background='#00e5b4'; dot.style.boxShadow='0 0 10px #00e5b4';
+      label.textContent='🟢 PRIME SCALP WINDOW — Trade Now'; label.style.color='#00e5b4';
+      sub.textContent='NY Open 9:30–10:30am · Max volume · Tightest spreads · ES · NQ · CL';
+      const left=10*60+30-totalMins;
+      win.textContent=`${left}m left`; win.style.color='#00e5b4';
+    } else if (nyGood) {
+      dot.style.background='#3b9eff'; dot.style.boxShadow='0 0 8px #3b9eff';
+      label.textContent='🔵 GOOD SCALP WINDOW — Trade Carefully'; label.style.color='#3b9eff';
+      sub.textContent='10:30–11:00am · Volume fading · Only A+ setups · Tighten criteria';
+      const left=11*60-totalMins;
+      win.textContent=`${left}m left`; win.style.color='#3b9eff';
+    } else if (powerHour) {
+      dot.style.background='#3b9eff'; dot.style.boxShadow='0 0 8px #3b9eff';
+      label.textContent='🔵 POWER HOUR — Scalp Opportunity'; label.style.color='#3b9eff';
+      sub.textContent='2:00–3:30pm · Volume returns · Second best scalp window · ES · NQ';
+      const left=15*60+30-totalMins;
+      win.textContent=`${left}m left`; win.style.color='#3b9eff';
+    } else if (closing) {
+      dot.style.background='#f59e0b'; dot.style.boxShadow='0 0 6px #f59e0b';
+      label.textContent='🟡 Market Close Approach — Caution'; label.style.color='#f59e0b';
+      sub.textContent='3:30–4:00pm · Volatile close · Only momentum scalps · Reduce size';
+      win.textContent='Closes 4pm'; win.style.color='#f59e0b';
+    } else if (preMkt) {
+      dot.style.background='#f59e0b'; dot.style.boxShadow='0 0 6px #f59e0b';
+      label.textContent='🟡 Pre-Market Futures — Limited Scalps'; label.style.color='#f59e0b';
+      sub.textContent='8:00–9:30am · Futures active · Wider spreads · Size down 50%';
+      const left=9*60+30-totalMins;
+      win.textContent=`Opens in ${left}m`; win.style.color='#f59e0b';
+    } else if (londonOpen) {
+      dot.style.background='#f59e0b'; dot.style.boxShadow='0 0 6px #f59e0b';
+      label.textContent='🟡 London Open — Forex Scalps Only'; label.style.color='#f59e0b';
+      sub.textContent='3:00–5:00am EST · EUR/USD · GBP/USD only · Not ideal for ES/NQ';
+      const left=5*60-totalMins;
+      win.textContent=`${left}m left`; win.style.color='#f59e0b';
+    } else if (chop) {
+      dot.style.background='#ef4444'; dot.style.boxShadow='none';
+      label.textContent='🔴 MIDDAY CHOP — No Scalp Trades'; label.style.color='#ef4444';
+      sub.textContent='11:00am–2:00pm · Choppy, slow, no direction · Skip this window';
+      const left=14*60-totalMins;
+      win.textContent=`Power Hour in ${left}m`; win.style.color='#f59e0b';
+    } else if (afterClose) {
+      dot.style.background='#ef4444'; dot.style.boxShadow='none';
+      label.textContent='🔴 After Hours — No Scalp Trades'; label.style.color='#ef4444';
+      sub.textContent='Market closed · Come back tomorrow 9:30am EST';
+      win.textContent='Tomorrow 9:30am'; win.style.color='#ef4444';
+    } else {
+      dot.style.background='#666'; dot.style.boxShadow='none';
+      label.textContent='⚫ Overnight — No Scalp Trades'; label.style.color='var(--text2)';
+      sub.textContent='Next scalp window: 9:30am EST · London open at 3:00am (forex only)';
+      win.textContent='9:30am EST'; win.style.color='var(--text3)';
+    }
+
+  // ── DAY TRADE windows ──────────────────────────────────────────
+  // Best: 9:30–11:30am (NY open — primary ICT window)
+  // Good: 2:00–4:00pm (NY power hour + close run)
+  // Watch: 8:00–9:30am pre-market (plan only, no trades)
+  // Avoid: 11:30am–2:00pm chop, after 4pm, weekends
+  } else if (mode === 'dayTrade') {
+    const preMkt     = totalMins >= 8*60    && totalMins < 9*60+30;
+    const nyBest     = totalMins >= 9*60+30 && totalMins < 11*60+30;
+    const midday     = totalMins >= 11*60+30&& totalMins < 14*60;
+    const afternoon  = totalMins >= 14*60   && totalMins < 16*60;
+    const afterClose = totalMins >= 16*60   && totalMins < 20*60;
+
+    if (isWeekend) {
+      dot.style.background='#666'; dot.style.boxShadow='none';
+      label.textContent='⚫ Weekend — Plan Trades for Monday'; label.style.color='var(--text2)';
+      sub.textContent='No day trades on weekends · Use this time to mark key levels on 4H/Daily';
+      win.textContent='Mon 9:30am'; win.style.color='var(--text3)';
+    } else if (nyBest) {
+      dot.style.background='#00e5b4'; dot.style.boxShadow='0 0 10px #00e5b4';
+      label.textContent='🟢 BEST WINDOW OPEN — Trade Now'; label.style.color='#00e5b4';
+      sub.textContent='NY Open 9:30–11:30am · ICT prime window · ES · NQ · CL · Best R:R setups';
+      const left=11*60+30-totalMins;
+      win.textContent=`${left}m left`; win.style.color='#00e5b4';
+    } else if (afternoon) {
+      dot.style.background='#3b9eff'; dot.style.boxShadow='0 0 8px #3b9eff';
+      label.textContent='🔵 GOOD WINDOW OPEN — Trade Now'; label.style.color='#3b9eff';
+      sub.textContent='NY Afternoon 2:00–4:00pm · Power hour + close run · Second best window';
+      const left=16*60-totalMins;
+      win.textContent=`${left}m left`; win.style.color='#3b9eff';
+    } else if (preMkt) {
+      dot.style.background='#f59e0b'; dot.style.boxShadow='0 0 6px #f59e0b';
+      label.textContent='🟡 Pre-Market — Plan Only, No Entries'; label.style.color='#f59e0b';
+      sub.textContent='8:00–9:30am · Mark levels on 4H & 1H · Wait for 9:30am open to trade';
+      const left=9*60+30-totalMins;
+      win.textContent=`Opens in ${left}m`; win.style.color='#f59e0b';
+    } else if (midday) {
+      dot.style.background='#ef4444'; dot.style.boxShadow='none';
+      label.textContent='🔴 MIDDAY CHOP — Avoid Day Trading'; label.style.color='#ef4444';
+      sub.textContent='11:30am–2:00pm · Low volume · Choppy · High false signal rate · Skip';
+      const left=14*60-totalMins;
+      win.textContent=`Afternoon in ${left}m`; win.style.color='#f59e0b';
+    } else if (afterClose) {
+      dot.style.background='#ef4444'; dot.style.boxShadow='none';
+      label.textContent='🔴 Market Closed — Done for Today'; label.style.color='#ef4444';
+      sub.textContent='Review trades · Plan tomorrow · Next window: 9:30am EST';
+      win.textContent='Tomorrow 9:30am'; win.style.color='#ef4444';
+    } else {
+      dot.style.background='#666'; dot.style.boxShadow='none';
+      label.textContent='⚫ Overnight — Market Closed'; label.style.color='var(--text2)';
+      sub.textContent='Next best window: NY Open 9:30am EST · Mark your levels tonight';
+      win.textContent='9:30am EST'; win.style.color='var(--text3)';
+    }
+
+  // ── SWING windows ──────────────────────────────────────────────
+  // Swing holds 1–5 days — less time-sensitive but entry timing still matters
+  // Best entry:  NY Open 9:30–11:30am (daily candle direction set)
+  //              End of day 3:30–4:00pm (daily candle confirmed)
+  // Also good:   London open 3:00–5:00am (for 4H setups)
+  // Avoid entry: Friday afternoon (weekend gap risk)
+  //              Monday pre-market (gap open — wait for first candle close)
   } else {
-    dot.style.background = '#666';
-    dot.style.boxShadow  = 'none';
-    label.textContent    = '⚫ Overnight — Market Closed';
-    label.style.color    = 'var(--text2)';
-    sub.textContent      = 'Next best window: 9:30am EST';
-    win.textContent = '9:30am EST';
-    win.style.color = 'var(--text3)';
+    const londonOpen = totalMins >= 3*60    && totalMins < 5*60;
+    const nyOpen     = totalMins >= 9*60+30 && totalMins < 11*60+30;
+    const midSession = totalMins >= 11*60+30&& totalMins < 15*60+30;
+    const eodClose   = totalMins >= 15*60+30&& totalMins < 16*60;
+    const afterClose = totalMins >= 16*60   && totalMins < 20*60;
+    const isFriday   = day === 5;
+    const isMonday   = day === 1;
+
+    if (isWeekend) {
+      dot.style.background='#f59e0b'; dot.style.boxShadow='0 0 6px #f59e0b';
+      label.textContent='🟡 Weekend — Hold Existing Swings Only'; label.style.color='#f59e0b';
+      sub.textContent='No new swing entries on weekends · Watch for Sunday gap on ES/NQ/BTC';
+      win.textContent='Mon 9:30am'; win.style.color='#f59e0b';
+    } else if (nyOpen) {
+      dot.style.background='#00e5b4'; dot.style.boxShadow='0 0 10px #00e5b4';
+      label.textContent='🟢 BEST SWING ENTRY WINDOW — Trade Now'; label.style.color='#00e5b4';
+      sub.textContent='NY Open 9:30–11:30am · Daily candle direction prints here · Best swing entries';
+      const left=11*60+30-totalMins;
+      win.textContent=`${left}m left`; win.style.color='#00e5b4';
+    } else if (eodClose && !isFriday) {
+      dot.style.background='#00e5b4'; dot.style.boxShadow='0 0 8px #00e5b4';
+      label.textContent='🟢 END OF DAY ENTRY — Daily Candle Confirming'; label.style.color='#00e5b4';
+      sub.textContent='3:30–4:00pm · Daily close confirms bias · Enter on 1H/4H after daily candle';
+      win.textContent='Closes 4pm'; win.style.color='#00e5b4';
+    } else if (londonOpen) {
+      dot.style.background='#3b9eff'; dot.style.boxShadow='0 0 8px #3b9eff';
+      label.textContent='🔵 LONDON OPEN — 4H Swing Setups'; label.style.color='#3b9eff';
+      sub.textContent='3:00–5:00am EST · Good for 4H OB/FVG entries · EUR/USD · GBP/USD · Gold';
+      const left=5*60-totalMins;
+      win.textContent=`${left}m left`; win.style.color='#3b9eff';
+    } else if (isFriday && eodClose) {
+      dot.style.background='#ef4444'; dot.style.boxShadow='none';
+      label.textContent='🔴 FRIDAY CLOSE — Avoid New Swing Entries'; label.style.color='#ef4444';
+      sub.textContent='Do NOT open new swings before weekend · Gap risk is high · Close or hold tight SL';
+      win.textContent='Mon open'; win.style.color='#ef4444';
+    } else if (midSession) {
+      dot.style.background='#3b9eff'; dot.style.boxShadow='0 0 6px #3b9eff';
+      label.textContent='🔵 MID-SESSION — Monitor Existing Swings'; label.style.color='#3b9eff';
+      sub.textContent='Midday/afternoon · Wait for NY open or daily close for new entries · Manage open trades';
+      const minsToClose = 15*60+30-totalMins;
+      win.textContent=`EOD in ${minsToClose}m`; win.style.color='#3b9eff';
+    } else if (afterClose) {
+      dot.style.background='#3b9eff'; dot.style.boxShadow='0 0 6px #3b9eff';
+      label.textContent='🔵 AFTER HOURS — Plan Tomorrow\'s Entries'; label.style.color='#3b9eff';
+      sub.textContent='Mark daily levels tonight · Prep 4H setups · Enter at NY open tomorrow';
+      win.textContent='NY Open 9:30am'; win.style.color='#3b9eff';
+    } else {
+      dot.style.background='#666'; dot.style.boxShadow='none';
+      label.textContent='⚫ Overnight — Swing Positions Active'; label.style.color='var(--text2)';
+      sub.textContent='Hold overnight OK for swing · Next entry window: NY Open 9:30am or London Open 3:00am';
+      win.textContent='3:00am or 9:30am'; win.style.color='var(--text3)';
+    }
   }
 }
 updateSessionTimer();
