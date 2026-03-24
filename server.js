@@ -429,7 +429,15 @@ const img = (b64, mime) => ({ type:'image', source:{ type:'base64', media_type:m
 // ─────────────────────────────────────────────
 // PASS 1A — CHART STRUCTURE & SMC (Haiku)
 // ─────────────────────────────────────────────
-async function pass1A(charts, sym, key) {
+// Model selector based on trade mode
+function getModels(tradeMode) {
+  if (tradeMode === 'scalp') return { p1a: SONNET, p1b: HAIKU, p2: HAIKU,  p3: SONNET, tokens: { p1a:1200, p1b:400, p2:800,  p3:1000 } };
+  if (tradeMode === 'swing') return { p1a: OPUS,   p1b: HAIKU, p2: OPUS,   p3: OPUS,   tokens: { p1a:3000, p1b:600, p2:2000, p3:2500 } };
+  /* dayTrade default */     return { p1a: SONNET, p1b: HAIKU, p2: SONNET, p3: OPUS,   tokens: { p1a:2000, p1b:500, p2:1500, p3:2000 } };
+}
+
+async function pass1A(charts, sym, key, tradeMode='dayTrade') {
+  const { p1a, tokens } = getModels(tradeMode);
   const n = charts.length;
   const sys = `You are an ICT/SMC chart reading machine. Objective, bias-free reading of price structure and smart money concepts only.
 
@@ -460,13 +468,14 @@ Return ONLY valid raw JSON:
     ...charts.map((c, i) => [{ type:'text', text:`Chart ${i+1}:` }, img(c.base64, c.mime)]).flat(),
     { type:'text', text:`Read all ${n} chart${n>1?'s':''} for ${sym}. Report exact prices.` }
   ];
-  return claude(key, SONNET, sys, content, 3000);
+  return claude(key, p1a, sys, content, tokens.p1a);
 }
 
 // ─────────────────────────────────────────────
 // PASS 1B — TIMING & CONTEXT (Haiku)
 // ─────────────────────────────────────────────
-async function pass1B(charts, sym, livePrice, mktCtx, winStats, key) {
+async function pass1B(charts, sym, livePrice, mktCtx, winStats, key, tradeMode='dayTrade') {
+  const { p1b, tokens } = getModels(tradeMode);
   const lp = livePrice ? `Live price: $${livePrice.price} (${livePrice.change24h||'?'}% 24h)` : 'Live price: unavailable';
   const ws = winStats  ? `Journal: ${winStats.winRate}% win rate / ${winStats.total} trades` : 'No journal history yet.';
   const sys = `You are a trading session and context filter. Assess if NOW is a good time to trade based on session, news risk, and day-of-week.
@@ -487,16 +496,17 @@ Return ONLY valid raw JSON:
 "historical_edge":"<what journal stats suggest>","context_score":<0-100>,
 "context_bias":"Proceed/Caution/Wait/Avoid","risk_multiplier":<0.5-1.5>,
 "summary":"<3 sentences: session quality, news/day risk, timing verdict>"}`;
-  return claude(key, HAIKU, sys, [
+  return claude(key, p1b, sys, [
     img(charts[0].base64, charts[0].mime),
     { type:'text', text:`Asset: ${sym}\n${lp}\nSession: ${mktCtx.session}\nDay: ${mktCtx.market_hours}\nRisk events: ${mktCtx.risk_events.join('; ')||'None'}\n${ws}\n\nIs NOW a good time to trade ${sym}?` }
-  ], 1000);
+  ], tokens.p1b);
 }
 
 // ─────────────────────────────────────────────
 // PASS 2 — ENTRY ARCHITECT (Sonnet)
 // ─────────────────────────────────────────────
-async function pass2(charts, sym, reading, ctx, livePrice, key) {
+async function pass2(charts, sym, reading, ctx, livePrice, key, tradeMode='dayTrade') {
+  const { p2, tokens } = getModels(tradeMode);
   const lp  = livePrice ? `Live price: $${livePrice.price}` : 'Live price: N/A';
   const dir = reading.tradeable_direction;
   const sys = `You are an elite ICT entry specialist. Find the SINGLE best entry setup at institutional price levels.
@@ -522,10 +532,10 @@ Return ONLY valid raw JSON:
 "trade_management":{"move_to_be":"<when>","partial_at_tp1":"50%","trail_after_tp1":"<method>","max_hold_time":"<>"},
 "position_size_guidance":"<% account risk>","invalidation":"<price that kills setup>",
 "summary":"<4 sentences: entry location, stop rationale, TP targets, trade management>"}`;
-  return claude(key, OPUS, sys, [
+  return claude(key, p2, sys, [
     img(charts[0].base64, charts[0].mime),
     { type:'text', text:`Find best ${dir} entry for ${sym}.\n${lp}\nHTF bias: ${reading.htf_bias} | Alignment: ${reading.alignment_score}/100 | Position: ${reading.price_position}\nOB: ${JSON.stringify(reading.htf_key_ob)}\nFVG: ${reading.htf_fvg}\nLiquidity target: ${reading.liquidity_target}\nKey levels: ${JSON.stringify(reading.key_levels?.slice(0,5))}\nContext: ${ctx.context_bias} | Session: ${ctx.session_quality}` }
-  ], 2500);
+  ], tokens.p2);
 }
 
 // ─────────────────────────────────────────────
@@ -586,10 +596,11 @@ Return ONLY valid raw JSON:
 "candle_analysis":"<last 3-5 candles>","best_case":"<>","worst_case":"<>",
 "fullAnalysis":"<20-25 sentences elite HTML with strong tags covering: institutional context, HTF bias, MTF alignment, price position, SMC setup, all 12 gates, session/news, entry plan, SL/TP levels, position sizing, trade management, invalidation, probability assessment>"}`;
 
-  return claude(key, OPUS, sys, [
+  const { p3, tokens } = getModels(tradeMode);
+  return claude(key, p3, sys, [
     ...charts.map(c => img(c.base64, c.mime)),
     { type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\n${ws}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nApply all 12 gates strictly.` }
-  ], 6000);
+  ], tokens.p3);
 }
 
 function getWinStats(allTrades) {
@@ -627,8 +638,8 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
     const mktCtx      = getMarketContext(sym);
 
     const [reading, ctx] = await Promise.all([
-      pass1A(chartList, sym, key),
-      pass1B(chartList, sym, livePrice, mktCtx, winStats, key)
+      pass1A(chartList, sym, key, tradeMode||'dayTrade'),
+      pass1B(chartList, sym, livePrice, mktCtx, winStats, key, tradeMode||'dayTrade')
     ]);
     console.log(`[1A] Bias:${reading.htf_bias} Align:${reading.alignment_score} Dir:${reading.tradeable_direction}`);
     console.log(`[1B] Session:${ctx.session_quality} News:${ctx.news_risk} Bias:${ctx.context_bias}`);
@@ -641,7 +652,7 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
       && ctx.session_quality !== 'Avoid';
 
     if (shouldRunEntry) {
-      entry = await pass2(chartList, sym, reading, ctx, livePrice, key);
+      entry = await pass2(chartList, sym, reading, ctx, livePrice, key, tradeMode||'dayTrade');
       console.log(`[Pass 2] Entry:${entry.entry_price} SL:${entry.sl_price} Quality:${entry.entry_quality}`);
     }
 
