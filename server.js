@@ -1105,8 +1105,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     // Build text-based chart data for each TF
     const chartTexts = available.map(d => ohlcvToText(d));
 
-    // Build correlated assets context string
-    const corrNote = correlatedAssets ? `\nCORRELATED ASSETS: VIX=${correlatedAssets.vix?.level||'?'} (${correlatedAssets.vix?.price||'?'}), DXY proxy=${correlatedAssets.dxy?.price||'?'} (${correlatedAssets.dxy?.change||'?'}%), Bonds(TLT)=${correlatedAssets.bonds?.price||'?'} (${correlatedAssets.bonds?.change||'?'}%). ${correlatedAssets.note||''}` : '';
+    // corrNote built after correlated assets resolve (later in the flow)
 
     let result;
     if (mode === 'scalp') {
