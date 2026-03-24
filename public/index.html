@@ -1244,13 +1244,13 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <div class="charts-label">Chart Screenshots (upload up to 3 timeframes)</div>
     <div class="charts-grid">
       <div class="chart-slot" id="slot0" onclick="triggerSlot(0)" ondragover="onDragOver(event,0)" ondragleave="onDragLeave(0)" ondrop="onDrop(event,0)">
-        <div class="slot-label">Slot 1 — 4H (Trend)</div><div class="slot-icon">📊</div><div class="slot-hint">4H chart — sets direction</div>
+        <div class="slot-label" id="slotLabel0">Slot 1</div><div class="slot-icon" id="slotIcon0">📊</div><div class="slot-hint" id="slotHint0">Click or drag to upload</div>
       </div>
       <div class="chart-slot" id="slot1" onclick="triggerSlot(1)" ondragover="onDragOver(event,1)" ondragleave="onDragLeave(1)" ondrop="onDrop(event,1)">
-        <div class="slot-label">Slot 2 — 1H (Zone)</div><div class="slot-icon">📈</div><div class="slot-hint">1H chart — key level</div>
+        <div class="slot-label" id="slotLabel1">Slot 2</div><div class="slot-icon" id="slotIcon1">📈</div><div class="slot-hint" id="slotHint1">Optional</div>
       </div>
       <div class="chart-slot" id="slot2" onclick="triggerSlot(2)" ondragover="onDragOver(event,2)" ondragleave="onDragLeave(2)" ondrop="onDrop(event,2)">
-        <div class="slot-label">Slot 3 — 15m (Entry)</div><div class="slot-icon">🎯</div><div class="slot-hint">15m chart — place trade here</div>
+        <div class="slot-label" id="slotLabel2">Slot 3</div><div class="slot-icon" id="slotIcon2">🎯</div><div class="slot-hint" id="slotHint2">Optional</div>
       </div>
     </div>
     <input type="file" id="fileInput0" accept="image/*" style="display:none" onchange="onFileSelect(event,0)">
@@ -2454,7 +2454,8 @@ function setMode(mode, btn){
   const tfLabels={scalp:'1m · 5m · 15m',dayTrade:'15m · 1H · 4H',swing:'1H · 4H · 1D'};
   const modeEmoji={scalp:'⚡ Scalp',dayTrade:'📈 Day Trade',swing:'🌊 Swing'};
   if(liveLabel) liveLabel.textContent=`${modeEmoji[mode]} (${tfLabels[mode]})`;
-  [0,1,2].forEach(i=>{ if(charts[i]) renderSlot(i); });
+  // Re-render ALL slots (filled + empty) so labels always match current mode
+  [0,1,2].forEach(i=>renderSlot(i));
   // Refresh session timer to reflect new mode windows
   updateSessionTimer();
 }
@@ -2490,15 +2491,33 @@ function loadFile(file,i){
   reader.readAsDataURL(file);
 }
 
+// Mode-aware slot metadata
+const SLOT_META = {
+  scalp: [
+    { label:'Slot 1 — 1m (Momentum)', hint:'1m chart — fast entries & exits', icon:'⚡' },
+    { label:'Slot 2 — 5m (Structure)', hint:'5m chart — key OB/FVG zones', icon:'📈' },
+    { label:'Slot 3 — 15m (Entry Zone)', hint:'15m chart — confirm & place trade', icon:'🎯' }
+  ],
+  dayTrade: [
+    { label:'Slot 1 — 4H (Trend)', hint:'4H chart — sets overall direction', icon:'📊' },
+    { label:'Slot 2 — 1H (Zone)', hint:'1H chart — key level & OB', icon:'📈' },
+    { label:'Slot 3 — 15m (Entry)', hint:'15m chart — place trade here', icon:'🎯' }
+  ],
+  swing: [
+    { label:'Slot 1 — 1D (Bias)', hint:'Daily chart — weekly bias & structure', icon:'🗓' },
+    { label:'Slot 2 — 4H (Structure)', hint:'4H chart — OB/FVG & key levels', icon:'📊' },
+    { label:'Slot 3 — 1H (Entry)', hint:'1H chart — entry timing & trigger', icon:'🎯' }
+  ]
+};
+
 function renderSlot(i){
   const slot=$('slot'+i);
   const c=charts[i];
-  const labels=['Slot 1 — 4H (Trend)','Slot 2 — 1H (Zone)','Slot 3 — 15m (Entry)'];
-  const hints=['Click or drag to upload','Optional — e.g. 4H or Daily','Optional — e.g. Weekly'];
-  const icons=['📊','📈','🗓'];
+  const mode=(typeof tradeMode!=='undefined')?tradeMode:'dayTrade';
+  const meta=(SLOT_META[mode]||SLOT_META.dayTrade)[i];
   if(!c){
     slot.classList.remove('filled');
-    slot.innerHTML=`<div class="slot-label">${labels[i]}</div><div class="slot-icon">${icons[i]}</div><div class="slot-hint">${hints[i]}</div>`;
+    slot.innerHTML=`<div class="slot-label">${meta.label}</div><div class="slot-icon">${meta.icon}</div><div class="slot-hint">${meta.hint}</div>`;
     slot.onclick=()=>triggerSlot(i);
   }else{
     slot.classList.add('filled');slot.onclick=null;
@@ -3031,6 +3050,8 @@ function updateSessionTimer() {
 }
 updateSessionTimer();
 setInterval(updateSessionTimer, 30000);
+// Init slot labels for default mode on page load
+[0,1,2].forEach(i=>renderSlot(i));
 
 // ── ALERT PREFERENCES ──
 function toggleAlertPanel() {
