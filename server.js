@@ -429,6 +429,46 @@ const img = (b64, mime) => ({ type:'image', source:{ type:'base64', media_type:m
 // ─────────────────────────────────────────────
 // PASS 1A — CHART STRUCTURE & SMC (Haiku)
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// SCALP FAST PATH — 2 passes, Haiku only, ~2s
+// ─────────────────────────────────────────────
+async function scalpFast(charts, sym, livePrice, mktCtx, key) {
+  const lp = livePrice ? `Live: $${livePrice.price}` : '';
+  const sys = `You are an elite scalp trader. Analyze these charts and give an instant BUY/SELL/WAIT signal. Be fast and decisive.
+
+SCALP RULES:
+- Only BUY if: clear bullish displacement candle, price at support/OB/FVG, 1m and 5m aligned bullish
+- Only SELL if: clear bearish displacement candle, price at resistance/OB/FVG, 1m and 5m aligned bearish
+- WAIT if: unclear structure, ranging, no displacement, or conflicting timeframes
+- SL: just below/above the displacement candle
+- TP: nearest liquidity (equal highs/lows or next key level)
+- Min R:R 1:1.5 or WAIT
+
+Return ONLY valid raw JSON — no markdown:
+{"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A/B/C/D",
+"entry":"<price>","sl":"<price>","tp1":"<price>","tp2":"<price>",
+"rr":"1:<X.X>","entry_trigger":"<exact candle/pattern to confirm>",
+"wait_reason":"<if WAIT>","bias":"<1-2 sentences>",
+"fullAnalysis":"<5-8 sentences: what you see, why this signal, entry trigger, SL logic, TP targets, risk>"}`;
+
+  const content = [
+    ...charts.map((c,i) => [{ type:'text', text:`Chart ${i+1} (${c.label||'?'}):` }, img(c.base64, c.mime)]).flat(),
+    { type:'text', text:`Scalp ${sym} NOW. ${lp} Session: ${mktCtx.session}. Give instant signal.` }
+  ];
+  const raw = await claude(key, HAIKU, sys, content, 800);
+  // Normalise to pass3 shape so the rest of the route works unchanged
+  return {
+    verdict: raw.verdict, confidence: raw.confidence, signal_grade: raw.signal_grade,
+    entry: raw.entry, sl: raw.sl, tp1: raw.tp1, tp2: raw.tp2,
+    rr_tp1: raw.rr, entry_trigger: raw.entry_trigger,
+    wait_reason: raw.wait_reason || '', market_phase: 'Scalp',
+    price_position: 'N/A', gates_passed: [], gates_failed: [],
+    alignment_score: raw.confidence || 0,
+    factors: [], patterns: [], smart_money: {},
+    fullAnalysis: raw.fullAnalysis || raw.bias || ''
+  };
+}
+
 // Model selector based on trade mode
 function getModels(tradeMode) {
   if (tradeMode === 'scalp') return { p1a: SONNET, p1b: HAIKU, p2: HAIKU,  p3: SONNET, tokens: { p1a:1200, p1b:400, p2:800,  p3:1000 } };
@@ -637,26 +677,33 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
     const winStats    = getWinStats(allTrades);
     const mktCtx      = getMarketContext(sym);
 
-    const [reading, ctx] = await Promise.all([
-      pass1A(chartList, sym, key, tradeMode||'dayTrade'),
-      pass1B(chartList, sym, livePrice, mktCtx, winStats, key, tradeMode||'dayTrade')
-    ]);
-    console.log(`[1A] Bias:${reading.htf_bias} Align:${reading.alignment_score} Dir:${reading.tradeable_direction}`);
-    console.log(`[1B] Session:${ctx.session_quality} News:${ctx.news_risk} Bias:${ctx.context_bias}`);
+    let result;
+    if ((tradeMode||'dayTrade') === 'scalp') {
+      // ⚡ SCALP FAST PATH — single Haiku call ~2s
+      console.log(`[SCALP] Fast path — Haiku single pass`);
+      result = await scalpFast(chartList, sym, livePrice, mktCtx, key);
+    } else {
+      // 📈 STANDARD 4-PASS PATH
+      const [reading, ctx] = await Promise.all([
+        pass1A(chartList, sym, key, tradeMode||'dayTrade'),
+        pass1B(chartList, sym, livePrice, mktCtx, winStats, key, tradeMode||'dayTrade')
+      ]);
+      console.log(`[1A] Bias:${reading.htf_bias} Align:${reading.alignment_score} Dir:${reading.tradeable_direction}`);
+      console.log(`[1B] Session:${ctx.session_quality} News:${ctx.news_risk} Bias:${ctx.context_bias}`);
 
-    let entry = { entry_quality:'D', tp1_rr:'0:0', summary:'Skipped — conditions not met' };
-    const shouldRunEntry = reading.alignment_score >= 55
-      && reading.tradeable_direction !== 'Wait'
-      && ctx.context_bias !== 'Avoid'
-      && ctx.news_risk !== 'High'
-      && ctx.session_quality !== 'Avoid';
+      let entry = { entry_quality:'D', tp1_rr:'0:0', summary:'Skipped — conditions not met' };
+      const shouldRunEntry = reading.alignment_score >= 55
+        && reading.tradeable_direction !== 'Wait'
+        && ctx.context_bias !== 'Avoid'
+        && ctx.news_risk !== 'High'
+        && ctx.session_quality !== 'Avoid';
 
-    if (shouldRunEntry) {
-      entry = await pass2(chartList, sym, reading, ctx, livePrice, key, tradeMode||'dayTrade');
-      console.log(`[Pass 2] Entry:${entry.entry_price} SL:${entry.sl_price} Quality:${entry.entry_quality}`);
+      if (shouldRunEntry) {
+        entry = await pass2(chartList, sym, reading, ctx, livePrice, key, tradeMode||'dayTrade');
+        console.log(`[Pass 2] Entry:${entry.entry_price} SL:${entry.sl_price} Quality:${entry.entry_quality}`);
+      }
+      result = await pass3(chartList, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode||'dayTrade');
     }
-
-    const result  = await pass3(chartList, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode||'dayTrade');
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
     console.log(`[Pass 3] ${result.verdict} Grade:${result.signal_grade} Conf:${result.confidence}% — ${elapsed}s`);
 
