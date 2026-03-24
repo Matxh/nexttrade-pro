@@ -162,12 +162,26 @@ function isWhitelisted(user) { return WHITELIST.has((user.email || '').toLowerCa
 // ─────────────────────────────────────────────
 // MIDDLEWARE
 // ─────────────────────────────────────────────
+
+// In-memory user cache — avoids hitting GitHub on every single request
+const _userCache = {};
+const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 async function authMiddleware(req, res, next) {
   const token   = (req.headers.authorization || '').replace('Bearer ', '').trim();
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Unauthorized — please log in' });
+
+  // Serve from user cache if fresh — skips GitHub entirely
+  const cached = _userCache[payload.userId];
+  if (cached && Date.now() - cached.ts < USER_CACHE_TTL) {
+    req.user = cached.user;
+    return next();
+  }
+
   const user = await getUserById(payload.userId);
   if (!user) return res.status(401).json({ error: 'Account not found' });
+  _userCache[payload.userId] = { user, ts: Date.now() };
   req.user = user;
   next();
 }
@@ -1003,7 +1017,7 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     const yTF    = TF_MAP_YAHOO[timeframe] || '15m';
     const yRange = TF_RANGE[timeframe] || '5d';
     const url    = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym||sym)}?interval=${yTF}&range=${yRange}`;
-    const r      = await fetch(url, { headers:{ 'User-Agent':'Mozilla/5.0' }, timeout:8000 });
+    const r      = await fetch(url, { headers:{ 'User-Agent':'Mozilla/5.0' }, timeout:5000 });
     const d      = await r.json();
     const result = d?.chart?.result?.[0];
     if (!result) throw new Error('No data');
@@ -1025,7 +1039,7 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     if (!tdKey) throw new Error('No key');
     const tdTF = TF_MAP_12[timeframe] || '15min';
     const url  = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}`;
-    const r    = await fetch(url, { timeout:8000 });
+    const r    = await fetch(url, { timeout:5000 });
     const d    = await r.json();
     if (d.status !== 'ok' || !d.values) throw new Error(d.message || 'No data');
     const candles = d.values.reverse().map(v => ({
@@ -1095,15 +1109,15 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`\n[LIVE] ═══ ${sym} ${tfs.join('+')} — ${tradeMode||'dayTrade'} — ${req.user.email} ═══`);
     const t0 = Date.now();
 
-    // Fire background fetches immediately with hard timeouts so they never hang
-    const correlatedPromise = withTimeout(fetchCorrelatedAssets(sym), 12000).catch(() => null);
-    const newsPromise       = withTimeout(fetchNewsSentiment(sym), 12000).catch(() => null);
-    const tradesPromise     = withTimeout(getTrades(), 8000).catch(() => []);
+    // Fire background fetches — capped tightly so they never block the response
+    const correlatedPromise = withTimeout(fetchCorrelatedAssets(sym), 8000).catch(() => null);
+    const newsPromise       = withTimeout(fetchNewsSentiment(sym), 8000).catch(() => null);
+    const tradesPromise     = withTimeout(getTrades(), 5000).catch(() => []);
 
     // ── STEP 1: Fetch OHLCV data in parallel ──────────────────────────────
     console.log(`[LIVE] Step 1: fetching OHLCV for ${tfs.join('+')}`);
     const ohlcvResults = await Promise.all(
-      tfs.map(tf => withTimeout(fetchOHLCV(sym, tf, 60), 10000).catch(() => null))
+      tfs.map(tf => withTimeout(fetchOHLCV(sym, tf, 60), 6000).catch(() => null))
     );
     const allTrades = await tradesPromise;
     console.log(`[LIVE] Step 1 done — ${ohlcvResults.filter(Boolean).length}/${tfs.length} TFs loaded in ${((Date.now()-t0)/1000).toFixed(1)}s`);
@@ -1219,8 +1233,16 @@ Return ONLY valid raw JSON (no markdown, no text outside JSON):
   "position_size": "1% risk"
 }`;
 
-  const dataBlock = chartTexts.map((t, i) => `=== TF ${i+1} ===\n${t}`).join('\n\n');
-  const userMsg = `Analyze ${sym} — ${tradeMode} signal\n${lp}\nSession: ${session}\n${ws}${edge ? '\n'+edge : ''}\n\n${dataBlock}`;
+  // Trim each TF to first 12 lines of header + last 20 candle rows to keep input small & fast
+  const trimTF = (t) => {
+    const lines = t.split('\n');
+    const headerEnd = lines.findIndex(l => l.startsWith('---') || l.includes('| Open')) + 1;
+    const header = lines.slice(0, Math.max(headerEnd, 8)).join('\n');
+    const rows   = lines.slice(headerEnd).slice(-20).join('\n');
+    return header + '\n' + rows;
+  };
+  const dataBlock = chartTexts.map((t, i) => `=== TF ${i+1} ===\n${trimTF(t)}`).join('\n\n');
+  const userMsg = `${sym} ${tradeMode} | ${lp} | ${session}${ws ? ' | '+ws : ''}${edge ? ' | '+edge : ''}\n\n${dataBlock}`;
 
   return claude(key, model, sys, [{ type:'text', text: userMsg }], tokens);
 }

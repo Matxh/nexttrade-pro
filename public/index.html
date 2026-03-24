@@ -2558,7 +2558,7 @@ function startLoading(count){
   $('passCount').textContent=count>1?`${count}-CHART + 4-PASS`:'4-PASS ENGINE';
   ['s1','s2','s3','s4','s5','s6'].forEach(s=>{$(s).className='step';});
   let i=0;if(stepTmr)clearInterval(stepTmr);
-  stepTmr=setInterval(()=>{if(i>0)$('s'+i).className='step done';if(i<6)$('s'+(i+1)).className='step on';i++;if(i>=6)clearInterval(stepTmr);},5000);
+  stepTmr=setInterval(()=>{if(i>0)$('s'+i).className='step done';if(i<6)$('s'+(i+1)).className='step on';i++;if(i>=6){$('s6').className='step on';}},7000);
 }
 function stopLoading(){
   if(stepTmr){clearInterval(stepTmr);stepTmr=null;}
