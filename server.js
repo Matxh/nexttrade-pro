@@ -1081,9 +1081,10 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     const t0 = Date.now();
 
     // Fetch all timeframes in parallel (also fetch correlated assets for ES/NQ/SPY/QQQ)
-    const [allTrades, correlatedAssets, ...ohlcvResults] = await Promise.all([
+    const [allTrades, correlatedAssets, newsSentiment, ...ohlcvResults] = await Promise.all([
       getTrades(),
       fetchCorrelatedAssets(sym).catch(() => null),
+      fetchNewsSentiment(sym).catch(() => null),
       ...tfs.map(tf => fetchOHLCV(sym, tf, 100).catch(() => null))
     ]);
 
@@ -1123,8 +1124,9 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
       const entry = await pass2Live(chartTexts, sym, reading, ctx, livePrice, key, mode, true);
       result      = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, entry, livePrice, mktCtx, winStats, key, mode, true, personalEdge);
     }
-    // Attach correlated assets to result
+    // Attach correlated assets and news sentiment to result
     if (correlatedAssets) result._correlatedAssets = correlatedAssets;
+    if (newsSentiment) result._newsSentiment = newsSentiment;
 
     // Save to journal
     if (result?.verdict && result.verdict !== 'WAIT') {
@@ -1136,7 +1138,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 
     const elapsed = ((Date.now()-t0)/1000).toFixed(1);
     console.log(`[LIVE] Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
-    res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: result._correlatedAssets || correlatedAssets });
+    res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: result._correlatedAssets || correlatedAssets, _newsSentiment: result._newsSentiment || newsSentiment });
 
   } catch(e) {
     console.error('[LIVE] Error:', e.message);
@@ -1526,6 +1528,199 @@ Return ONLY valid raw JSON: {"verdict":"BUY/SELL/WAIT","grade":"A+/A/B/C/D","ent
     console.error('[BACKTEST] Error:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─────────────────────────────────────────────
+// FEATURE 1: LIVE TRADE MONITOR
+// ─────────────────────────────────────────────
+app.get('/api/trade-monitor/:tradeId', authMiddleware, async (req, res) => {
+  const { tradeId } = req.params;
+  const symbol = req.query.symbol || 'ES1!';
+
+  try {
+    // Get trade from DB
+    const trades = await getTrades();
+    const trade = trades.find(t => t.id === tradeId);
+    if (!trade) return res.status(404).json({ error: 'Trade not found' });
+
+    // Fetch current live price (latest candle)
+    const tf = trade.timeframe || '15m';
+    const ohlcv = await fetchOHLCV(symbol, tf, 5);
+    if (!ohlcv || !ohlcv.candles.length) return res.status(400).json({ error: 'Could not fetch live price' });
+
+    const lastCandle = ohlcv.candles[ohlcv.candles.length - 1];
+    const currentPrice = parseFloat(lastCandle.close);
+
+    const entry = parseFloat(trade.entry);
+    const sl    = parseFloat(trade.sl);
+    const tp1   = parseFloat(trade.tp1);
+    const tp2   = parseFloat(trade.tp2) || null;
+
+    if (!entry || !sl || !tp1 || isNaN(entry) || isNaN(sl) || isNaN(tp1)) {
+      return res.json({ currentPrice, status: 'in_progress', pnlR: 0, action: 'hold', actionNote: 'Trade levels not available', percentToTP1: 0, percentToSL: 0 });
+    }
+
+    const isBuy = trade.verdict === 'BUY';
+    const slDist  = Math.abs(entry - sl);
+    const tp1Dist = Math.abs(tp1 - entry);
+
+    // P&L in R
+    const priceMoveRaw = isBuy ? currentPrice - entry : entry - currentPrice;
+    const pnlR = slDist > 0 ? parseFloat((priceMoveRaw / slDist).toFixed(2)) : 0;
+
+    // % moved toward TP1
+    const moveToTP1 = isBuy ? currentPrice - entry : entry - currentPrice;
+    const percentToTP1 = tp1Dist > 0 ? Math.max(0, Math.min(100, (moveToTP1 / tp1Dist) * 100)) : 0;
+
+    // % moved toward SL
+    const moveToSL = isBuy ? entry - currentPrice : currentPrice - entry;
+    const percentToSL = slDist > 0 ? Math.max(0, Math.min(100, (moveToSL / slDist) * 100)) : 0;
+
+    // Determine status and action
+    let status = 'in_progress';
+    let action = 'hold';
+    let actionNote = 'Hold — trade progressing normally';
+
+    const slHit  = isBuy ? currentPrice <= sl  : currentPrice >= sl;
+    const tp1Hit = isBuy ? currentPrice >= tp1 : currentPrice <= tp1;
+    const tp2Hit = tp2 && (isBuy ? currentPrice >= tp2 : currentPrice <= tp2);
+
+    if (slHit) {
+      status = 'sl_hit'; action = 'close'; actionNote = 'SL hit — close trade';
+    } else if (tp2Hit) {
+      status = 'tp2_hit'; action = 'trail_stop'; actionNote = 'TP2 hit — trail stop below last swing low';
+    } else if (tp1Hit) {
+      status = 'tp1_hit'; action = 'take_partial'; actionNote = 'TP1 hit — close 50%, move SL to BE';
+    } else if (percentToSL >= 90) {
+      status = 'in_progress'; action = 'caution'; actionNote = 'Price approaching SL — watch closely';
+    } else if (percentToTP1 >= 50) {
+      status = 'at_be'; action = 'move_to_be'; actionNote = 'Move SL to breakeven now';
+    }
+
+    res.json({ currentPrice, status, pnlR, action, actionNote, percentToTP1: Math.round(percentToTP1), percentToSL: Math.round(percentToSL), symbol, tradeId, entry, sl, tp1, tp2, verdict: trade.verdict });
+  } catch(e) {
+    console.error('[TradeMonitor] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// FEATURE 3: NEWS SENTIMENT
+// ─────────────────────────────────────────────
+async function fetchNewsSentiment(symbol) {
+  try {
+    const sym = symbol.replace('1!','').replace('/','').toUpperCase();
+    // Map futures/crypto to Yahoo Finance tickers
+    const symMap = { 'ES':'ES=F','NQ':'NQ=F','CL':'CL=F','GC':'GC=F','BTC':'BTC-USD','ETH':'ETH-USD' };
+    const yahooSym = symMap[sym] || sym;
+
+    const rssUrl = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(yahooSym)}&region=US&lang=en-US`;
+    const r = await fetch(rssUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 6000 });
+    if (!r.ok) throw new Error('RSS fetch failed');
+    const xml = await r.text();
+
+    // Parse headlines from RSS with regex
+    const titleMatches = xml.match(/<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<\/item>/g) || [];
+    const headlines = titleMatches.slice(0, 5).map(item => {
+      const m = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/);
+      return m ? m[1].trim() : '';
+    }).filter(Boolean);
+
+    // Also try plain title tags
+    if (!headlines.length) {
+      const plain = xml.match(/<title>(?!\s*<!\[CDATA\[)(.*?)<\/title>/g) || [];
+      headlines.push(...plain.slice(1, 6).map(t => t.replace(/<\/?title>/g,'').trim()).filter(h => h.length > 10));
+    }
+
+    if (!headlines.length) return { sentiment: 'Neutral', score: 50, headlines: [], note: 'No recent news found' };
+
+    // Score sentiment with Claude Haiku
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return { sentiment: 'Neutral', score: 50, headlines, note: 'API not configured' };
+
+    const sentResult = await claude(key, HAIKU,
+      `You are a financial news sentiment analyzer. Given headlines about a trading instrument, determine overall sentiment and return ONLY valid JSON.`,
+      [{ type: 'text', text: `Headlines for ${symbol}:\n${headlines.map((h,i) => `${i+1}. ${h}`).join('\n')}\n\nReturn JSON: {"sentiment":"Bullish/Bearish/Neutral","score":<0-100>,"note":"<1 sentence summary>"}` }],
+      200
+    );
+
+    return {
+      sentiment: sentResult.sentiment || 'Neutral',
+      score: sentResult.score || 50,
+      headlines: headlines.slice(0, 3),
+      note: sentResult.note || ''
+    };
+  } catch(e) {
+    return { sentiment: 'Neutral', score: 50, headlines: [], note: 'News unavailable' };
+  }
+}
+
+// ─────────────────────────────────────────────
+// FEATURE 4: AI POST-TRADE REVIEW
+// ─────────────────────────────────────────────
+app.post('/api/trade-review/:tradeId', authMiddleware, async (req, res) => {
+  const { tradeId } = req.params;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+
+  try {
+    const trades = await getTrades();
+    const trade = trades.find(t => t.id === tradeId);
+    if (!trade) return res.status(404).json({ error: 'Trade not found' });
+    if (!trade.outcome) return res.status(400).json({ error: 'Trade must have an outcome before review' });
+
+    // Fetch historical data around trade time
+    let ohlcvText = 'Historical data unavailable';
+    try {
+      const sym = (trade.symbol || 'ES1!').toUpperCase();
+      const tf = trade.timeframe || '15m';
+      const ohlcv = await fetchOHLCV(sym, tf, 50);
+      if (ohlcv) ohlcvText = ohlcvToText(ohlcv).substring(0, 2000);
+    } catch(e) {}
+
+    const review = await claude(key, SONNET,
+      `You are an elite trading coach reviewing a completed trade. Analyze the trade execution objectively. Return ONLY valid JSON.`,
+      [{ type: 'text', text: `Review this completed trade:
+Symbol: ${trade.symbol} | Timeframe: ${trade.timeframe} | Mode: ${trade.source || 'N/A'}
+Signal: ${trade.verdict} | Grade: ${trade.grade} | Confidence: ${trade.confidence}%
+Entry: ${trade.entry} | SL: ${trade.sl} | TP1: ${trade.tp1} | TP2: ${trade.tp2 || 'N/A'}
+Expected R:R: ${trade.rr_tp1} | Actual R:R: ${trade.actual_rr || 'N/A'}
+Outcome: ${trade.outcome.toUpperCase()} | Notes: ${trade.notes || 'None'}
+Opened: ${trade.timestamp} | Closed: ${trade.closed_at || 'N/A'}
+
+Recent OHLCV context:
+${ohlcvText}
+
+Grade the trade EXECUTION (not just the signal). Return JSON:
+{"executionGrade":"A/B/C/D","whatWorked":"<2-3 sentences>","whatWentWrong":"<2-3 sentences or none>","keyLesson":"<1 powerful lesson>","improvementTip":"<specific actionable tip for next time>"}` }],
+      600
+    );
+
+    // Save review to trade
+    const tradeIdx = trades.findIndex(t => t.id === tradeId);
+    if (tradeIdx !== -1) {
+      trades[tradeIdx].aiReview = { ...review, reviewedAt: new Date().toISOString() };
+      await saveTrades(trades);
+    }
+
+    res.json(review);
+  } catch(e) {
+    console.error('[TradeReview] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// FEATURE 7: BROKER INTEGRATION PLACEHOLDER
+// ─────────────────────────────────────────────
+app.post('/api/broker/execute', authMiddleware, async (req, res) => {
+  const { broker, symbol, direction, entry, sl, tp1, size } = req.body;
+  console.log('[BROKER] Order received:', { broker, symbol, direction, entry, sl, tp1, size, user: req.user.email });
+  res.json({
+    success: false,
+    message: 'Broker execution coming soon — order details logged',
+    order: req.body
+  });
 });
 
 app.get('/sitemap.xml', (req, res) => {

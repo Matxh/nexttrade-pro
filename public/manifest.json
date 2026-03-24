@@ -1,0 +1,13 @@
+{
+  "name": "PriceAction AI",
+  "short_name": "PriceAction",
+  "description": "AI-powered price action trading signals",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e17",
+  "theme_color": "#00e5b4",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

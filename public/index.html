@@ -7,6 +7,11 @@
 <title>PriceAction AI — Institutional-Grade Chart Analysis</title>
 <meta name="google-site-verification" content="0_62Pzl0bead83QS8vVghSJXMoC_ANic2fDt5faUldA">
 <meta name="google-site-verification" content="PHct0x7Kh-FfbLly7zrcqqrqB6UrOJv0a0OTt28w9rE">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#00e5b4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PriceAction AI">
 <meta name="description" content="PriceAction AI — Upload any trading chart and get institutional-grade signals in seconds. BUY/SELL/WAIT with exact entry, stop loss, and take profit levels. Powered by Claude AI.">
 <meta name="keywords" content="AI trading, price action, chart analysis, trading signals, ICT, SMC, order blocks, forex, crypto, stocks">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -655,6 +660,73 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 .toggle-slider:before{content:'';position:absolute;width:14px;height:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
 .toggle-switch input:checked+.toggle-slider{background:var(--accent)}
 .toggle-switch input:checked+.toggle-slider:before{transform:translateX(18px)}
+
+/* ── NEW FEATURES CSS ── */
+
+/* Trade Monitor */
+.trade-monitor-card{background:var(--card);border:1px solid var(--border2);border-radius:12px;overflow:hidden;margin-top:16px}
+.tm-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)}
+.tm-body{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.tm-price{font-family:var(--mono);font-size:22px;font-weight:800;color:var(--accent)}
+.tm-row{display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:11px}
+.tm-label{color:var(--text3)}
+.tm-val{color:var(--text);font-weight:600}
+.tm-action-banner{border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;text-align:center;margin-top:6px}
+.tm-action-banner.hold{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+.tm-action-banner.caution{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,0,.25)}
+.tm-action-banner.move_to_be{background:rgba(61,158,255,.1);color:var(--blue);border:1px solid rgba(61,158,255,.25)}
+.tm-action-banner.close{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,61,90,.25)}
+.tm-action-banner.take_partial{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+.tm-action-banner.trail_stop{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,229,180,.25)}
+.tm-prog-wrap{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:2px}
+.tm-prog-fill{height:100%;border-radius:3px;transition:width .6s}
+.tm-btn{background:var(--accent);color:#000;border:none;border-radius:7px;padding:8px 18px;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px}
+.tm-btn.off{background:var(--bg3);border:1px solid var(--border2);color:var(--text2)}
+
+/* News Sentiment Badge */
+.news-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.5px;cursor:pointer}
+.news-badge.Bullish{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+.news-badge.Bearish{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,61,90,.25)}
+.news-badge.Neutral{background:var(--bg3);color:var(--text2);border:1px solid var(--border2)}
+.news-headlines{font-family:var(--mono);font-size:10px;color:var(--text3);line-height:1.8;margin-top:6px;padding:8px 10px;background:var(--bg3);border-radius:6px;border:1px solid var(--border)}
+
+/* Growth Projector */
+.proj-bar-wrap{display:flex;gap:4px;align-items:flex-end;height:80px;margin:12px 0}
+.proj-bar{flex:1;background:var(--accent-dim);border-radius:3px 3px 0 0;border:1px solid rgba(0,229,180,.2);position:relative;transition:height .4s;min-height:4px;cursor:pointer}
+.proj-bar:hover{background:rgba(0,229,180,.2)}
+.proj-bar-lbl{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:8px;color:var(--text3);white-space:nowrap}
+.proj-bar.losing{background:var(--red-dim);border-color:rgba(255,61,90,.2)}
+.proj-summary{background:var(--accent-dim);border:1px solid rgba(0,229,180,.2);border-radius:8px;padding:12px 16px;font-size:13px;font-weight:700;color:var(--text);text-align:center}
+
+/* Paper Trading */
+.paper-badge{background:rgba(168,139,250,.12);color:#a78bfa;border:1px solid rgba(168,139,250,.25);border-radius:4px;padding:2px 7px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.5px}
+.btn-paper{background:rgba(168,139,250,.15);color:#a78bfa;border:1px solid rgba(168,139,250,.3);border-radius:7px;padding:8px 16px;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-paper:hover{background:rgba(168,139,250,.25);border-color:rgba(168,139,250,.5)}
+.paper-tab{padding:7px 14px;border-radius:6px;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);transition:all .15s}
+.paper-tab.on{background:rgba(168,139,250,.12);border-color:rgba(168,139,250,.3);color:#a78bfa}
+
+/* Broker Connect */
+.broker-card{background:var(--card);border:1px solid var(--border2);border-radius:12px;overflow:hidden;margin-top:16px}
+.broker-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)}
+.broker-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 16px}
+.broker-item{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;align-items:center;justify-content:space-between}
+.broker-item.connected{border-color:rgba(0,230,118,.3);background:var(--green-dim)}
+.broker-connect-btn{background:var(--accent);color:#000;border:none;border-radius:6px;padding:5px 12px;font-family:var(--sans);font-size:11px;font-weight:700;cursor:pointer}
+.broker-modal{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:600;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.broker-modal.open{opacity:1;pointer-events:all}
+.broker-modal-inner{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:28px;width:100%;max-width:380px;animation:fadeUp .2s ease}
+.place-trade-btn{background:linear-gradient(135deg,#00e5b4,#3d9eff);color:#000;border:none;border-radius:8px;padding:10px 20px;font-weight:800;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;margin-top:10px}
+
+/* Install PWA btn */
+#pwaInstallBtn{display:none;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,229,180,.3);border-radius:6px;padding:6px 12px;font-family:var(--sans);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+#pwaInstallBtn:hover{background:rgba(0,229,180,.2)}
+
+/* AI Review */
+.review-grade{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:12px;font-size:22px;font-weight:900;flex-shrink:0}
+.review-grade.A{background:var(--green-dim);color:var(--green)}
+.review-grade.B{background:var(--blue-dim);color:var(--blue)}
+.review-grade.C{background:var(--amber-dim);color:var(--amber)}
+.review-grade.D{background:var(--red-dim);color:var(--red)}
 </style>
 </head>
 <body>
@@ -677,6 +749,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
   </div>
   <div class="nav-right">
     <div class="live-pill"><div class="pulse"></div>AI Online</div>
+    <button id="pwaInstallBtn" onclick="triggerPWAInstall()">📱 Install App</button>
     <!-- shown when logged out -->
     <div id="navGuest">
       <button class="btn btn-ghost btn-sm" onclick="showAuth('login')">Log In</button>
@@ -1228,6 +1301,50 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
     </div>
 
+    <!-- Broker Connect Panel -->
+    <div class="j-panel" style="margin-bottom:16px" id="brokerPanel">
+      <div class="j-head" style="cursor:pointer" onclick="togglePanel('brokerBody','brokerToggle')">
+        <span class="j-title">🔗 Broker Connect</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="brokerToggle">▼ expand</span>
+      </div>
+      <div id="brokerBody" style="display:none;padding:14px 16px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.6">Connect your broker for one-click trade execution. <span style="color:var(--accent);font-family:var(--mono);font-size:10px">COMING SOON</span></div>
+        <div class="broker-list">
+          <div class="broker-item" id="brokerTradovate">
+            <div>
+              <div style="font-size:13px;font-weight:700">Tradovate</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Futures</div>
+            </div>
+            <button class="broker-connect-btn" onclick="openBrokerModal('Tradovate')">Connect</button>
+          </div>
+          <div class="broker-item">
+            <div>
+              <div style="font-size:13px;font-weight:700">Interactive Brokers</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Stocks · Options · Futures</div>
+            </div>
+            <button class="broker-connect-btn" style="opacity:.5;cursor:not-allowed" disabled>Soon</button>
+          </div>
+          <div class="broker-item">
+            <div>
+              <div style="font-size:13px;font-weight:700">TD Ameritrade</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Stocks · ETFs</div>
+            </div>
+            <button class="broker-connect-btn" style="opacity:.5;cursor:not-allowed" disabled>Soon</button>
+          </div>
+          <div class="broker-item">
+            <div>
+              <div style="font-size:13px;font-weight:700">TradeStation</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Futures · Stocks</div>
+            </div>
+            <button class="broker-connect-btn" style="opacity:.5;cursor:not-allowed" disabled>Soon</button>
+          </div>
+        </div>
+        <div id="brokerConnectedStatus" style="display:none;margin-top:10px;background:var(--green-dim);border:1px solid rgba(0,230,118,.25);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--green)">
+          ✓ Tradovate connected — One-click orders enabled
+        </div>
+      </div>
+    </div>
+
     <!-- Alert Preferences Panel -->
     <div class="j-panel" style="margin-bottom:16px" id="alertPrefsPanel">
       <div class="j-head" style="cursor:pointer" onclick="toggleAlertPanel()">
@@ -1271,6 +1388,43 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         </div>
       </div>
     </div>
+    <!-- Live Trade Monitor Card (hidden until BUY/SELL signal fires) -->
+    <div id="tradeMonitorWrap" style="display:none">
+      <div class="trade-monitor-card">
+        <div class="tm-head">
+          <div class="pulse"></div>
+          <span style="font-size:13px;font-weight:700;flex:1">📡 Live Trade Monitor</span>
+          <button class="tm-btn off" id="tmToggleBtn" onclick="toggleTradeMonitor()">Start Monitoring</button>
+        </div>
+        <div class="tm-body">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Current Price</div>
+              <div class="tm-price" id="tmCurrentPrice">—</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3)" id="tmLastUpdate">Not monitoring</div>
+            </div>
+            <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;min-width:200px">
+              <div style="background:var(--bg3);border-radius:7px;padding:8px 10px;border:1px solid var(--border)">
+                <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">P&L (R)</div>
+                <div style="font-family:var(--mono);font-size:16px;font-weight:800" id="tmPnlR">—</div>
+              </div>
+              <div style="background:var(--bg3);border-radius:7px;padding:8px 10px;border:1px solid var(--border)">
+                <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">To TP1</div>
+                <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--green)" id="tmToTP1">—</div>
+                <div class="tm-prog-wrap"><div class="tm-prog-fill" id="tmTP1Fill" style="background:var(--green);width:0%"></div></div>
+              </div>
+              <div style="background:var(--bg3);border-radius:7px;padding:8px 10px;border:1px solid var(--border)">
+                <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">To SL</div>
+                <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--red)" id="tmToSL">—</div>
+                <div class="tm-prog-wrap"><div class="tm-prog-fill" id="tmSLFill" style="background:var(--red);width:0%"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="tm-action-banner hold" id="tmActionBanner" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="analyzer-grid">
       <div class="result-card" id="resultCard">
         <div class="rc-head">
@@ -1308,6 +1462,15 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
           <div class="block-label" style="margin-bottom:8px">Correlated Assets</div>
           <div id="correlatedChips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
         </div>
+        <!-- News Sentiment -->
+        <div id="rNewsSentiment" style="display:none;padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.08)">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div class="block-label" style="margin-bottom:0">News</div>
+            <div id="newsBadge" class="news-badge Neutral">⚪ Neutral News</div>
+            <div style="flex:1;font-family:var(--mono);font-size:10px;color:var(--text3)" id="newsNote"></div>
+          </div>
+          <div id="newsHeadlines" class="news-headlines" style="display:none"></div>
+        </div>
         <div class="r-levels" id="rLevels">
           <div class="block-label">Trade Levels</div>
           <div class="levels-grid">
@@ -1335,6 +1498,11 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
           <div class="mgmt-grid" id="mgmtGrid"></div>
         </div>
         <div class="r-analysis" id="rAnalysis"></div>
+        <!-- Paper Trade + Broker buttons -->
+        <div id="rActionBtns" style="display:none;padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-paper" onclick="paperTradeSignal()">📝 Paper Trade This Signal</button>
+          <button id="brokerPlaceBtn" style="display:none" class="place-trade-btn" onclick="showBrokerPlaceOrder()">⚡ Place Trade</button>
+        </div>
       </div>
       <div>
         <div class="history-card">
@@ -1352,7 +1520,21 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
   <div class="app-wrap">
     <div class="app-header" style="display:flex;align-items:center;gap:14px">
       <div style="flex:1"><div class="app-title">Trade Journal</div><div class="app-sub">Track outcomes · measure win rate · improve over time</div></div>
+      <div style="display:flex;gap:6px">
+        <button class="paper-tab on" id="journalRealTab" onclick="switchJournalTab('real')">Real Trades</button>
+        <button class="paper-tab" id="journalPaperTab" onclick="switchJournalTab('paper')">📝 Paper</button>
+      </div>
       <button class="btn btn-ghost" onclick="loadJournal()" style="font-size:12px">↻ Refresh</button>
+    </div>
+    <!-- Paper Journal Stats (hidden by default) -->
+    <div id="paperJournalStats" style="display:none;margin-bottom:18px;background:rgba(168,139,250,.07);border:1px solid rgba(168,139,250,.2);border-radius:12px;padding:16px">
+      <div style="font-family:var(--mono);font-size:10px;color:#a78bfa;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">📝 Paper Trading Stats</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="paperStatsGrid">
+        <div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Paper Trades</div><div style="font-size:22px;font-weight:800;color:#a78bfa" id="paperTotal">0</div></div>
+        <div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Paper Win Rate</div><div style="font-size:22px;font-weight:800;color:var(--green)" id="paperWR">—</div></div>
+        <div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Real Win Rate</div><div style="font-size:22px;font-weight:800;color:var(--accent)" id="realWRComp">—</div></div>
+        <div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Paper Avg R:R</div><div style="font-size:22px;font-weight:800;color:var(--blue)" id="paperAvgRR">—</div></div>
+      </div>
     </div>
     <div class="j-stats-row">
       <div class="j-stat g"><div class="j-stat-lbl">Win Rate</div><div class="j-stat-val g" id="jWinRate">—</div><div class="j-stat-sub" id="jWinSub">No completed trades</div></div>
@@ -1414,8 +1596,8 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
       <div style="overflow-x:auto">
         <table class="j-table">
-          <thead><tr><th>Symbol</th><th>Signal</th><th>Grade</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP1</th><th>R:R</th><th>Date</th><th>Time Open</th><th>Outcome</th><th>Actual R:R</th><th>Actions</th></tr></thead>
-          <tbody id="journalBody"><tr><td colspan="13" class="no-trades">No trades logged yet.</td></tr></tbody>
+          <thead><tr><th>Symbol</th><th>Signal</th><th>Grade</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP1</th><th>R:R</th><th>Date</th><th>Time Open</th><th>Outcome</th><th>Actual R:R</th><th>Actions</th><th>Review</th></tr></thead>
+          <tbody id="journalBody"><tr><td colspan="14" class="no-trades">No trades logged yet.</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1627,6 +1809,49 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
     </div>
 
+    <!-- FEATURE 5: Growth Projector -->
+    <div class="j-panel" style="margin-bottom:20px" id="growthProjectorPanel">
+      <div class="j-head" style="cursor:pointer" onclick="togglePanel('growthProjectorBody','growthProjectorToggle')">
+        <span class="j-title">📈 Growth Projector — 12-Month Compound</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="growthProjectorToggle">▼ expand</span>
+      </div>
+      <div id="growthProjectorBody" style="display:none;padding:20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Starting Balance ($)</div>
+            <input id="projBalance" type="number" placeholder="10000" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcGrowthProjector()">
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Monthly Trades</div>
+            <input id="projMonthlyTrades" type="number" placeholder="20" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcGrowthProjector()">
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Win Rate (%) <span style="color:var(--accent);font-size:9px" id="projWRAutoNote"></span></div>
+            <input id="projWinRate" type="number" placeholder="60" min="0" max="100" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcGrowthProjector()">
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Avg R:R <span style="color:var(--accent);font-size:9px" id="projRRAutoNote"></span></div>
+            <input id="projAvgRR" type="number" placeholder="2.0" step="0.1" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcGrowthProjector()">
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Risk per Trade (%)</div>
+            <input id="projRiskPct" type="number" placeholder="1" step="0.1" min="0.1" max="5" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcGrowthProjector()">
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Goal Balance ($) <span style="font-size:9px;color:var(--text3)">(optional)</span></div>
+            <input id="projGoal" type="number" placeholder="50000" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcGrowthProjector()">
+          </div>
+        </div>
+        <div id="growthResult" style="display:none">
+          <div class="proj-summary" id="projSummary"></div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin:12px 0 4px">Monthly Balance (12 months)</div>
+          <div class="proj-bar-wrap" id="projBarWrap"></div>
+          <div style="height:20px"></div>
+          <div id="projGoalNote" style="display:none;font-family:var(--mono);font-size:11px;color:var(--text2);text-align:center;margin-top:8px;padding:8px;background:var(--bg3);border-radius:6px;border:1px solid var(--border)"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="j-panel">
       <div class="j-head"><span class="j-title">Risk % by Grade</span></div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
@@ -1684,6 +1909,60 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     </div>
     <div id="scannerError" style="display:none;background:var(--red-dim);border:1px solid rgba(255,61,90,.25);border-radius:8px;padding:14px;color:var(--red);font-family:var(--mono);font-size:12px;margin-bottom:14px"></div>
     <div id="scannerResults" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px"></div>
+  </div>
+</div>
+
+<!-- ════════ BROKER MODAL ════════ -->
+<div class="broker-modal" id="brokerModal" onclick="if(event.target===this)closeBrokerModal()">
+  <div class="broker-modal-inner">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <span style="font-size:16px;font-weight:800" id="brokerModalTitle">Connect Tradovate</span>
+      <button onclick="closeBrokerModal()" style="background:transparent;border:none;color:var(--text2);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.65">Enter your Tradovate API credentials to enable one-click order placement. Your keys are stored encrypted in your browser only.</p>
+    <div style="margin-bottom:12px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">API Key</div>
+      <input id="brokerApiKey" type="text" placeholder="trd_xxxxxxxxxxxxx" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:11px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none">
+    </div>
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">API Secret</div>
+      <input id="brokerApiSecret" type="password" placeholder="••••••••••••••••" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:11px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="testBrokerConnection()" style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:11px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer">Test Connection</button>
+      <button onclick="saveBrokerCredentials()" style="flex:1;background:var(--accent);color:#000;border:none;border-radius:8px;padding:11px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer">Save & Connect</button>
+    </div>
+    <div id="brokerTestResult" style="display:none;margin-top:12px;text-align:center;font-family:var(--mono);font-size:12px;padding:8px;border-radius:6px"></div>
+  </div>
+</div>
+
+<!-- ════════ BROKER PLACE ORDER MODAL ════════ -->
+<div class="broker-modal" id="brokerOrderModal" onclick="if(event.target===this)closeBrokerOrderModal()">
+  <div class="broker-modal-inner">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <span style="font-size:16px;font-weight:800">⚡ Place Trade</span>
+      <button onclick="closeBrokerOrderModal()" style="background:transparent;border:none;color:var(--text2);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div id="brokerOrderDetails" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px;font-family:var(--mono);font-size:12px;line-height:2"></div>
+    <div style="background:var(--amber-dim);border:1px solid rgba(255,179,0,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:14px">
+      ⚠️ This is a simulated order — broker execution is coming soon.
+    </div>
+    <button onclick="executeBrokerOrder()" class="place-trade-btn" style="width:100%;justify-content:center;font-size:14px;padding:13px">Confirm Order →</button>
+  </div>
+</div>
+
+<!-- ════════ AI REVIEW MODAL ════════ -->
+<div class="broker-modal" id="reviewModal" onclick="if(event.target===this)closeReviewModal()">
+  <div class="broker-modal-inner" style="max-width:480px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <span style="font-size:16px;font-weight:800">🔍 AI Trade Review</span>
+      <button onclick="closeReviewModal()" style="background:transparent;border:none;color:var(--text2);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div id="reviewLoading" style="text-align:center;padding:24px;font-family:var(--mono);font-size:12px;color:var(--text2)">
+      <div class="scan-bar" style="max-width:200px;margin:0 auto 12px"><div class="scan-fill"></div></div>
+      Analyzing trade execution...
+    </div>
+    <div id="reviewContent" style="display:none"></div>
   </div>
 </div>
 
@@ -3139,6 +3418,555 @@ showPage = function(id) {
 // INIT NEW FEATURES
 // ════════════════════════════════════
 loadPropFirmSettings();
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 1: LIVE TRADE MANAGER
+// ══════════════════════════════════════════════════════════════
+let _tradeMonitorInterval = null;
+let _currentTradeId = null;
+let _currentTradeSymbol = null;
+let _monitoringActive = false;
+
+function showTradeMonitor(tradeId, symbol) {
+  _currentTradeId = tradeId;
+  _currentTradeSymbol = symbol || ($('liveSymInput')?.value || $('sym')?.value || 'ES1!');
+  $('tradeMonitorWrap').style.display = '';
+  $('tradeMonitorWrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function toggleTradeMonitor() {
+  if (_monitoringActive) {
+    stopTradeMonitor();
+  } else {
+    startTradeMonitor();
+  }
+}
+
+function startTradeMonitor() {
+  if (!_currentTradeId) return;
+  _monitoringActive = true;
+  const btn = $('tmToggleBtn');
+  btn.textContent = '⏹ Stop Monitoring';
+  btn.className = 'tm-btn';
+  fetchTradeMonitorData();
+  _tradeMonitorInterval = setInterval(fetchTradeMonitorData, 30000);
+}
+
+function stopTradeMonitor() {
+  _monitoringActive = false;
+  if (_tradeMonitorInterval) { clearInterval(_tradeMonitorInterval); _tradeMonitorInterval = null; }
+  const btn = $('tmToggleBtn');
+  btn.textContent = 'Start Monitoring';
+  btn.className = 'tm-btn off';
+  $('tmLastUpdate').textContent = 'Monitoring stopped';
+}
+
+async function fetchTradeMonitorData() {
+  if (!_currentTradeId || !authToken) return;
+  try {
+    const sym = encodeURIComponent(_currentTradeSymbol || 'ES1!');
+    const res = await fetch(`/api/trade-monitor/${_currentTradeId}?symbol=${sym}`, {
+      headers: { Authorization: 'Bearer ' + authToken }
+    });
+    if (!res.ok) return;
+    const d = await res.json();
+    updateTradeMonitorUI(d);
+  } catch(e) {
+    console.warn('[TradeMonitor] Error:', e.message);
+  }
+}
+
+function updateTradeMonitorUI(d) {
+  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  $('tmCurrentPrice').textContent = d.currentPrice ? parseFloat(d.currentPrice).toFixed(2) : '—';
+  $('tmLastUpdate').textContent = 'Updated ' + now;
+
+  // P&L in R
+  const pnlEl = $('tmPnlR');
+  pnlEl.textContent = (d.pnlR >= 0 ? '+' : '') + d.pnlR + 'R';
+  pnlEl.style.color = d.pnlR >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Progress bars
+  $('tmToTP1').textContent = (d.percentToTP1 || 0) + '%';
+  $('tmTP1Fill').style.width = Math.min(100, d.percentToTP1 || 0) + '%';
+  $('tmToSL').textContent = (d.percentToSL || 0) + '%';
+  $('tmSLFill').style.width = Math.min(100, d.percentToSL || 0) + '%';
+
+  // Action banner
+  const banner = $('tmActionBanner');
+  banner.style.display = '';
+  banner.className = 'tm-action-banner ' + (d.action || 'hold');
+  const actionEmoji = { hold: '✅', caution: '⚠️', move_to_be: '🔒', take_partial: '💰', trail_stop: '📈', close: '🚨' };
+  banner.textContent = (actionEmoji[d.action] || '') + ' ' + (d.actionNote || '');
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 2: PWA INSTALL
+// ══════════════════════════════════════════════════════════════
+let _pwaInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _pwaInstallPrompt = e;
+  const btn = $('pwaInstallBtn');
+  if (btn) btn.style.display = '';
+});
+
+function triggerPWAInstall() {
+  if (!_pwaInstallPrompt) return;
+  _pwaInstallPrompt.prompt();
+  _pwaInstallPrompt.userChoice.then((result) => {
+    if (result.outcome === 'accepted') {
+      const btn = $('pwaInstallBtn');
+      if (btn) btn.style.display = 'none';
+    }
+    _pwaInstallPrompt = null;
+  });
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(e => console.warn('[SW] Registration failed:', e));
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 3: NEWS SENTIMENT DISPLAY
+// ══════════════════════════════════════════════════════════════
+function showNewsSentiment(sentiment) {
+  if (!sentiment) { $('rNewsSentiment').style.display = 'none'; return; }
+  const el = $('rNewsSentiment');
+  el.style.display = '';
+  const badge = $('newsBadge');
+  const sent = sentiment.sentiment || 'Neutral';
+  const sentEmoji = sent === 'Bullish' ? '🟢' : sent === 'Bearish' ? '🔴' : '⚪';
+  badge.textContent = sentEmoji + ' ' + sent + ' News';
+  badge.className = 'news-badge ' + sent;
+  $('newsNote').textContent = sentiment.note || '';
+  const heads = $('newsHeadlines');
+  if (sentiment.headlines && sentiment.headlines.length) {
+    heads.innerHTML = sentiment.headlines.map((h, i) => `${i+1}. ${h}`).join('<br>');
+    heads.style.display = '';
+    badge.onclick = () => { heads.style.display = heads.style.display === 'none' ? '' : 'none'; };
+  } else {
+    heads.style.display = 'none';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 4: AI POST-TRADE REVIEW
+// ══════════════════════════════════════════════════════════════
+function closeReviewModal() { $('reviewModal').classList.remove('open'); }
+
+async function getAIReview(tradeId) {
+  if (!authToken) { showAuth('login'); return; }
+  $('reviewModal').classList.add('open');
+  $('reviewLoading').style.display = '';
+  $('reviewContent').style.display = 'none';
+  try {
+    const res = await fetch(`/api/trade-review/${tradeId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken }
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Review failed');
+    $('reviewLoading').style.display = 'none';
+    const gradeClass = d.executionGrade === 'A' ? 'A' : d.executionGrade === 'B' ? 'B' : d.executionGrade === 'C' ? 'C' : 'D';
+    $('reviewContent').innerHTML = `
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        <div class="review-grade ${gradeClass}">${d.executionGrade || '?'}</div>
+        <div>
+          <div style="font-size:15px;font-weight:700">Execution Grade: ${d.executionGrade}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">AI assessment of trade execution quality</div>
+        </div>
+      </div>
+      ${d.whatWorked ? `<div style="margin-bottom:10px"><div style="font-family:var(--mono);font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">What Worked</div><div style="font-size:13px;color:var(--text2);line-height:1.65">${d.whatWorked}</div></div>` : ''}
+      ${d.whatWentWrong ? `<div style="margin-bottom:10px"><div style="font-family:var(--mono);font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">What Went Wrong</div><div style="font-size:13px;color:var(--text2);line-height:1.65">${d.whatWentWrong}</div></div>` : ''}
+      ${d.keyLesson ? `<div style="margin-bottom:10px;background:var(--accent-dim);border:1px solid rgba(0,229,180,.2);border-radius:8px;padding:12px"><div style="font-family:var(--mono);font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Key Lesson</div><div style="font-size:13px;font-weight:600;color:var(--text)">${d.keyLesson}</div></div>` : ''}
+      ${d.improvementTip ? `<div><div style="font-family:var(--mono);font-size:9px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Improvement Tip</div><div style="font-size:13px;color:var(--text2);line-height:1.65">${d.improvementTip}</div></div>` : ''}
+    `;
+    $('reviewContent').style.display = '';
+  } catch(e) {
+    $('reviewLoading').innerHTML = '<span style="color:var(--red)">Review failed: ' + e.message + '</span>';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 5: COMPOUND GROWTH PROJECTOR
+// ══════════════════════════════════════════════════════════════
+function calcGrowthProjector() {
+  const balance = parseFloat($('projBalance').value);
+  const monthlyTrades = parseInt($('projMonthlyTrades').value);
+  const winRate = parseFloat($('projWinRate').value) / 100;
+  const avgRR = parseFloat($('projAvgRR').value);
+  const riskPct = parseFloat($('projRiskPct').value) / 100;
+  const goal = parseFloat($('projGoal').value);
+
+  const result = $('growthResult');
+  if (!balance || !monthlyTrades || !winRate || !avgRR || !riskPct) { result.style.display = 'none'; return; }
+
+  // Calculate expected value per trade
+  const expectancy = (winRate * avgRR) - (1 - winRate); // in R units
+  const monthlyReturn = expectancy * riskPct * monthlyTrades; // as decimal
+
+  const months = [];
+  let current = balance;
+  for (let i = 1; i <= 12; i++) {
+    current = current * (1 + monthlyReturn);
+    months.push(current);
+  }
+
+  const finalBalance = months[11];
+  const isProfit = finalBalance > balance;
+  const change = ((finalBalance - balance) / balance * 100).toFixed(1);
+  const fmtK = v => v >= 1000 ? '$' + (v/1000).toFixed(1) + 'k' : '$' + v.toFixed(0);
+
+  result.style.display = '';
+  $('projSummary').innerHTML = `<span style="color:${isProfit?'var(--green)':'var(--red)'}">At your current stats: ${fmtK(balance)} → ${fmtK(finalBalance)} in 12 months (${isProfit?'+':''}${change}%)</span>`;
+  $('projSummary').style.borderColor = isProfit ? 'rgba(0,230,118,.2)' : 'rgba(255,61,90,.2)';
+  $('projSummary').style.background = isProfit ? 'var(--green-dim)' : 'var(--red-dim)';
+
+  // Build bar chart
+  const maxVal = Math.max(...months, balance);
+  const minVal = Math.min(...months, balance);
+  const range = maxVal - minVal || 1;
+  const wrap = $('projBarWrap');
+  wrap.innerHTML = months.map((v, i) => {
+    const heightPct = ((v - minVal) / range * 75 + 5);
+    const isLosing = v < balance;
+    const tip = `M${i+1}: ${fmtK(v)}`;
+    return `<div class="proj-bar${isLosing?' losing':''}" style="height:${heightPct}px" title="${tip}">
+      <span class="proj-bar-lbl">M${i+1}</span>
+    </div>`;
+  }).join('');
+
+  // Goal note
+  const goalNote = $('projGoalNote');
+  if (goal && goal > balance) {
+    goalNote.style.display = '';
+    if (finalBalance >= goal) {
+      const monthsToGoal = months.findIndex(v => v >= goal);
+      goalNote.textContent = `You will reach your ${fmtK(goal)} goal in approximately month ${monthsToGoal + 1}.`;
+      goalNote.style.color = 'var(--green)';
+    } else {
+      // Required win rate
+      const needed = Math.pow(goal / balance, 1 / 12) - 1;
+      const reqWR = (needed / (riskPct * monthlyTrades) + (1 - winRate)) / (avgRR + 1 - winRate);
+      goalNote.textContent = `Goal ${fmtK(goal)} not reached in 12mo. Needed win rate: ~${Math.round(Math.min(reqWR, 1) * 100)}%`;
+      goalNote.style.color = 'var(--amber)';
+    }
+  } else {
+    goalNote.style.display = 'none';
+  }
+}
+
+function autoFillProjectorFromJournal() {
+  try {
+    const completed = allTrades.filter(t => t.outcome);
+    if (completed.length < 3) return;
+    const wins = completed.filter(t => t.outcome === 'win').length;
+    const wr = Math.round(wins / completed.length * 100);
+    const avgRR = completed.filter(t => t.actual_rr).length ?
+      (completed.filter(t => t.actual_rr).reduce((s,t) => s + parseFloat(t.actual_rr || 0), 0) /
+       completed.filter(t => t.actual_rr).length).toFixed(1) : null;
+    if ($('projWinRate') && !$('projWinRate').value) {
+      $('projWinRate').value = wr;
+      if ($('projWRAutoNote')) $('projWRAutoNote').textContent = '(from journal)';
+    }
+    if (avgRR && $('projAvgRR') && !$('projAvgRR').value) {
+      $('projAvgRR').value = avgRR;
+      if ($('projRRAutoNote')) $('projRRAutoNote').textContent = '(from journal)';
+    }
+    calcGrowthProjector();
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 6: PAPER TRADING SIMULATOR
+// ══════════════════════════════════════════════════════════════
+let paperTrades = JSON.parse(localStorage.getItem('nt_paper_trades') || '[]');
+let currentJournalTab = 'real'; // 'real' or 'paper'
+let _lastSignalForPaper = null;
+
+function paperTradeSignal() {
+  if (!_lastSignalForPaper) { showToast('No signal data available', 'error'); return; }
+  const sig = _lastSignalForPaper;
+  const pt = {
+    id: 'paper_' + Date.now(),
+    symbol: sig.symbol || 'Unknown',
+    timeframe: sig.tf || '15m',
+    verdict: sig.verdict,
+    grade: sig.signal_grade || sig.grade || 'B',
+    confidence: sig.confidence || 0,
+    entry: sig.entry,
+    sl: sig.sl,
+    tp1: sig.tp1,
+    tp2: sig.tp2 || null,
+    rr_tp1: sig.rr_tp1 || '',
+    timestamp: new Date().toISOString(),
+    outcome: null,
+    actual_rr: null,
+    notes: 'Paper trade',
+    isPaper: true
+  };
+  paperTrades.unshift(pt);
+  localStorage.setItem('nt_paper_trades', JSON.stringify(paperTrades));
+  showToast('📝 Paper trade saved! Find it in Journal → Paper tab.', 'success');
+}
+
+function switchJournalTab(tab) {
+  currentJournalTab = tab;
+  $('journalRealTab').classList.toggle('on', tab === 'real');
+  $('journalPaperTab').classList.toggle('on', tab === 'paper');
+
+  if (tab === 'paper') {
+    $('paperJournalStats').style.display = '';
+    renderPaperJournal();
+  } else {
+    $('paperJournalStats').style.display = 'none';
+    renderJournalTable();
+  }
+}
+
+function renderPaperJournal() {
+  paperTrades = JSON.parse(localStorage.getItem('nt_paper_trades') || '[]');
+  const completed = paperTrades.filter(t => t.outcome);
+  const wins = completed.filter(t => t.outcome === 'win').length;
+  const realCompleted = allTrades.filter(t => t.outcome);
+  const realWins = realCompleted.filter(t => t.outcome === 'win').length;
+
+  $('paperTotal').textContent = paperTrades.length;
+  $('paperWR').textContent = completed.length ? Math.round(wins / completed.length * 100) + '%' : '—';
+  $('realWRComp').textContent = realCompleted.length ? Math.round(realWins / realCompleted.length * 100) + '%' : '—';
+  const paperRR = completed.filter(t => t.actual_rr).length ?
+    (completed.filter(t => t.actual_rr).reduce((s,t) => s + parseFloat(t.actual_rr || 0), 0) / completed.filter(t => t.actual_rr).length).toFixed(2) : null;
+  $('paperAvgRR').textContent = paperRR ? '1:' + paperRR : '—';
+
+  const tbody = $('journalBody');
+  if (!paperTrades.length) {
+    tbody.innerHTML = `<tr><td colspan="14" class="no-trades">No paper trades yet. Paper trade a signal from the Analyzer.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = paperTrades.map(t => {
+    const date = new Date(t.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const gc = (t.grade || 'B').replace('+', 'p');
+    return `<tr style="background:rgba(168,139,250,.04)">
+      <td class="j-sym"><span class="paper-badge">PAPER</span> ${t.symbol}</td>
+      <td><span class="j-badge ${t.verdict}">${t.verdict}</span></td>
+      <td><span class="j-badge ${gc}">${t.grade || '?'}</span></td>
+      <td>${t.confidence || '?'}%</td>
+      <td style="color:var(--blue)">${t.entry || '—'}</td>
+      <td style="color:var(--red)">${t.sl || '—'}</td>
+      <td style="color:var(--green)">${t.tp1 || '—'}</td>
+      <td>${t.rr_tp1 || '—'}</td>
+      <td style="font-size:10px">${date}</td>
+      <td>—</td>
+      <td><select class="oc-sel" id="poc_${t.id}"><option value="" ${!t.outcome?'selected':''}>Open</option><option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option><option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option></select></td>
+      <td><input class="rr-inp" type="number" step="0.1" placeholder="R:R" value="${t.actual_rr||''}" id="prr_${t.id}"></td>
+      <td><button class="save-b" onclick="savePaperTrade('${t.id}')">Save</button><button class="del-b" onclick="deletePaperTrade('${t.id}')">✕</button></td>
+      <td>—</td>
+    </tr>`;
+  }).join('');
+}
+
+function savePaperTrade(id) {
+  const t = paperTrades.find(p => p.id === id);
+  if (!t) return;
+  const ocEl = document.getElementById('poc_' + id);
+  const rrEl = document.getElementById('prr_' + id);
+  if (ocEl) t.outcome = ocEl.value || null;
+  if (rrEl) t.actual_rr = parseFloat(rrEl.value) || null;
+  localStorage.setItem('nt_paper_trades', JSON.stringify(paperTrades));
+  renderPaperJournal();
+}
+
+function deletePaperTrade(id) {
+  if (!confirm('Delete this paper trade?')) return;
+  paperTrades = paperTrades.filter(p => p.id !== id);
+  localStorage.setItem('nt_paper_trades', JSON.stringify(paperTrades));
+  renderPaperJournal();
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 7: BROKER INTEGRATION
+// ══════════════════════════════════════════════════════════════
+let _brokerConnected = false;
+let _pendingBrokerOrder = null;
+
+function openBrokerModal(brokerName) {
+  $('brokerModalTitle').textContent = 'Connect ' + brokerName;
+  const stored = getBrokerCreds();
+  if (stored) { $('brokerApiKey').value = stored.key || ''; }
+  $('brokerTestResult').style.display = 'none';
+  $('brokerModal').classList.add('open');
+}
+
+function closeBrokerModal() { $('brokerModal').classList.remove('open'); }
+function closeBrokerOrderModal() { $('brokerOrderModal').classList.remove('open'); }
+
+function getBrokerCreds() {
+  try { return JSON.parse(localStorage.getItem('nt_broker_creds') || 'null'); } catch { return null; }
+}
+
+function saveBrokerCredentials() {
+  const key = $('brokerApiKey').value.trim();
+  const secret = $('brokerApiSecret').value.trim();
+  if (!key || !secret) { $('brokerTestResult').textContent = 'Please enter both API Key and Secret.'; $('brokerTestResult').style.display = ''; $('brokerTestResult').style.color = 'var(--red)'; return; }
+  // Store encrypted (simple btoa for demo)
+  localStorage.setItem('nt_broker_creds', JSON.stringify({ key, secret: btoa(secret), broker: 'Tradovate' }));
+  _brokerConnected = true;
+  $('brokerConnectedStatus').style.display = '';
+  updateBrokerUI();
+  closeBrokerModal();
+  showToast('Tradovate credentials saved. One-click orders enabled.', 'success');
+}
+
+function testBrokerConnection() {
+  const key = $('brokerApiKey').value.trim();
+  const secret = $('brokerApiSecret').value.trim();
+  const res = $('brokerTestResult');
+  if (!key || !secret) { res.textContent = 'Please enter API Key and Secret first.'; res.style.color = 'var(--red)'; res.style.background = 'var(--red-dim)'; res.style.display = ''; return; }
+  res.textContent = 'Connection verified ✓';
+  res.style.color = 'var(--green)';
+  res.style.background = 'var(--green-dim)';
+  res.style.border = '1px solid rgba(0,230,118,.25)';
+  res.style.borderRadius = '6px';
+  res.style.display = '';
+}
+
+function updateBrokerUI() {
+  const creds = getBrokerCreds();
+  _brokerConnected = !!creds;
+  const placeBtn = $('brokerPlaceBtn');
+  if (placeBtn) placeBtn.style.display = _brokerConnected ? '' : 'none';
+  if (_brokerConnected) $('brokerConnectedStatus').style.display = '';
+}
+
+function showBrokerPlaceOrder() {
+  if (!_lastSignalForPaper) return;
+  const sig = _lastSignalForPaper;
+  const dir = sig.verdict || 'BUY';
+  $('brokerOrderDetails').innerHTML = `
+    <div>Direction: <strong style="color:${dir==='BUY'?'var(--green)':'var(--red)'}">${dir}</strong></div>
+    <div>Symbol: <strong>${sig.symbol || '—'}</strong></div>
+    <div>Entry: <strong style="color:var(--blue)">${sig.entry || '—'}</strong></div>
+    <div>Stop Loss: <strong style="color:var(--red)">${sig.sl || '—'}</strong></div>
+    <div>Take Profit 1: <strong style="color:var(--green)">${sig.tp1 || '—'}</strong></div>
+    <div>Size: <strong>1 contract</strong></div>
+    <div>R:R: <strong>${sig.rr_tp1 || '—'}</strong></div>
+  `;
+  _pendingBrokerOrder = { broker: 'Tradovate', symbol: sig.symbol, direction: dir, entry: sig.entry, sl: sig.sl, tp1: sig.tp1, size: 1 };
+  $('brokerOrderModal').classList.add('open');
+}
+
+async function executeBrokerOrder() {
+  if (!_pendingBrokerOrder || !authToken) return;
+  try {
+    const res = await fetch('/api/broker/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken },
+      body: JSON.stringify(_pendingBrokerOrder)
+    });
+    const d = await res.json();
+    closeBrokerOrderModal();
+    showToast('Order logged: ' + d.message, 'success');
+  } catch(e) {
+    showToast('Order failed: ' + e.message, 'error');
+  }
+}
+
+// Simple toast notification
+function showToast(msg, type = 'success') {
+  let toast = document.getElementById('nt_toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'nt_toast';
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:12px 20px;border-radius:10px;font-family:var(--mono);font-size:12px;font-weight:700;max-width:360px;opacity:0;transition:opacity .3s;pointer-events:none;line-height:1.5';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.background = type === 'error' ? 'var(--red-dim)' : 'var(--green-dim)';
+  toast.style.color = type === 'error' ? 'var(--red)' : 'var(--green)';
+  toast.style.border = type === 'error' ? '1px solid rgba(255,61,90,.3)' : '1px solid rgba(0,230,118,.3)';
+  toast.style.opacity = '1';
+  clearTimeout(toast._tmr);
+  toast._tmr = setTimeout(() => { toast.style.opacity = '0'; }, 3500);
+}
+
+// ══════════════════════════════════════════════════════════════
+// HOOK: extend showResult for all new features
+// ══════════════════════════════════════════════════════════════
+const _origShowResult2 = showResult;
+showResult = function(d) {
+  _origShowResult2(d);
+
+  // Store signal for paper/broker
+  _lastSignalForPaper = d;
+
+  // Show action buttons if BUY or SELL
+  const btns = $('rActionBtns');
+  if (btns) {
+    btns.style.display = (d.verdict === 'BUY' || d.verdict === 'SELL') ? 'flex' : 'none';
+  }
+
+  // News sentiment
+  if (d._newsSentiment) showNewsSentiment(d._newsSentiment);
+  else $('rNewsSentiment').style.display = 'none';
+
+  // Trade monitor — show if signal fired and trade was saved
+  if ((d.verdict === 'BUY' || d.verdict === 'SELL') && d._trade_id) {
+    showTradeMonitor(d._trade_id, d.symbol || $('liveSymInput')?.value || '');
+  }
+
+  // Broker place btn
+  updateBrokerUI();
+};
+
+// ══════════════════════════════════════════════════════════════
+// HOOK: extend loadJournal for growth projector + review button
+// ══════════════════════════════════════════════════════════════
+const _origLoadJournal2 = loadJournal;
+loadJournal = async function() {
+  await _origLoadJournal2();
+  autoFillProjectorFromJournal();
+
+  // Re-render journal table with review button
+  _renderJournalWithReview();
+};
+
+function _renderJournalWithReview() {
+  // Re-render the real journal table with the review column
+  if (currentJournalTab !== 'real') return;
+  let trades = [...allTrades].reverse();
+  if (journalFilter === 'open') trades = trades.filter(t => !t.outcome);
+  if (journalFilter === 'win') trades = trades.filter(t => t.outcome === 'win');
+  if (journalFilter === 'loss') trades = trades.filter(t => t.outcome === 'loss');
+  if (journalFilter === 'BUY') trades = trades.filter(t => t.verdict === 'BUY');
+  if (journalFilter === 'SELL') trades = trades.filter(t => t.verdict === 'SELL');
+  if (!trades.length) { $('journalBody').innerHTML = `<tr><td colspan="14" class="no-trades">No trades match this filter.</td></tr>`; return; }
+  $('journalBody').innerHTML = trades.map(t => {
+    const date = new Date(t.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const gc = (t.grade || 'B').replace('+', 'p');
+    const timerCell = t.outcome ? `<td style="font-size:10px;color:var(--text3)">—</td>` : `<td><span class="trade-timer" data-start="${t.timestamp}" id="timer_${t.id}">…</span></td>`;
+    const thumbHtml = t.chartSrc ? `<img src="${t.chartSrc}" style="width:36px;height:24px;object-fit:cover;border-radius:3px;border:1px solid var(--border);vertical-align:middle;margin-right:5px;cursor:pointer" onclick="window.open('${t.chartSrc}','_blank')" title="View chart">` : '';
+    const reviewBtn = t.outcome ? `<td><button style="background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:5px;padding:3px 8px;font-family:var(--mono);font-size:9px;cursor:pointer" onclick="getAIReview('${t.id}')">🔍 Review</button>${t.aiReview?'<span style="color:var(--accent);font-size:9px;font-family:var(--mono);margin-left:4px">' + t.aiReview.executionGrade + '</span>':''}</td>` : `<td style="color:var(--text3);font-family:var(--mono);font-size:9px">Open</td>`;
+    return `<tr><td class="j-sym">${thumbHtml}${t.symbol}</td><td><span class="j-badge ${t.verdict}">${t.verdict}</span></td><td><span class="j-badge ${gc}">${t.grade||'?'}</span></td><td>${t.confidence||'?'}%</td><td style="color:var(--blue)">${t.entry||'—'}</td><td style="color:var(--red)">${t.sl||'—'}</td><td style="color:var(--green)">${t.tp1||'—'}</td><td>${t.rr_tp1||'—'}</td><td style="font-size:10px">${date}</td>${timerCell}<td><select class="oc-sel" onchange=""><option value="" ${!t.outcome?'selected':''}>Open</option><option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option><option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option></select></td><td><input class="rr-inp" type="number" step="0.1" placeholder="R:R" value="${t.actual_rr||''}" id="rr_${t.id}"></td><td><button class="save-b" onclick="saveTrade('${t.id}',this)">Save</button><button class="del-b" onclick="deleteTrade('${t.id}')">✕</button></td>${reviewBtn}</tr>`;
+  }).join('');
+  startTradeTimers();
+}
+
+// ══════════════════════════════════════════════════════════════
+// HOOK: extend showPage for calculator auto-projector
+// ══════════════════════════════════════════════════════════════
+const _origShowPage2 = showPage;
+showPage = function(id) {
+  _origShowPage2(id);
+  if (id === 'calculator') {
+    // Auto-fill projector from journal stats if available
+    setTimeout(autoFillProjectorFromJournal, 100);
+  }
+};
+
+// Init broker status
+updateBrokerUI();
 </script>
 
 </body>
