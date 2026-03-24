@@ -1098,14 +1098,29 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
     </div>
 
+    <!-- 📡 LIVE ANALYSIS BAR -->
+    <div style="background:linear-gradient(135deg,rgba(0,229,180,.06),rgba(61,158,255,.06));border:1px solid rgba(0,229,180,.25);border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:2px">📡 Analyze Live — No Screenshot Needed</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Pulls real-time candle data automatically · ES1!, NQ1!, BTC/USD, EUR/USD, SPY...</div>
+      </div>
+      <input id="liveSymInput" type="text" placeholder="ES1!" maxlength="12"
+        style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;font-family:var(--mono);outline:none;width:120px;text-transform:uppercase"
+        oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')analyzeLive()">
+      <button onclick="analyzeLive()" id="liveBtn" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Analyze Live
+      </button>
+    </div>
+
     <div class="analyze-bar">
       <div class="analyze-info">
         <strong id="analyze-status">Upload at least 1 chart to begin</strong>
-        <span id="analyze-sub">Add multiple timeframes for higher accuracy</span>
+        <span id="analyze-sub">Or use Analyze Live above — no screenshot needed</span>
       </div>
       <button class="btn-analyze-main" id="analyzeBtn" onclick="runAnalysis()" disabled>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M8 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Analyze Charts
+        Analyze Screenshots
       </button>
     </div>
     <div class="paste-row"><span class="kbd">Ctrl+V</span><span>paste chart to slot 1 · or drag & drop onto any slot</span></div>
@@ -1998,6 +2013,38 @@ function showResult(d){
 }
 
 // ── ANALYZE ──
+async function analyzeLive(){
+  if(!currentUser){showAuth('login');return;}
+  const sym=($('liveSymInput').value||'ES1!').trim().toUpperCase();
+  const btn=$('liveBtn');
+  btn.disabled=true; btn.textContent='Fetching live data...';
+  startLoading(1);
+  try{
+    const tfs = tradeMode==='scalp'?['15m','5m','1m']:tradeMode==='swing'?['1D','4H','1H']:['4H','1H','15m'];
+    const res=await fetch('/api/analyze-live',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
+      body:JSON.stringify({symbol:sym,timeframes:tfs,tradeMode})
+    });
+    const d=await res.json();
+    if(!res.ok||d.error){stopLoading();showToast('⚠️ '+(d.error||'Live fetch failed'),'error');btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Analyze Live';return;}
+    // store for calc autofill
+    localStorage.setItem('nt_last_analysis',JSON.stringify({symbol:sym,verdict:d.verdict,entry:d.entry,sl:d.sl,tp1:d.tp1,grade:d.signal_grade}));
+    // add to history
+    analysisHistory.unshift({...d,symbol:sym,tf:tfs[tfs.length-1],thumbSrc:null,source:'live'});
+    if(analysisHistory.length>8)analysisHistory.pop();
+    $('histCount').textContent=analysisHistory.length+' chart'+(analysisHistory.length!==1?'s':'');
+    $('histList').innerHTML=analysisHistory.map((h,i)=>{
+      const t=new Date(Date.now()-i*60000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      return `<div class="hist-item" onclick="showResult(analysisHistory[${i}])"><div class="hist-thumb" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3)">${h.source==='live'?'📡':'📷'}</div><div class="hist-info"><div class="hist-sym">${h.symbol} · ${h.tf}${h.signal_grade?' · '+h.signal_grade:''}</div><div class="hist-time">${t} · ${h.confidence||'?'}% · ${h.source==='live'?'Live':'Screenshot'}</div></div><div class="hist-v ${h.verdict||'WAIT'}">${h.verdict||'?'}</div></div>`;
+    }).join('');
+    stopLoading(); showResult(d);
+    // Update sym input
+    if($('sym'))$('sym').value=sym;
+  }catch(e){stopLoading();showToast('⚠️ '+e.message,'error');}
+  finally{btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Analyze Live';}
+}
+
 async function runAnalysis(){
   const chartList=charts.filter(Boolean);
   if(!chartList.length)return;

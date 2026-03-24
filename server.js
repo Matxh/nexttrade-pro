@@ -846,6 +846,254 @@ app.post('/api/alerts/preferences', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
+// ─────────────────────────────────────────────
+// LIVE OHLCV DATA FETCHER
+// ─────────────────────────────────────────────
+const FUTURES_MAP = {
+  'ES1!':'ES=F','ES':'ES=F','NQ1!':'NQ=F','NQ':'NQ=F',
+  'YM1!':'YM=F','YM':'YM=F','RTY1!':'RTY=F','CL1!':'CL=F',
+  'GC1!':'GC=F','SI1!':'SI=F','NG1!':'NG=F','ZB1!':'ZB=F'
+};
+const TF_MAP_YAHOO = { '1m':'1m','5m':'5m','15m':'15m','30m':'30m','1H':'1h','4H':'1h','1D':'1d','1W':'1wk' };
+const TF_MAP_12    = { '1m':'1min','5m':'5min','15m':'15min','30m':'30min','1H':'1h','4H':'4h','1D':'1day','1W':'1week' };
+const TF_RANGE     = { '1m':'1d','5m':'2d','15m':'5d','30m':'5d','1H':'1mo','4H':'3mo','1D':'1y','1W':'5y' };
+
+async function fetchOHLCV(symbol, timeframe, bars=100) {
+  const sym = symbol.toUpperCase().trim();
+  const yahooSym = FUTURES_MAP[sym];
+
+  // Try Yahoo Finance first (futures + stocks)
+  try {
+    const yTF    = TF_MAP_YAHOO[timeframe] || '15m';
+    const yRange = TF_RANGE[timeframe] || '5d';
+    const url    = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym||sym)}?interval=${yTF}&range=${yRange}`;
+    const r      = await fetch(url, { headers:{ 'User-Agent':'Mozilla/5.0' }, timeout:8000 });
+    const d      = await r.json();
+    const result = d?.chart?.result?.[0];
+    if (!result) throw new Error('No data');
+    const ts   = result.timestamp || [];
+    const q    = result.indicators?.quote?.[0] || {};
+    const candles = ts.map((t,i) => ({
+      datetime: new Date(t*1000).toISOString().replace('T',' ').substring(0,16),
+      open: q.open?.[i]?.toFixed(2), high: q.high?.[i]?.toFixed(2),
+      low:  q.low?.[i]?.toFixed(2),  close: q.close?.[i]?.toFixed(2),
+      volume: q.volume?.[i] || 0
+    })).filter(c => c.open && c.close);
+    if (candles.length < 10) throw new Error('Not enough candles');
+    return { candles: candles.slice(-bars), source:'Yahoo', symbol: yahooSym||sym, tf: timeframe };
+  } catch {}
+
+  // Fallback: TwelveData (stocks/forex/crypto)
+  try {
+    const tdKey = process.env.TWELVE_DATA_KEY;
+    if (!tdKey) throw new Error('No key');
+    const tdTF = TF_MAP_12[timeframe] || '15min';
+    const url  = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}`;
+    const r    = await fetch(url, { timeout:8000 });
+    const d    = await r.json();
+    if (d.status !== 'ok' || !d.values) throw new Error(d.message || 'No data');
+    const candles = d.values.reverse().map(v => ({
+      datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
+    }));
+    return { candles, source:'TwelveData', symbol:sym, tf: timeframe };
+  } catch {}
+
+  return null;
+}
+
+function ohlcvToText(data) {
+  if (!data) return 'No data available';
+  const c = data.candles;
+  const last = c[c.length-1];
+  const prev = c[c.length-2];
+  const avgVol = c.slice(-20).reduce((s,x)=>s+(+x.volume||0),0)/20;
+  const lastVol = +last?.volume||0;
+  const volNote = lastVol > avgVol*1.5 ? 'HIGH VOLUME' : lastVol < avgVol*0.5 ? 'LOW VOLUME' : 'AVERAGE VOLUME';
+
+  // Calculate basic EMAs
+  const closes = c.map(x=>+x.close);
+  const ema = (arr,p) => arr.reduce((a,v,i)=>i===0?[v]:[...a,v*(2/(p+1))+a[i-1]*(1-2/(p+1))],[]);
+  const ema20 = ema(closes,20); const ema50 = ema(closes,50);
+  const e20 = ema20[ema20.length-1]?.toFixed(2); const e50 = ema50[ema50.length-1]?.toFixed(2);
+
+  // Swing highs/lows
+  const highs = c.map(x=>+x.high); const lows = c.map(x=>+x.low);
+  const swingH = Math.max(...highs.slice(-20)).toFixed(2);
+  const swingL = Math.min(...lows.slice(-20)).toFixed(2);
+
+  const header = `LIVE ${data.tf} DATA — ${data.symbol} (${c.length} candles, source: ${data.source})
+Current Price: ${last?.close} | Prev Close: ${prev?.close}
+EMA20: ${e20} | EMA50: ${e50}
+20-bar Swing High: ${swingH} | Swing Low: ${swingL}
+Last Candle Volume: ${volNote} (${lastVol.toLocaleString()} vs avg ${Math.round(avgVol).toLocaleString()})
+
+Recent candles (newest last):
+Datetime            | Open    | High    | Low     | Close   | Volume
+`;
+  const rows = c.slice(-40).map(x=>
+    `${x.datetime} | ${String(x.open).padStart(7)} | ${String(x.high).padStart(7)} | ${String(x.low).padStart(7)} | ${String(x.close).padStart(7)} | ${String(x.volume).padStart(8)}`
+  ).join('\n');
+  return header + rows;
+}
+
+// ─────────────────────────────────────────────
+// ANALYZE LIVE ENDPOINT
+// ─────────────────────────────────────────────
+app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
+  const { symbol, timeframes, tradeMode } = req.body;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key)    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+  if (!symbol) return res.status(400).json({ error: 'Symbol required' });
+
+  const tfs = timeframes || (tradeMode==='scalp' ? ['15m','5m','1m'] : tradeMode==='swing' ? ['1D','4H','1H'] : ['4H','1H','15m']);
+  const sym = symbol.toUpperCase().trim();
+
+  try {
+    console.log(`\n[LIVE] ═══ ${sym} ${tfs.join('+')} — ${tradeMode||'dayTrade'} — ${req.user.email} ═══`);
+    const t0 = Date.now();
+
+    // Fetch all timeframes in parallel
+    const [allTrades, ...ohlcvResults] = await Promise.all([
+      getTrades(),
+      ...tfs.map(tf => fetchOHLCV(sym, tf, 100).catch(() => null))
+    ]);
+
+    const available = ohlcvResults.filter(Boolean);
+    if (!available.length) return res.status(400).json({ error: `Could not fetch live data for ${sym}. Try: ES1!, NQ1!, BTC/USD, EUR/USD, SPY, AAPL` });
+
+    const livePrice  = { price: available[0].candles.slice(-1)[0]?.close, source: available[0].source };
+    const winStats   = getWinStats(allTrades);
+    const mktCtx     = getMarketContext(sym);
+    const mode       = tradeMode || 'dayTrade';
+
+    // Build text-based chart data for each TF
+    const chartTexts = available.map(d => ohlcvToText(d));
+
+    let result;
+    if (mode === 'scalp') {
+      result = await scalpFastLive(chartTexts, sym, livePrice, mktCtx, key);
+    } else {
+      const [reading, ctx] = await Promise.all([
+        pass1ALive(chartTexts, sym, key, mode),
+        pass1B([], sym, livePrice, mktCtx, winStats, key, mode)
+      ]);
+      const entry = await pass2Live(chartTexts, sym, reading, ctx, livePrice, key, mode);
+      result      = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, entry, livePrice, mktCtx, winStats, key, mode);
+    }
+
+    // Save to journal
+    if (result?.verdict && result.verdict !== 'WAIT') {
+      const trades  = allTrades || [];
+      const tradeId = Date.now().toString();
+      trades.push({ id:tradeId, symbol:sym, timeframe:tfs[tfs.length-1], verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null, userId:req.user.id, notes:'', source:'live', chartSrc:null });
+      await saveTrades(trades);
+    }
+
+    const elapsed = ((Date.now()-t0)/1000).toFixed(1);
+    console.log(`[LIVE] Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
+    res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf) });
+
+  } catch(e) {
+    console.error('[LIVE] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Live-data versions of pass1A, pass2, pass3 (text-based, no image)
+async function pass1ALive(chartTexts, sym, key, tradeMode) {
+  const { p1a, tokens } = getModels(tradeMode);
+  const sys = `You are an ICT/SMC chart reading machine. You receive LIVE OHLCV data tables instead of chart images. Perform the same objective analysis.
+
+DEFINITIONS:
+- Order Block (OB): LAST up-candle before strong bearish displacement, or LAST down-candle before strong bullish displacement.
+- Fair Value Gap (FVG): 3-candle pattern — candle 1's high doesn't overlap candle 3's low (bullish FVG).
+- BOS: Price closes beyond most recent swing high (bullish) or swing low (bearish).
+- CHOCH: First BOS AGAINST current trend.
+- Liquidity: BSL = equal highs above. SSL = equal lows below.
+- Premium: Above 50% equilibrium. Discount: Below 50% equilibrium.
+
+Analyze the OHLCV tables carefully. Identify swing highs/lows, structure, OBs, FVGs from the price data.
+
+Return ONLY valid raw JSON:
+{"timeframes":[${chartTexts.map((_,i)=>`{"chart_index":${i+1},"trend":"Bullish/Bearish/Sideways","structure":"HH+HL/LH+LL/Ranging","swing_high":"<price>","swing_low":"<price>","last_bos":"<price and direction>","last_choch":"<price or None>","key_ob":{"type":"Bullish/Bearish/None","zone":"<low>-<high>","fresh":true},"fvg":{"type":"Bullish/Bearish/None","range":"<low>-<high>"},"liquidity":{"bsl":"<price>","ssl":"<price>"},"bias":"Bullish/Bearish/Neutral"}`).join(',')}],
+"htf_bias":"Bullish/Bearish/Neutral","mtf_alignment":"Perfect Bull/Perfect Bear/Partial/Mixed/Conflicting",
+"alignment_score":<0-100>,"tradeable_direction":"Long/Short/Wait",
+"current_price":"<from data>","price_position":"Premium/Discount/Equilibrium",
+"htf_support":"<price>","htf_resistance":"<price>","liquidity_target":"<next likely grab>",
+"key_levels":[{"price":"<>","type":"Resistance/Support/OB/FVG","strength":"Major/Minor","reason":"<>"}],
+"volume_analysis":{"volume_trend":"Increasing/Decreasing/Flat","volume_confirms_move":true,"volume_note":"<>"},
+"at_key_level":true,"nearest_key_level":"<price and type>",
+"reading_confidence":<0-100>,
+"summary":"<5 sentences: HTF bias, structure, OB/FVG, liquidity, setup quality>"}`;
+  const content = [{ type:'text', text: chartTexts.map((t,i)=>`=== CHART ${i+1} ===\n${t}`).join('\n\n') + `\n\nAnalyze ${sym} from this live data.` }];
+  return claude(key, p1a, sys, content, tokens.p1a);
+}
+
+async function pass2Live(chartTexts, sym, reading, ctx, livePrice, key, tradeMode) {
+  const { p2, tokens } = getModels(tradeMode);
+  const lp  = livePrice ? `Live price: $${livePrice.price}` : 'Live price: N/A';
+  const dir = reading.tradeable_direction;
+  const sys = `You are an elite ICT entry specialist. Find the SINGLE best entry setup at institutional price levels from live OHLCV data.
+
+ENTRY HIERARCHY: OB+FVG confluence=A+, Fresh OB at HTF level=A, FVG fill=A, Key S/R=B, Other=C/D
+STOP LOSS: Below OB low (longs) or above OB high (shorts). Min 1:2.5 R:R.
+
+Return ONLY valid raw JSON:
+{"entry_type":"Limit/Stop-Limit/Market/Wait","entry_price":"<exact>","entry_zone":"<low>-<high>",
+"entry_trigger":"<specific condition>","entry_quality":"A+/A/B/C/D",
+"sl_price":"<exact>","sl_reason":"<structural>","sl_pct":"<%>",
+"tp1_price":"<exact>","tp1_reason":"<>","tp1_rr":"1:<X.X>",
+"tp2_price":"<exact>","tp2_rr":"1:<X.X>",
+"tp3_price":"<exact>","tp3_rr":"1:<X.X>",
+"invalidation":"<price>","summary":"<3 sentences>"}`;
+  return claude(key, p2, sys, [{ type:'text', text:`${sym} — Find best ${dir} entry.\n${lp}\nHTF bias: ${reading.htf_bias} | Alignment: ${reading.alignment_score}/100\nOB: ${JSON.stringify(reading.timeframes?.[0]?.key_ob)}\nKey levels: ${JSON.stringify(reading.key_levels?.slice(0,5))}\nContext: ${ctx.context_bias} | Session: ${ctx.session_quality}\n\nLIVE DATA:\n${chartTexts[0]?.substring(0,2000)}` }], tokens.p2);
+}
+
+async function pass3Live(chartTexts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode) {
+  const lp = livePrice ? `Live: $${livePrice.price}` : 'Live: N/A';
+  const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
+  const modeCtx = tradeMode==='scalp'
+    ? 'TRADE MODE: SCALP — Tight SL/TP. 2–15 mins. 1:1.5+ R:R. NY open only.'
+    : tradeMode==='swing'
+    ? 'TRADE MODE: SWING — Wide SL/TP. 1–5 days. 1:3+ R:R.'
+    : `TRADE MODE: DAY TRADE — 30 mins–3 hrs. 1:2.5+ R:R. Best 9:30-11:30am EST. Volume required. Key levels only.`;
+  const { p3, tokens } = getModels(tradeMode);
+  const sys = `You are the Chief Trading Officer. Make FINAL trading decision from live OHLCV data analysis. Apply 12 quality gates strictly.
+${modeCtx}
+GATES: G1:alignment<65→WAIT G2:direction=Wait→WAIT G3:session Poor/Avoid→WAIT G4:news High→WAIT G5:day risk High→WAIT G6:entry C/D→WAIT G7:rr<1:2.5→WAIT G8:obstacle to TP1→WAIT G9:Premium+Long→WAIT G10:Discount+Short→WAIT G11:no trigger→WAIT G12:context Avoid→WAIT G13:no volume spike→WAIT G14:middle of range→WAIT G15:dead zone+grade<A→WAIT
+
+Return ONLY valid raw JSON:
+{"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A+/A/B/C/D",
+"gates_passed":["G1 ✓"],"gates_failed":["G8 ✗ — reason"],
+"wait_reason":"<if WAIT>","market_bias":"Strongly Bullish/Bullish/Neutral/Bearish/Strongly Bearish",
+"summary":"<10 sentences: bias, structure, SMC, gates, session, entry, SL/TP, management>",
+"entry":"<exact>","entry_trigger":"<confirmation>","entry_zone":"<low>-<high>",
+"sl":"<exact>","sl_reason":"<>","tp1":"<exact>","tp1_reason":"<>","tp2":"<exact>","tp3":"<exact>",
+"rr_tp1":"1:<X.X>","rr_tp2":"1:<X.X>",
+"confluences":["<1>","<2>","<3>","<4>","<5>"],
+"key_levels":{"major_resistance":"<>","major_support":"<>","equilibrium":"<>"},
+"factors":[{"name":"HTF Trend","score":<0-100>,"note":"<>"},{"name":"Entry Quality","score":<0-100>,"note":"<>"},{"name":"Risk/Reward","score":<0-100>,"note":"<>"},{"name":"Session","score":<0-100>,"note":"<>"},{"name":"Volume","score":<0-100>,"note":"<>"}],
+"invalidation":"<price>","position_size":"1% risk",
+"fullAnalysis":"<15 sentences covering all aspects of the trade>"}`;
+  return claude(key, p3, sys, [{ type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\nMode: ${tradeMode}\n${ws}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nLIVE DATA SUMMARY:\n${chartTexts.map((t,i)=>t.split('\n').slice(0,8).join('\n')).join('\n---\n')}\n\nApply all gates strictly.` }], tokens.p3);
+}
+
+async function scalpFastLive(chartTexts, sym, livePrice, mktCtx, key) {
+  const lp = livePrice ? `Live: $${livePrice.price}` : '';
+  const sys = `You are a scalp trading AI. Analyze LIVE OHLCV data for a quick scalp signal. Fast, decisive, clean.
+Rules: Only signal during high-liquidity (NY open 9:30-11:30am EST). Need clear momentum. Tight SL. Min 1:1.5 R:R.
+Return ONLY valid raw JSON:
+{"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A/B/C",
+"entry":"<exact>","sl":"<exact>","tp1":"<exact>","tp2":"<exact>","rr_tp1":"1:<X.X>",
+"entry_trigger":"<confirmation>","wait_reason":"<if WAIT>",
+"summary":"<3 sentences>","fullAnalysis":"<5 sentences>",
+"key_levels":{"major_resistance":"<>","major_support":"<>","equilibrium":"<>"},
+"factors":[{"name":"Momentum","score":<0-100>,"note":"<>"},{"name":"Level","score":<0-100>,"note":"<>"},{"name":"Volume","score":<0-100>,"note":"<>"}],
+"confluences":["<1>","<2>","<3>"],"market_bias":"Bullish/Bearish/Neutral",
+"gates_passed":["momentum ✓"],"gates_failed":[],"invalidation":"<price>"}`;
+  return claude(key, HAIKU, sys, [{ type:'text', text:`SCALP — ${sym}\n${lp}\nSession: ${mktCtx.session}\n\n${chartTexts[0]?.substring(0,3000)}` }], 900);
+}
+
 app.get('/sitemap.xml', (req, res) => {
   res.setHeader('Content-Type', 'application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://nexttrade-pro.vercel.app/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url></urlset>`);
