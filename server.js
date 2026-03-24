@@ -34,14 +34,15 @@ const GH_API    = 'https://api.github.com';
 
 // In-memory cache — eliminates GitHub read latency on every request
 const _cache = {};
-const CACHE_TTL = 30000; // 30 seconds
+const CACHE_TTL = 120000; // 2 minutes — reduces GitHub API calls, speeds up all requests
 
 async function ghRead(file) {
-  // Return cached value if fresh
+  // Return cached value if fresh (30s TTL — avoids hammering GitHub on every request)
   if (_cache[file] && Date.now() - _cache[file].ts < CACHE_TTL) return _cache[file].val;
   try {
     const r = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${file}`, {
-      headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+      headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' },
+      timeout: 6000   // ← CRITICAL: without this, GitHub hangs block every request
     });
     if (!r.ok) return _cache[file]?.val || null;
     const d = await r.json();
@@ -58,7 +59,8 @@ async function ghWrite(file, data, sha) {
     await fetch(`${GH_API}/repos/${GH_REPO}/contents/${file}`, {
       method: 'PUT',
       headers: { Authorization: `token ${GH_TOKEN}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: `update ${file}`, content: Buffer.from(JSON.stringify(data)).toString('base64'), sha })
+      body: JSON.stringify({ message: `update ${file}`, content: Buffer.from(JSON.stringify(data)).toString('base64'), sha }),
+      timeout: 8000
     });
   } catch(e) { console.warn('[GH] write failed:', e.message); }
 }
