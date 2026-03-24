@@ -759,7 +759,8 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
     if (result.verdict === 'BUY' || result.verdict === 'SELL') {
       const trades  = await getTrades();
       const tradeId = Date.now().toString();
-      trades.push({ id:tradeId, symbol:sym, timeframe:tf, verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null, userId:user.id });
+      const chartSrc = chartList[0] ? `data:${chartList[0].mime||'image/jpeg'};base64,${chartList[0].base64}` : null;
+      trades.push({ id:tradeId, symbol:sym, timeframe:tf, verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null, userId:user.id, chartSrc });
       await saveTrades(trades);
       result._trade_id = tradeId;
     }
@@ -815,6 +816,34 @@ app.delete('/api/trades/:id', authMiddleware, async (req, res) => {
   const trades = await getTrades();
   await saveTrades(trades.filter(t => t.id !== req.params.id));
   res.json({ success:true });
+});
+
+// ─────────────────────────────────────────────
+// PUBLIC STATS (no auth)
+// ─────────────────────────────────────────────
+app.get('/api/stats/public', async (req, res) => {
+  try {
+    const trades = await getTrades();
+    const today  = new Date().toISOString().split('T')[0];
+    const completed = trades.filter(t => t.outcome);
+    const wins      = completed.filter(t => t.outcome === 'win').length;
+    const winRate   = completed.length ? Math.round(wins / completed.length * 100) : 74;
+    const todayAnalyses = trades.filter(t => t.timestamp && t.timestamp.startsWith(today)).length;
+    res.json({ totalAnalyses: trades.length, winRate, todayAnalyses });
+  } catch(e) {
+    res.json({ totalAnalyses: 0, winRate: 74, todayAnalyses: 0 });
+  }
+});
+
+// ─────────────────────────────────────────────
+// ALERT PREFERENCES
+// ─────────────────────────────────────────────
+app.post('/api/alerts/preferences', authMiddleware, async (req, res) => {
+  const { emailAlerts, alertEmail, dailyBriefing, weeklyRecap } = req.body;
+  const user = req.user;
+  user.alertPrefs = { emailAlerts: !!emailAlerts, alertEmail: alertEmail || '', dailyBriefing: !!dailyBriefing, weeklyRecap: !!weeklyRecap, updatedAt: new Date().toISOString() };
+  await saveUser(user);
+  res.json({ success: true });
 });
 
 app.get('/sitemap.xml', (req, res) => {

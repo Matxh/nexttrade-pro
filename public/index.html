@@ -357,7 +357,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:48px 40p
 .hist-empty{padding:18px;text-align:center;font-family:var(--mono);font-size:10px;color:var(--text3)}
 
 /* JOURNAL */
-.j-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.j-stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px}
 .j-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden}
 .j-stat::after{content:'';position:absolute;top:0;left:0;right:0;height:2px}
 .j-stat.g::after{background:var(--green)}.j-stat.b::after{background:var(--blue)}.j-stat.a::after{background:var(--amber)}.j-stat.r::after{background:var(--red)}
@@ -397,6 +397,9 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:48px 40p
 .grade-letter.Ap,.grade-letter.A{color:var(--green)}.grade-letter.B{color:var(--blue)}.grade-letter.C{color:var(--amber)}.grade-letter.D{color:var(--red)}
 .grade-stats{font-family:var(--mono);font-size:9px;color:var(--text3);line-height:1.8}
 
+@media(max-width:1100px){
+  .j-stats-row{grid-template-columns:repeat(3,1fr)}
+}
 @media(max-width:900px){
   .demo-grid{grid-template-columns:1fr}.steps-grid{grid-template-columns:1fr 1fr}.features-grid{grid-template-columns:1fr 1fr}.pricing-grid{grid-template-columns:1fr}.testi-grid{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr 1fr}.analyzer-grid{grid-template-columns:1fr}.charts-grid{grid-template-columns:1fr 1fr}.j-stats-row{grid-template-columns:1fr 1fr}
 }
@@ -593,6 +596,35 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 .paywall h3{font-size:24px;font-weight:800;margin-bottom:10px}
 .paywall p{color:var(--text2);margin-bottom:24px;max-width:380px;line-height:1.7}
 .paywall-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+
+/* ── AUTOFILL BANNER ── */
+.autofill-banner{display:none;background:var(--accent-dim);border:1px solid rgba(0,229,180,.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11px;color:var(--accent)}
+.autofill-banner.show{display:flex}
+.autofill-banner button{margin-left:auto;background:transparent;border:1px solid rgba(0,229,180,.3);color:var(--accent);border-radius:5px;padding:3px 10px;font-family:var(--mono);font-size:10px;cursor:pointer}
+
+/* ── DRAWDOWN BAR ── */
+.dd-bar-wrap{height:10px;background:var(--border);border-radius:5px;overflow:hidden;margin:10px 0}
+.dd-bar-fill{height:100%;border-radius:5px;transition:width .4s,background .4s}
+
+/* ── WATCHLIST ── */
+.watchlist-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px}
+.wl-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:4px 10px;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.wl-chip:hover{border-color:var(--accent);color:var(--accent)}
+.wl-chip .wl-x{color:var(--text3);margin-left:2px;font-size:10px;line-height:1}
+.wl-chip .wl-x:hover{color:var(--red)}
+.wl-add-btn{background:var(--accent-dim);border:1px solid rgba(0,229,180,.3);color:var(--accent);border-radius:16px;padding:4px 10px;font-family:var(--mono);font-size:11px;cursor:pointer;white-space:nowrap}
+.wl-add-btn:hover{background:rgba(0,229,180,.2)}
+
+/* ── ALERT PANEL ── */
+.alert-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.alert-toggle-row:last-of-type{border-bottom:none}
+.alert-toggle-label{font-size:13px;color:var(--text2);flex:1}
+.toggle-switch{position:relative;width:38px;height:20px;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--border2);border-radius:10px;transition:.2s}
+.toggle-slider:before{content:'';position:absolute;width:14px;height:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle-switch input:checked+.toggle-slider{background:var(--accent)}
+.toggle-switch input:checked+.toggle-slider:before{transform:translateX(18px)}
 </style>
 </head>
 <body>
@@ -646,9 +678,9 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <span>Trusted by 2,400+ traders worldwide</span>
     </div>
     <div class="stats-bar">
-      <div class="stat-item"><div class="stat-num">74%</div><div class="stat-lbl">AI Win Rate</div></div>
-      <div class="stat-item"><div class="stat-num">&lt;30s</div><div class="stat-lbl">Analysis Time</div></div>
-      <div class="stat-item"><div class="stat-num">4-Pass</div><div class="stat-lbl">AI Engine</div></div>
+      <div class="stat-item"><div class="stat-num" id="statWinRate">74%</div><div class="stat-lbl">AI Win Rate</div></div>
+      <div class="stat-item"><div class="stat-num" id="statTotal">—</div><div class="stat-lbl">Total Analyses</div></div>
+      <div class="stat-item"><div class="stat-num" id="statToday">—</div><div class="stat-lbl">Today's Analyses</div></div>
       <div class="stat-item"><div class="stat-num">Any</div><div class="stat-lbl">Asset Class</div></div>
     </div>
   </section>
@@ -1017,8 +1049,14 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <div id="modeHint" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px;padding:8px 12px;background:var(--bg2);border-radius:7px;border:1px solid var(--border)">
       ⚡ <strong style="color:var(--text2)">Scalp mode</strong> — Upload 1m (Slot 1), 5m (Slot 2), 15m (Slot 3). Trade lasts 2–15 mins. Best in first 30 min of NY open (9:30–10:00am EST). Execute on 15m chart.
     </div>
+    <!-- Watchlist -->
+    <div class="watchlist-row" id="watchlistRow">
+      <span style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Watchlist:</span>
+      <div id="watchlistChips" style="display:flex;gap:5px;flex-wrap:wrap;flex:1"></div>
+      <button class="wl-add-btn" onclick="addToWatchlist()" title="Add current symbol">+ Add</button>
+    </div>
     <div class="config-row">
-      <input class="sym-input" id="sym" placeholder="Symbol (ES, NQ, BTC…)">
+      <input class="sym-input" id="sym" placeholder="Symbol (ES, NQ, BTC…)" oninput="updateAnalyzeBar()">
     </div>
     <div class="charts-label">Chart Screenshots (upload up to 3 timeframes)</div>
     <div class="charts-grid">
@@ -1071,6 +1109,50 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </button>
     </div>
     <div class="paste-row"><span class="kbd">Ctrl+V</span><span>paste chart to slot 1 · or drag & drop onto any slot</span></div>
+
+    <!-- Alert Preferences Panel -->
+    <div class="j-panel" style="margin-bottom:16px" id="alertPrefsPanel">
+      <div class="j-head" style="cursor:pointer" onclick="toggleAlertPanel()">
+        <span class="j-title">🔔 Alert Preferences</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="alertPanelToggle">▼ expand</span>
+      </div>
+      <div id="alertPrefsBody" style="display:none;padding:16px 20px">
+        <div class="alert-toggle-row">
+          <div class="alert-toggle-label">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">Email me when analysis grade is A or A+</div>
+            <input id="alertEmailInput" type="email" placeholder="your@email.com" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;font-family:var(--mono);outline:none;width:220px;margin-top:4px" oninput="saveAlertPrefsLocal()">
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="alertEmailToggle" onchange="saveAlertPrefsLocal()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="alert-toggle-row">
+          <div class="alert-toggle-label">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Daily market briefing at 9am EST</div>
+            <div style="font-size:11px;color:var(--text3)">Summary of session quality and key levels to watch</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="alertDailyBriefing" onchange="saveAlertPrefsLocal()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="alert-toggle-row">
+          <div class="alert-toggle-label">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Weekly performance recap (Sundays)</div>
+            <div style="font-size:11px;color:var(--text3)">Your win rate, best grades, and key stats from the week</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="alertWeeklyRecap" onchange="saveAlertPrefsLocal()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+          <button style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 24px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer" onclick="saveAlertPrefs()">Save Preferences</button>
+          <span id="alertSaveMsg" style="font-family:var(--mono);font-size:11px;color:var(--green);display:none">✓ Saved</span>
+        </div>
+      </div>
+    </div>
     <div class="analyzer-grid">
       <div class="result-card" id="resultCard">
         <div class="rc-head">
@@ -1155,6 +1237,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <div class="j-stat b"><div class="j-stat-lbl">Total Signals</div><div class="j-stat-val b" id="jTotal">0</div><div class="j-stat-sub" id="jOpen">0 open</div></div>
       <div class="j-stat a"><div class="j-stat-lbl">Avg R:R Achieved</div><div class="j-stat-val a" id="jAvgRR">—</div><div class="j-stat-sub">actual vs expected</div></div>
       <div class="j-stat r"><div class="j-stat-lbl">Best Grade Win%</div><div class="j-stat-val" id="jBestGrade" style="font-size:18px">—</div><div class="j-stat-sub" id="jBestGradeSub">need 2+ trades per grade</div></div>
+      <div class="j-stat" style="--streak-color:var(--accent)"><div class="j-stat-lbl">Current Streak</div><div class="j-stat-val" id="jStreak" style="font-size:22px;color:var(--accent)">—</div><div class="j-stat-sub" id="jStreakSub">no closed trades yet</div></div>
     </div>
     <div class="j-panel">
       <div class="j-head"><span class="j-title">Performance by Signal Grade</span></div>
@@ -1164,6 +1247,15 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <div class="grade-cell"><div class="grade-letter B">B</div><div class="grade-stats">No data</div></div>
         <div class="grade-cell"><div class="grade-letter C">C</div><div class="grade-stats">No data</div></div>
         <div class="grade-cell"><div class="grade-letter D">D</div><div class="grade-stats">No data</div></div>
+      </div>
+    </div>
+    <div class="j-panel" id="weeklyPerfPanel">
+      <div class="j-head"><span class="j-title">This Week's Performance</span><span class="rc-badge" id="weekBadge">0 trades</span></div>
+      <div style="padding:16px 18px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="weeklyGrid">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Trades</div><div style="font-size:22px;font-weight:800;color:var(--blue)" id="weekTrades">0</div></div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Win Rate</div><div style="font-size:22px;font-weight:800;color:var(--green)" id="weekWR">—</div></div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">P&L Direction</div><div style="font-size:14px;font-weight:700" id="weekPL">—</div></div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Best Day</div><div style="font-size:14px;font-weight:700;color:var(--accent)" id="weekBestDay">—</div></div>
       </div>
     </div>
     <div class="j-panel">
@@ -1188,12 +1280,18 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 
 <!-- ════════ CALCULATOR PAGE ════════ -->
 <div class="page" id="page-calculator">
-  <div class="app-wrap" style="max-width:600px">
+  <div class="app-wrap" style="max-width:680px">
     <div class="app-header">
       <div style="flex:1">
         <div class="app-title">Position Size Calculator</div>
         <div class="app-sub">Calculate exact position size based on your account and signal grade</div>
       </div>
+    </div>
+
+    <!-- Auto-fill banner -->
+    <div class="autofill-banner" id="autofillBanner">
+      <span>⚡</span><span id="autofillText">Auto-filled from last analysis</span>
+      <button onclick="clearAutofill()">Clear ✕</button>
     </div>
 
     <div class="j-panel" style="margin-bottom:20px">
@@ -1202,6 +1300,10 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <div>
           <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Account Size ($)</div>
           <input id="calcAccount" type="number" placeholder="10000" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;color:var(--text);font-size:16px;font-family:var(--mono);outline:none" oninput="calcPosition()">
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Daily Max Loss ($) <span style="color:var(--text3);font-size:9px">(optional)</span></div>
+          <input id="calcDailyLimit" type="number" placeholder="e.g. 200" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;color:var(--text);font-size:16px;font-family:var(--mono);outline:none" oninput="calcPosition()">
         </div>
         <div>
           <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Signal Grade</div>
@@ -1219,6 +1321,10 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <div>
           <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Stop Loss Price</div>
           <input id="calcSL" type="number" placeholder="82900" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;color:var(--text);font-size:16px;font-family:var(--mono);outline:none" oninput="calcPosition()">
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">TP1 Price <span style="color:var(--text3);font-size:9px">(optional)</span></div>
+          <input id="calcTP1" type="number" placeholder="84200" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;color:var(--text);font-size:16px;font-family:var(--mono);outline:none" oninput="calcPosition()">
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <input type="checkbox" id="calcFunded" onchange="calcPosition()" style="width:16px;height:16px;accent-color:var(--accent)">
@@ -1250,6 +1356,76 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
           <div id="calcSLDist" style="font-size:22px;font-weight:700;color:var(--text);font-family:var(--mono)">0 points</div>
         </div>
         <div id="calcWarning" style="display:none;background:var(--red-dim);border:1px solid rgba(255,61,90,.3);border-radius:8px;padding:14px;text-align:center;color:var(--red);font-weight:600;font-size:14px"></div>
+        <div id="calcDailyWarning" style="display:none;background:var(--red-dim);border:1px solid rgba(255,61,90,.3);border-radius:8px;padding:14px;text-align:center;color:var(--red);font-weight:700;font-size:14px">⚠️ This trade exceeds your daily loss limit!</div>
+      </div>
+    </div>
+
+    <!-- Drawdown Tracker -->
+    <div class="j-panel" style="margin-bottom:20px">
+      <div class="j-head"><span class="j-title">Account Drawdown</span></div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Peak Balance ($)</div>
+            <input id="ddPeak" type="number" placeholder="10000" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:var(--mono);outline:none" oninput="calcDrawdown()">
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Current Balance ($)</div>
+            <input id="ddCurrent" type="number" placeholder="9500" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:var(--mono);outline:none" oninput="calcDrawdown()">
+          </div>
+        </div>
+        <div id="ddResult" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-family:var(--mono);font-size:12px;color:var(--text2)">Current Drawdown</span>
+            <span style="font-family:var(--mono);font-size:18px;font-weight:800" id="ddPct">0%</span>
+          </div>
+          <div class="dd-bar-wrap"><div class="dd-bar-fill" id="ddBarFill" style="width:0%"></div></div>
+          <div id="ddWarning" style="display:none;margin-top:8px;background:var(--red-dim);border:1px solid rgba(255,61,90,.3);border-radius:7px;padding:10px 14px;color:var(--red);font-size:13px;font-weight:600;text-align:center">⚠️ Drawdown >10% — Reduce position size!</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scale-In Planner -->
+    <div class="j-panel" style="margin-bottom:20px">
+      <div class="j-head"><span class="j-title">Scale-In Planner</span></div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:12px">
+        <div id="scaleInRows">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Entry 1 Price</div>
+              <input id="si1Price" type="number" placeholder="83400" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:10px 12px;color:var(--text);font-size:14px;font-family:var(--mono);outline:none" oninput="calcScaleIn()">
+            </div>
+            <div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Allocation %</div>
+              <input id="si1Pct" type="number" placeholder="50" min="0" max="100" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:10px 12px;color:var(--text);font-size:14px;font-family:var(--mono);outline:none" oninput="calcScaleIn()" value="50">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Entry 2 Price</div>
+              <input id="si2Price" type="number" placeholder="83200" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:10px 12px;color:var(--text);font-size:14px;font-family:var(--mono);outline:none" oninput="calcScaleIn()">
+            </div>
+            <div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Allocation %</div>
+              <input id="si2Pct" type="number" placeholder="30" min="0" max="100" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:10px 12px;color:var(--text);font-size:14px;font-family:var(--mono);outline:none" oninput="calcScaleIn()" value="30">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Entry 3 Price</div>
+              <input id="si3Price" type="number" placeholder="83000" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:10px 12px;color:var(--text);font-size:14px;font-family:var(--mono);outline:none" oninput="calcScaleIn()">
+            </div>
+            <div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Allocation %</div>
+              <input id="si3Pct" type="number" placeholder="20" min="0" max="100" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:10px 12px;color:var(--text);font-size:14px;font-family:var(--mono);outline:none" oninput="calcScaleIn()" value="20">
+            </div>
+          </div>
+        </div>
+        <div id="scaleInResult" style="display:none;background:var(--accent-dim);border:1px solid rgba(0,229,180,.3);border-radius:8px;padding:16px;text-align:center">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Average Entry Price</div>
+          <div id="siAvgEntry" style="font-size:32px;font-weight:900;color:var(--accent);font-family:var(--mono)">—</div>
+          <div id="siPctNote" style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:4px"></div>
+        </div>
       </div>
     </div>
 
@@ -1504,6 +1680,7 @@ function showPage(id){
   window.scrollTo(0,0);
   if(id==='journal')loadJournal();
   if(id==='analyzer')updateAnalyzerGate();
+  if(id==='calculator')autoFillCalcFromLastAnalysis();
 }
 
 function goTo(id){
@@ -1525,12 +1702,14 @@ function setGrade(btn, pct) {
   calcPosition();
 }
 function calcPosition() {
-  const account = parseFloat($('calcAccount').value);
-  const entry   = parseFloat($('calcEntry').value);
-  const sl      = parseFloat($('calcSL').value);
-  const funded  = $('calcFunded').checked;
-  const result  = $('calcResult');
-  const warning = $('calcWarning');
+  const account    = parseFloat($('calcAccount').value);
+  const entry      = parseFloat($('calcEntry').value);
+  const sl         = parseFloat($('calcSL').value);
+  const funded     = $('calcFunded').checked;
+  const dailyLimit = parseFloat($('calcDailyLimit').value);
+  const result     = $('calcResult');
+  const warning    = $('calcWarning');
+  const dailyWarn  = $('calcDailyWarning');
 
   if (!account || !entry || !sl || calcRiskPct === 0) {
     if (calcRiskPct === 0) {
@@ -1545,6 +1724,7 @@ function calcPosition() {
     } else {
       result.style.display = 'none';
     }
+    dailyWarn.style.display = 'none';
     return;
   }
 
@@ -1565,6 +1745,103 @@ function calcPosition() {
     warning.style.display = '';
     warning.textContent = 'Warning: Never risk more than 2% per trade.';
   }
+
+  // Daily max loss check
+  dailyWarn.style.display = (!isNaN(dailyLimit) && dailyLimit > 0 && riskAmt > dailyLimit) ? '' : 'none';
+}
+
+function calcDrawdown() {
+  const peak    = parseFloat($('ddPeak').value);
+  const current = parseFloat($('ddCurrent').value);
+  const result  = $('ddResult');
+  if (!peak || !current || peak <= 0) { result.style.display = 'none'; return; }
+  result.style.display = '';
+  const dd = Math.max(0, ((peak - current) / peak) * 100);
+  $('ddPct').textContent = dd.toFixed(2) + '%';
+  const fill = $('ddBarFill');
+  fill.style.width = Math.min(100, dd) + '%';
+  if (dd < 5) { fill.style.background = 'var(--green)'; $('ddPct').style.color = 'var(--green)'; }
+  else if (dd < 10) { fill.style.background = 'var(--amber)'; $('ddPct').style.color = 'var(--amber)'; }
+  else { fill.style.background = 'var(--red)'; $('ddPct').style.color = 'var(--red)'; }
+  $('ddWarning').style.display = dd >= 10 ? '' : 'none';
+}
+
+function calcScaleIn() {
+  const entries = [
+    { price: parseFloat($('si1Price').value), pct: parseFloat($('si1Pct').value) || 0 },
+    { price: parseFloat($('si2Price').value), pct: parseFloat($('si2Pct').value) || 0 },
+    { price: parseFloat($('si3Price').value), pct: parseFloat($('si3Pct').value) || 0 }
+  ].filter(e => !isNaN(e.price) && e.price > 0 && e.pct > 0);
+  const result = $('scaleInResult');
+  if (entries.length < 2) { result.style.display = 'none'; return; }
+  const totalPct = entries.reduce((s, e) => s + e.pct, 0);
+  const avg = entries.reduce((s, e) => s + e.price * (e.pct / totalPct), 0);
+  result.style.display = '';
+  $('siAvgEntry').textContent = avg.toFixed(2);
+  $('siPctNote').textContent = `Total allocation: ${totalPct.toFixed(0)}%${totalPct !== 100 ? ' (not 100%)' : ''}`;
+}
+
+// ── WATCHLIST ──
+let watchlist = JSON.parse(localStorage.getItem('nt_watchlist') || '[]');
+function renderWatchlist() {
+  const el = $('watchlistChips');
+  if (!el) return;
+  if (!watchlist.length) {
+    el.innerHTML = '<span style="font-family:var(--mono);font-size:10px;color:var(--text3)">No symbols yet — add current symbol with + Add</span>';
+    return;
+  }
+  el.innerHTML = watchlist.slice(0,8).map((sym,i) =>
+    `<span class="wl-chip" onclick="selectWatchlistSym('${sym}')">
+      ${sym}<span class="wl-x" onclick="event.stopPropagation();removeWatchlistSym(${i})">×</span>
+    </span>`
+  ).join('');
+}
+function addToWatchlist() {
+  const sym = ($('sym')?.value || '').trim().toUpperCase();
+  if (!sym) return;
+  if (!watchlist.includes(sym)) {
+    watchlist.unshift(sym);
+    if (watchlist.length > 8) watchlist.pop();
+    localStorage.setItem('nt_watchlist', JSON.stringify(watchlist));
+  }
+  renderWatchlist();
+}
+function removeWatchlistSym(i) {
+  watchlist.splice(i, 1);
+  localStorage.setItem('nt_watchlist', JSON.stringify(watchlist));
+  renderWatchlist();
+}
+function selectWatchlistSym(sym) {
+  const el = $('sym');
+  if (el) { el.value = sym; updateAnalyzeBar(); }
+}
+
+// ── AUTO-FILL CALCULATOR FROM LAST ANALYSIS ──
+function autoFillCalcFromLastAnalysis() {
+  try {
+    const raw = localStorage.getItem('nt_last_analysis');
+    if (!raw) return;
+    const last = JSON.parse(raw);
+    if (!last) return;
+    let filled = false;
+    if (last.entry && !isNaN(parseFloat(last.entry))) { $('calcEntry').value = parseFloat(last.entry); filled = true; }
+    if (last.sl && !isNaN(parseFloat(last.sl))) { $('calcSL').value = parseFloat(last.sl); filled = true; }
+    if (last.tp1 && !isNaN(parseFloat(last.tp1))) { $('calcTP1').value = parseFloat(last.tp1); filled = true; }
+    if (filled) {
+      const banner = $('autofillBanner');
+      banner.classList.add('show');
+      const label = `${last.symbol || ''} ${last.verdict || ''}`.trim();
+      $('autofillText').textContent = `Auto-filled from last analysis${label ? ' — ' + label : ''}`;
+      calcPosition();
+    }
+  } catch(e) {}
+}
+function clearAutofill() {
+  $('calcEntry').value = '';
+  $('calcSL').value = '';
+  $('calcTP1').value = '';
+  $('autofillBanner').classList.remove('show');
+  calcPosition();
 }
 
 // ── TF & SLOTS ──
@@ -1714,6 +1991,8 @@ function showResult(d){
   }
   if(d.fullAnalysis){$('rAnalysis').innerHTML=d.fullAnalysis;$('rAnalysis').classList.add('on');}
   addHistory(d);
+  // Store last analysis for calculator auto-fill
+  try { localStorage.setItem('nt_last_analysis', JSON.stringify({ entry:d.entry, sl:d.sl, tp1:d.tp1, symbol:d.symbol, verdict:d.verdict, signal_grade:d.signal_grade })); } catch(e) {}
   // Refresh usage bar after analysis
   if(currentUser?.plan==='basic')fetchUsage();
 }
@@ -1796,6 +2075,41 @@ function renderJournalStats(){
   }).join('');
   let bestGrade=null,bestWR=0;grades.forEach(g=>{const d=byGrade[g]||{wins:0,losses:0};const total=d.wins+d.losses;if(total>=2){const wr=Math.round(d.wins/total*100);if(wr>bestWR){bestWR=wr;bestGrade=g;}}});
   $('jBestGrade').textContent=bestGrade||'—';$('jBestGradeSub').textContent=bestGrade?`${bestWR}% win rate (grade ${bestGrade})`:'need 2+ trades per grade';
+
+  // ── STREAK TRACKER ──
+  const sorted=[...allTrades].filter(t=>t.outcome).sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
+  let streak=0,streakType=null;
+  if(sorted.length){
+    streakType=sorted[sorted.length-1].outcome;
+    for(let i=sorted.length-1;i>=0;i--){if(sorted[i].outcome===streakType)streak++;else break;}
+  }
+  const streakEl=$('jStreak');
+  if(streakType==='win'){streakEl.textContent=`🔥 ${streak}W`;streakEl.style.color='var(--green)';$('jStreakSub').textContent=`${streak} win${streak!==1?'s':''} in a row`;}
+  else if(streakType==='loss'){streakEl.textContent=`❄️ ${streak}L`;streakEl.style.color='var(--red)';$('jStreakSub').textContent=`${streak} loss${streak!==1?'es':''} in a row`;}
+  else{streakEl.textContent='—';streakEl.style.color='var(--accent)';$('jStreakSub').textContent='no closed trades yet';}
+
+  // ── WEEKLY PERFORMANCE ──
+  const now=new Date();
+  const dayOfWeek=now.getDay(); // 0=Sun
+  const weekStart=new Date(now);weekStart.setDate(now.getDate()-(dayOfWeek===0?6:dayOfWeek-1));weekStart.setHours(0,0,0,0);
+  const weekTrades=allTrades.filter(t=>t.timestamp&&new Date(t.timestamp)>=weekStart);
+  const weekCompleted=weekTrades.filter(t=>t.outcome);
+  const weekWins=weekCompleted.filter(t=>t.outcome==='win').length;
+  const weekLosses=weekCompleted.filter(t=>t.outcome==='loss').length;
+  const weekWR=weekCompleted.length?Math.round(weekWins/weekCompleted.length*100):null;
+  $('weekTrades').textContent=weekTrades.length;
+  $('weekBadge').textContent=weekTrades.length+' this week';
+  $('weekWR').textContent=weekWR!==null?weekWR+'%':'—';
+  const plEl=$('weekPL');
+  if(weekWins>weekLosses){plEl.textContent='More Wins ↑';plEl.style.color='var(--green)';}
+  else if(weekLosses>weekWins){plEl.textContent='More Losses ↓';plEl.style.color='var(--red)';}
+  else{plEl.textContent='Even';plEl.style.color='var(--text2)';}
+  // Best day this week
+  const dayMap={};
+  weekCompleted.forEach(t=>{const d=new Date(t.timestamp).toLocaleDateString('en-US',{weekday:'short'});if(!dayMap[d])dayMap[d]={wins:0,losses:0};if(t.outcome==='win')dayMap[d].wins++;else dayMap[d].losses++;});
+  let bestDay=null,bestDayWR=-1;
+  Object.entries(dayMap).forEach(([day,d])=>{const total=d.wins+d.losses;const wr=total?d.wins/total:0;if(wr>bestDayWR||(wr===bestDayWR&&d.wins>0)){bestDayWR=wr;bestDay=day;}});
+  $('weekBestDay').textContent=bestDay||'—';
 }
 
 function filterJournal(btn,filter){document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');journalFilter=filter;renderJournalTable();}
@@ -1812,7 +2126,8 @@ function renderJournalTable(){
     const date=new Date(t.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     const gc=(t.grade||'B').replace('+','p');
     const timerCell = t.outcome ? `<td style="font-size:10px;color:var(--text3)">—</td>` : `<td><span class="trade-timer" data-start="${t.timestamp}" id="timer_${t.id}">…</span></td>`;
-    return `<tr><td class="j-sym">${t.symbol}</td><td><span class="j-badge ${t.verdict}">${t.verdict}</span></td><td><span class="j-badge ${gc}">${t.grade||'?'}</span></td><td>${t.confidence||'?'}%</td><td style="color:var(--blue)">${t.entry||'—'}</td><td style="color:var(--red)">${t.sl||'—'}</td><td style="color:var(--green)">${t.tp1||'—'}</td><td>${t.rr_tp1||'—'}</td><td style="font-size:10px">${date}</td>${timerCell}<td><select class="oc-sel" onchange=""><option value="" ${!t.outcome?'selected':''}>Open</option><option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option><option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option></select></td><td><input class="rr-inp" type="number" step="0.1" placeholder="R:R" value="${t.actual_rr||''}" id="rr_${t.id}"></td><td><button class="save-b" onclick="saveTrade('${t.id}',this)">Save</button><button class="del-b" onclick="deleteTrade('${t.id}')">✕</button></td></tr>`;
+    const thumbHtml = t.chartSrc ? `<img src="${t.chartSrc}" style="width:36px;height:24px;object-fit:cover;border-radius:3px;border:1px solid var(--border);vertical-align:middle;margin-right:5px;cursor:pointer" onclick="window.open('${t.chartSrc}','_blank')" title="View chart">` : '';
+    return `<tr><td class="j-sym">${thumbHtml}${t.symbol}</td><td><span class="j-badge ${t.verdict}">${t.verdict}</span></td><td><span class="j-badge ${gc}">${t.grade||'?'}</span></td><td>${t.confidence||'?'}%</td><td style="color:var(--blue)">${t.entry||'—'}</td><td style="color:var(--red)">${t.sl||'—'}</td><td style="color:var(--green)">${t.tp1||'—'}</td><td>${t.rr_tp1||'—'}</td><td style="font-size:10px">${date}</td>${timerCell}<td><select class="oc-sel" onchange=""><option value="" ${!t.outcome?'selected':''}>Open</option><option value="win" ${t.outcome==='win'?'selected':''}>✓ Win</option><option value="loss" ${t.outcome==='loss'?'selected':''}>✗ Loss</option></select></td><td><input class="rr-inp" type="number" step="0.1" placeholder="R:R" value="${t.actual_rr||''}" id="rr_${t.id}"></td><td><button class="save-b" onclick="saveTrade('${t.id}',this)">Save</button><button class="del-b" onclick="deleteTrade('${t.id}')">✕</button></td></tr>`;
   }).join('');
   startTradeTimers();
 }
@@ -1834,6 +2149,19 @@ async function deleteTrade(id){
 // ── INIT ──
 updateAnalyzeBar();
 initAuth();
+renderWatchlist();
+
+// ── LIVE HOME STATS ──
+(async function fetchPublicStats(){
+  try{
+    const res=await fetch('/api/stats/public');
+    if(!res.ok)return;
+    const d=await res.json();
+    if(d.winRate!=null&&$('statWinRate'))$('statWinRate').textContent=d.winRate+'%';
+    if(d.totalAnalyses!=null&&$('statTotal'))$('statTotal').textContent=d.totalAnalyses>999?(d.totalAnalyses/1000).toFixed(1)+'k':d.totalAnalyses;
+    if(d.todayAnalyses!=null&&$('statToday'))$('statToday').textContent=d.todayAnalyses;
+  }catch(e){}
+})();
 
 // ── TRADE TIMER ──────────────────────────────────────────
 let tradeTimerInterval = null;
@@ -1947,6 +2275,53 @@ function updateSessionTimer() {
 }
 updateSessionTimer();
 setInterval(updateSessionTimer, 30000);
+
+// ── ALERT PREFERENCES ──
+function toggleAlertPanel() {
+  const body = $('alertPrefsBody');
+  const tog  = $('alertPanelToggle');
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  tog.textContent = open ? '▲ collapse' : '▼ expand';
+}
+function loadAlertPrefs() {
+  try {
+    const raw = localStorage.getItem('nt_alert_prefs');
+    if (!raw) return;
+    const p = JSON.parse(raw);
+    if ($('alertEmailToggle')) $('alertEmailToggle').checked = !!p.emailAlerts;
+    if ($('alertEmailInput')) $('alertEmailInput').value = p.alertEmail || '';
+    if ($('alertDailyBriefing')) $('alertDailyBriefing').checked = !!p.dailyBriefing;
+    if ($('alertWeeklyRecap')) $('alertWeeklyRecap').checked = !!p.weeklyRecap;
+  } catch(e) {}
+}
+function saveAlertPrefsLocal() {
+  const prefs = {
+    emailAlerts:   $('alertEmailToggle')?.checked || false,
+    alertEmail:    $('alertEmailInput')?.value || '',
+    dailyBriefing: $('alertDailyBriefing')?.checked || false,
+    weeklyRecap:   $('alertWeeklyRecap')?.checked || false
+  };
+  localStorage.setItem('nt_alert_prefs', JSON.stringify(prefs));
+}
+async function saveAlertPrefs() {
+  saveAlertPrefsLocal();
+  const prefs = JSON.parse(localStorage.getItem('nt_alert_prefs') || '{}');
+  const msg = $('alertSaveMsg');
+  try {
+    if (authToken) {
+      await fetch('/api/alerts/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+        body: JSON.stringify(prefs)
+      });
+    }
+    if (msg) { msg.style.display = ''; setTimeout(() => { msg.style.display = 'none'; }, 2500); }
+  } catch(e) {
+    if (msg) { msg.textContent = '✓ Saved locally'; msg.style.display = ''; setTimeout(() => { msg.style.display = 'none'; msg.textContent = '✓ Saved'; }, 2500); }
+  }
+}
+loadAlertPrefs();
 </script>
 
 </body>
