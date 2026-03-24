@@ -1068,6 +1068,13 @@ Datetime            | Open    | High    | Low     | Close   | Volume
 // ─────────────────────────────────────────────
 // ANALYZE LIVE ENDPOINT
 // ─────────────────────────────────────────────
+
+// Wraps a promise with a hard timeout so background fetches never hang forever
+function withTimeout(promise, ms) {
+  const timer = new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms));
+  return Promise.race([promise, timer]);
+}
+
 app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
   const { symbol, timeframes, tradeMode } = req.body;
   const key = process.env.ANTHROPIC_API_KEY;
@@ -1081,51 +1088,60 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`\n[LIVE] ═══ ${sym} ${tfs.join('+')} — ${tradeMode||'dayTrade'} — ${req.user.email} ═══`);
     const t0 = Date.now();
 
-    // Fire background fetches immediately — don't block main analysis
-    const correlatedPromise = fetchCorrelatedAssets(sym).catch(() => null);
-    const newsPromise       = fetchNewsSentiment(sym).catch(() => null);
-    const tradesPromise     = getTrades().catch(() => []);
+    // Fire background fetches immediately with hard timeouts so they never hang
+    const correlatedPromise = withTimeout(fetchCorrelatedAssets(sym), 12000).catch(() => null);
+    const newsPromise       = withTimeout(fetchNewsSentiment(sym), 12000).catch(() => null);
+    const tradesPromise     = withTimeout(getTrades(), 8000).catch(() => []);
 
-    // Fetch OHLCV data — 60 bars is enough for ICT analysis (faster than 100)
+    // ── STEP 1: Fetch OHLCV data in parallel ──────────────────────────────
+    console.log(`[LIVE] Step 1: fetching OHLCV for ${tfs.join('+')}`);
     const ohlcvResults = await Promise.all(
-      tfs.map(tf => fetchOHLCV(sym, tf, 60).catch(() => null))
+      tfs.map(tf => withTimeout(fetchOHLCV(sym, tf, 60), 10000).catch(() => null))
     );
-    // Get trades (usually ready by now since it ran in parallel with OHLCV)
     const allTrades = await tradesPromise;
+    console.log(`[LIVE] Step 1 done — ${ohlcvResults.filter(Boolean).length}/${tfs.length} TFs loaded in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     const available = ohlcvResults.filter(Boolean);
     if (!available.length) return res.status(400).json({ error: `Could not fetch live data for ${sym}. Try: ES1!, NQ1!, BTC/USD, EUR/USD, SPY, AAPL` });
 
-    const livePrice  = { price: available[0].candles.slice(-1)[0]?.close, source: available[0].source };
-    const winStats   = getWinStats(allTrades);
+    const livePrice    = { price: available[0].candles.slice(-1)[0]?.close, source: available[0].source };
+    const winStats     = getWinStats(allTrades);
     const personalEdge = getPersonalizedEdge(allTrades.filter(t => t.userId === req.user.id));
-    const mktCtx     = getMarketContext(sym);
-    const mode       = tradeMode || 'dayTrade';
+    const mktCtx       = getMarketContext(sym);
+    const mode         = tradeMode || 'dayTrade';
 
     // Build text-based chart data for each TF
     const chartTexts = available.map(d => ohlcvToText(d));
 
-    // corrNote built after correlated assets resolve (later in the flow)
-
+    // ── STEP 2: AI Analysis ───────────────────────────────────────────────
     let result;
     if (mode === 'scalp') {
-      // ⚡ Scalp: single Haiku pass ~1-2s
+      console.log(`[LIVE] Step 2: scalp fast path (Haiku)`);
       result = await scalpFastLive(chartTexts, sym, livePrice, mktCtx, key);
+
     } else if (mode === 'dayTrade') {
-      // 📈 Day Trade: pass1A only (skip pass1B — session already in mktCtx), then combined verdict
+      console.log(`[LIVE] Step 2a: pass1A structure (Sonnet)`);
       const reading = await pass1ALive(chartTexts, sym, key, mode, true);
-      // Build a lightweight ctx from server-side market context (no AI call needed)
+      console.log(`[LIVE] Step 2a done — bias:${reading.htf_bias} align:${reading.alignment_score} in ${((Date.now()-t0)/1000).toFixed(1)}s`);
+
       const ctx = {
-        session: mktCtx.session, session_quality: mktCtx.session.includes('Excellent')||mktCtx.session.includes('Good') ? 'Good' : 'Poor',
+        session: mktCtx.session,
+        session_quality: (mktCtx.session||'').includes('Excellent') || (mktCtx.session||'').includes('Good') || (mktCtx.session||'').includes('High') ? 'Good' : 'Poor',
         news_risk: mktCtx.risk_events.length ? 'Medium' : 'Low',
         day_of_week_risk: [0,6].includes(new Date().getDay()) ? 'High' : 'Low',
         context_bias: 'Proceed', context_score: 70, risk_multiplier: 1.0,
         summary: `Session: ${mktCtx.session}. Market hours: ${mktCtx.market_hours}.`
       };
+      console.log(`[LIVE] Step 2b: pass2+3 combined (Sonnet)`);
       result = await pass23CombinedLive(chartTexts, sym, tfs[tfs.length-1], reading, ctx, livePrice, mktCtx, winStats, key, mode, personalEdge);
+      console.log(`[LIVE] Step 2b done — ${result?.verdict} ${result?.signal_grade||''} in ${((Date.now()-t0)/1000).toFixed(1)}s`);
+
     } else {
-      // 🌊 Swing: 2 passes — structure then final verdict
+      // swing
+      console.log(`[LIVE] Step 2a: pass1A structure (Sonnet)`);
       const reading = await pass1ALive(chartTexts, sym, key, mode, true);
+      console.log(`[LIVE] Step 2a done — bias:${reading.htf_bias} in ${((Date.now()-t0)/1000).toFixed(1)}s`);
+
       const ctx = {
         session: mktCtx.session, session_quality: 'Good',
         news_risk: mktCtx.risk_events.length ? 'Medium' : 'Low',
@@ -1133,26 +1149,36 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
         context_bias: 'Proceed', context_score: 70, risk_multiplier: 1.0,
         summary: `Session: ${mktCtx.session}.`
       };
+      console.log(`[LIVE] Step 2b: pass3 final verdict (Opus)`);
       result = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, {}, livePrice, mktCtx, winStats, key, mode, true, personalEdge);
+      console.log(`[LIVE] Step 2b done — ${result?.verdict} ${result?.signal_grade||''} in ${((Date.now()-t0)/1000).toFixed(1)}s`);
     }
-    // Now await the background fetches (they've had time to complete)
-    const [correlatedAssets, newsSentiment] = await Promise.all([correlatedPromise, newsPromise]);
 
-    // Save to journal
+    // ── STEP 3: Await background enrichment (already running) ─────────────
+    console.log(`[LIVE] Step 3: awaiting background enrichment`);
+    const [correlatedAssets, newsSentiment] = await Promise.all([correlatedPromise, newsPromise]);
+    console.log(`[LIVE] Step 3 done`);
+
+    // ── STEP 4: Save to journal ────────────────────────────────────────────
     if (result?.verdict && result.verdict !== 'WAIT') {
-      const trades  = allTrades || [];
-      const tradeId = Date.now().toString();
-      trades.push({ id:tradeId, symbol:sym, timeframe:tfs[tfs.length-1], verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null, userId:req.user.id, notes:'', source:'live', chartSrc:null });
-      await saveTrades(trades);
+      try {
+        const trades  = allTrades || [];
+        const tradeId = Date.now().toString();
+        trades.push({ id:tradeId, symbol:sym, timeframe:tfs[tfs.length-1], verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null, userId:req.user.id, notes:'', source:'live', chartSrc:null });
+        await saveTrades(trades);
+        result._trade_id = tradeId;
+      } catch(saveErr) {
+        console.warn('[LIVE] Journal save failed (non-fatal):', saveErr.message);
+      }
     }
 
     const elapsed = ((Date.now()-t0)/1000).toFixed(1);
-    console.log(`[LIVE] Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
+    console.log(`[LIVE] ✅ Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
     res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: correlatedAssets, _newsSentiment: newsSentiment });
 
   } catch(e) {
-    console.error('[LIVE] Error:', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[LIVE] ❌ Error:', e.stack || e.message);
+    res.status(500).json({ error: e.message || 'Live analysis failed' });
   }
 });
 
