@@ -1081,14 +1081,17 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`\n[LIVE] ═══ ${sym} ${tfs.join('+')} — ${tradeMode||'dayTrade'} — ${req.user.email} ═══`);
     const t0 = Date.now();
 
-    // Fetch core data in parallel — news/correlated run separately (non-blocking)
-    const [allTrades, ...ohlcvResults] = await Promise.all([
-      getTrades(),
-      ...tfs.map(tf => fetchOHLCV(sym, tf, 100).catch(() => null))
-    ]);
-    // Fire these in background — don't await them (they slow down the main signal)
+    // Fire background fetches immediately — don't block main analysis
     const correlatedPromise = fetchCorrelatedAssets(sym).catch(() => null);
     const newsPromise       = fetchNewsSentiment(sym).catch(() => null);
+    const tradesPromise     = getTrades().catch(() => []);
+
+    // Fetch OHLCV data — 60 bars is enough for ICT analysis (faster than 100)
+    const ohlcvResults = await Promise.all(
+      tfs.map(tf => fetchOHLCV(sym, tf, 60).catch(() => null))
+    );
+    // Get trades (usually ready by now since it ran in parallel with OHLCV)
+    const allTrades = await tradesPromise;
 
     const available = ohlcvResults.filter(Boolean);
     if (!available.length) return res.status(400).json({ error: `Could not fetch live data for ${sym}. Try: ES1!, NQ1!, BTC/USD, EUR/USD, SPY, AAPL` });
@@ -1110,21 +1113,28 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
       // ⚡ Scalp: single Haiku pass ~1-2s
       result = await scalpFastLive(chartTexts, sym, livePrice, mktCtx, key);
     } else if (mode === 'dayTrade') {
-      // 📈 Day Trade: 2 parallel passes then 1 combined verdict ~5-7s
-      const [reading, ctx] = await Promise.all([
-        pass1ALive(chartTexts, sym, key, mode, true),
-        pass1B([], sym, livePrice, mktCtx, winStats, key, mode)
-      ]);
-      // Combine pass2+3 into one call for speed
+      // 📈 Day Trade: pass1A only (skip pass1B — session already in mktCtx), then combined verdict
+      const reading = await pass1ALive(chartTexts, sym, key, mode, true);
+      // Build a lightweight ctx from server-side market context (no AI call needed)
+      const ctx = {
+        session: mktCtx.session, session_quality: mktCtx.session.includes('Excellent')||mktCtx.session.includes('Good') ? 'Good' : 'Poor',
+        news_risk: mktCtx.risk_events.length ? 'Medium' : 'Low',
+        day_of_week_risk: [0,6].includes(new Date().getDay()) ? 'High' : 'Low',
+        context_bias: 'Proceed', context_score: 70, risk_multiplier: 1.0,
+        summary: `Session: ${mktCtx.session}. Market hours: ${mktCtx.market_hours}.`
+      };
       result = await pass23CombinedLive(chartTexts, sym, tfs[tfs.length-1], reading, ctx, livePrice, mktCtx, winStats, key, mode, personalEdge);
     } else {
-      // 🌊 Swing: 3 passes with Opus on final ~12-15s
-      const [reading, ctx] = await Promise.all([
-        pass1ALive(chartTexts, sym, key, mode, true),
-        pass1B([], sym, livePrice, mktCtx, winStats, key, mode)
-      ]);
-      const entry = await pass2Live(chartTexts, sym, reading, ctx, livePrice, key, mode, true);
-      result      = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, entry, livePrice, mktCtx, winStats, key, mode, true, personalEdge);
+      // 🌊 Swing: 2 passes — structure then final verdict
+      const reading = await pass1ALive(chartTexts, sym, key, mode, true);
+      const ctx = {
+        session: mktCtx.session, session_quality: 'Good',
+        news_risk: mktCtx.risk_events.length ? 'Medium' : 'Low',
+        day_of_week_risk: [0,6].includes(new Date().getDay()) ? 'High' : 'Low',
+        context_bias: 'Proceed', context_score: 70, risk_multiplier: 1.0,
+        summary: `Session: ${mktCtx.session}.`
+      };
+      result = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, {}, livePrice, mktCtx, winStats, key, mode, true, personalEdge);
     }
     // Now await the background fetches (they've had time to complete)
     const [correlatedAssets, newsSentiment] = await Promise.all([correlatedPromise, newsPromise]);
