@@ -32,18 +32,28 @@ const GH_TOKEN  = process.env.GH_DB_TOKEN;
 const GH_REPO   = 'Matxh/priceaction-db';
 const GH_API    = 'https://api.github.com';
 
+// In-memory cache — eliminates GitHub read latency on every request
+const _cache = {};
+const CACHE_TTL = 30000; // 30 seconds
+
 async function ghRead(file) {
+  // Return cached value if fresh
+  if (_cache[file] && Date.now() - _cache[file].ts < CACHE_TTL) return _cache[file].val;
   try {
     const r = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${file}`, {
       headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
     });
-    if (!r.ok) return null;
+    if (!r.ok) return _cache[file]?.val || null;
     const d = await r.json();
-    return { data: JSON.parse(Buffer.from(d.content, 'base64').toString()), sha: d.sha };
-  } catch { return null; }
+    const val = { data: JSON.parse(Buffer.from(d.content, 'base64').toString()), sha: d.sha };
+    _cache[file] = { val, ts: Date.now() };
+    return val;
+  } catch { return _cache[file]?.val || null; }
 }
 
 async function ghWrite(file, data, sha) {
+  // Update cache immediately so next read is instant
+  _cache[file] = { val: { data, sha }, ts: Date.now() };
   try {
     await fetch(`${GH_API}/repos/${GH_REPO}/contents/${file}`, {
       method: 'PUT',
@@ -455,7 +465,7 @@ Return ONLY valid raw JSON — no markdown:
     ...charts.map((c,i) => [{ type:'text', text:`Chart ${i+1} (${c.label||'?'}):` }, img(c.base64, c.mime)]).flat(),
     { type:'text', text:`Scalp ${sym} NOW. ${lp} Session: ${mktCtx.session}. Give instant signal.` }
   ];
-  const raw = await claude(key, HAIKU, sys, content, 800);
+  const raw = await claude(key, SONNET, sys, content, 1000);
   // Normalise to pass3 shape so the rest of the route works unchanged
   return {
     verdict: raw.verdict, confidence: raw.confidence, signal_grade: raw.signal_grade,
