@@ -568,10 +568,11 @@ Return ONLY valid raw JSON:
 "historical_edge":"<what journal stats suggest>","context_score":<0-100>,
 "context_bias":"Proceed/Caution/Wait/Avoid","risk_multiplier":<0.5-1.5>,
 "summary":"<3 sentences: session quality, news/day risk, timing verdict>"}`;
-  return claude(key, p1b, sys, [
-    img(charts[0].base64, charts[0].mime),
-    { type:'text', text:`Asset: ${sym}\n${lp}\nSession: ${mktCtx.session}\nDay: ${mktCtx.market_hours}\nRisk events: ${mktCtx.risk_events.join('; ')||'None'}\n${ws}\n\nIs NOW a good time to trade ${sym}?` }
-  ], tokens.p1b);
+  // charts may be empty for live analysis — only include image if available
+  const content = charts && charts.length
+    ? [img(charts[0].base64, charts[0].mime), { type:'text', text:`Asset: ${sym}\n${lp}\nSession: ${mktCtx.session}\nDay: ${mktCtx.market_hours}\nRisk events: ${mktCtx.risk_events.join('; ')||'None'}\n${ws}\n\nIs NOW a good time to trade ${sym}?` }]
+    : [{ type:'text', text:`Asset: ${sym}\n${lp}\nSession: ${mktCtx.session}\nDay: ${mktCtx.market_hours}\nRisk events: ${mktCtx.risk_events.join('; ')||'None'}\n${ws}\n\nIs NOW a good time to trade ${sym}? (Live data analysis — no chart image)` }];
+  return claude(key, p1b, sys, content, tokens.p1b);
 }
 
 // ─────────────────────────────────────────────
@@ -1080,13 +1081,14 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`\n[LIVE] ═══ ${sym} ${tfs.join('+')} — ${tradeMode||'dayTrade'} — ${req.user.email} ═══`);
     const t0 = Date.now();
 
-    // Fetch all timeframes in parallel (also fetch correlated assets for ES/NQ/SPY/QQQ)
-    const [allTrades, correlatedAssets, newsSentiment, ...ohlcvResults] = await Promise.all([
+    // Fetch core data in parallel — news/correlated run separately (non-blocking)
+    const [allTrades, ...ohlcvResults] = await Promise.all([
       getTrades(),
-      fetchCorrelatedAssets(sym).catch(() => null),
-      fetchNewsSentiment(sym).catch(() => null),
       ...tfs.map(tf => fetchOHLCV(sym, tf, 100).catch(() => null))
     ]);
+    // Fire these in background — don't await them (they slow down the main signal)
+    const correlatedPromise = fetchCorrelatedAssets(sym).catch(() => null);
+    const newsPromise       = fetchNewsSentiment(sym).catch(() => null);
 
     const available = ohlcvResults.filter(Boolean);
     if (!available.length) return res.status(400).json({ error: `Could not fetch live data for ${sym}. Try: ES1!, NQ1!, BTC/USD, EUR/USD, SPY, AAPL` });
@@ -1124,9 +1126,8 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
       const entry = await pass2Live(chartTexts, sym, reading, ctx, livePrice, key, mode, true);
       result      = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, entry, livePrice, mktCtx, winStats, key, mode, true, personalEdge);
     }
-    // Attach correlated assets and news sentiment to result
-    if (correlatedAssets) result._correlatedAssets = correlatedAssets;
-    if (newsSentiment) result._newsSentiment = newsSentiment;
+    // Now await the background fetches (they've had time to complete)
+    const [correlatedAssets, newsSentiment] = await Promise.all([correlatedPromise, newsPromise]);
 
     // Save to journal
     if (result?.verdict && result.verdict !== 'WAIT') {
@@ -1138,7 +1139,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 
     const elapsed = ((Date.now()-t0)/1000).toFixed(1);
     console.log(`[LIVE] Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
-    res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: result._correlatedAssets || correlatedAssets, _newsSentiment: result._newsSentiment || newsSentiment });
+    res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: correlatedAssets, _newsSentiment: newsSentiment });
 
   } catch(e) {
     console.error('[LIVE] Error:', e.message);
