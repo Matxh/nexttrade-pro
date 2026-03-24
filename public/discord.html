@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Discord Community — PriceAction AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Barlow:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#06080d;--bg2:#0b0f18;--card:#0d1219;
+  --border:#18243a;--border2:#1e2e46;
+  --accent:#00e5b4;--accent-dim:rgba(0,229,180,0.10);
+  --blue:#3d9eff;--blue-dim:rgba(61,158,255,0.10);
+  --red:#ff3d5a;--red-dim:rgba(255,61,90,0.10);
+  --amber:#ffb300;--amber-dim:rgba(255,179,0,0.10);
+  --green:#00e676;--green-dim:rgba(0,230,118,0.10);
+  --text:#dce8f5;--text2:#5a7a96;--text3:#2e4a62;
+  --mono:'IBM Plex Mono',monospace;--sans:'Barlow',sans-serif;
+  --discord:#5865F2;
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--sans)}
+body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,180,.014) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,180,.014) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+nav{position:fixed;top:0;left:0;right:0;z-index:200;height:60px;display:flex;align-items:center;padding:0 40px;background:rgba(6,8,13,.85);backdrop-filter:blur(20px);border-bottom:1px solid rgba(24,36,58,.6)}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo-hex{width:34px;height:34px;background:var(--accent);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#000}
+.nav-brand{font-size:18px;font-weight:800;letter-spacing:-.3px}
+.nav-brand span{color:var(--accent)}
+.container{max-width:860px;margin:0 auto;padding:100px 24px 80px;position:relative;z-index:1}
+.back-link{display:inline-flex;align-items:center;gap:6px;color:var(--accent);text-decoration:none;font-size:13px;font-weight:600;margin-bottom:32px}
+.back-link:hover{opacity:.8}
+
+/* HERO */
+.hero{text-align:center;margin-bottom:64px}
+.discord-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(88,101,242,.15);border:1px solid rgba(88,101,242,.35);border-radius:30px;padding:8px 18px;font-size:12px;font-weight:700;color:var(--discord);letter-spacing:.5px;text-transform:uppercase;margin-bottom:24px}
+.hero h1{font-size:48px;font-weight:900;letter-spacing:-1px;margin-bottom:16px;line-height:1.1}
+.hero h1 span{color:var(--accent)}
+.hero p{color:var(--text2);font-size:16px;line-height:1.7;max-width:560px;margin:0 auto 32px}
+.join-btn{display:inline-flex;align-items:center;gap:10px;background:var(--discord);color:#fff;font-family:var(--sans);font-size:15px;font-weight:700;padding:14px 32px;border-radius:10px;text-decoration:none;transition:all .2s;border:none;cursor:pointer}
+.join-btn:hover{background:#4752c4;transform:translateY(-2px)}
+.join-btn svg{width:22px;height:22px;fill:#fff}
+
+/* STATS ROW */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:64px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center}
+.stat-num{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--accent);margin-bottom:4px}
+.stat-label{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+
+/* CHANNELS */
+.section-label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:20px;font-family:var(--mono)}
+.channels-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:64px}
+.channel-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 22px;display:flex;align-items:flex-start;gap:14px}
+.channel-card:hover{border-color:var(--border2)}
+.ch-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.ch-icon.green{background:var(--green-dim)}
+.ch-icon.blue{background:var(--blue-dim)}
+.ch-icon.amber{background:var(--amber-dim)}
+.ch-icon.red{background:var(--red-dim)}
+.ch-icon.accent{background:var(--accent-dim)}
+.ch-name{font-size:14px;font-weight:700;font-family:var(--mono);color:var(--text);margin-bottom:4px}
+.ch-name::before{content:'# ';color:var(--text3)}
+.ch-desc{font-size:12px;color:var(--text2);line-height:1.5}
+
+/* RULES */
+.rules-list{display:flex;flex-direction:column;gap:12px;margin-bottom:64px}
+.rule{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;display:flex;align-items:flex-start;gap:16px}
+.rule-num{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(0,229,180,.2);border-radius:6px;padding:4px 8px;flex-shrink:0;margin-top:2px}
+.rule-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.rule-desc{font-size:13px;color:var(--text2);line-height:1.6}
+
+/* PERKS */
+.perks-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:64px}
+.perk{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 22px}
+.perk-icon{font-size:22px;margin-bottom:10px}
+.perk-title{font-size:14px;font-weight:700;margin-bottom:6px}
+.perk-desc{font-size:13px;color:var(--text2);line-height:1.5}
+
+/* DISCLAIMER */
+.disclaimer-box{background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.2);border-radius:12px;padding:24px;margin-bottom:32px}
+.disclaimer-box h3{font-size:13px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.disclaimer-box p{font-size:13px;color:var(--text2);line-height:1.7;margin:0}
+
+/* CTA */
+.cta{text-align:center;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:48px 32px}
+.cta h2{font-size:28px;font-weight:800;margin-bottom:12px}
+.cta p{color:var(--text2);font-size:15px;margin-bottom:28px}
+
+@media(max-width:640px){
+  .channels-grid,.perks-grid,.stats-row{grid-template-columns:1fr}
+  .hero h1{font-size:32px}
+  nav{padding:0 20px}
+  .container{padding:88px 16px 60px}
+}
+</style>
+</head>
+<body>
+<nav>
+  <a class="nav-logo" href="/">
+    <div class="logo-hex">PA</div>
+    <span class="nav-brand">Price<span>Action</span> AI</span>
+  </a>
+</nav>
+
+<div class="container">
+  <a class="back-link" href="/">← Back to Home</a>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="discord-badge">
+      <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:#5865F2"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+      Discord Community
+    </div>
+    <h1>Trade Smarter.<br><span>Together.</span></h1>
+    <p>Join the PriceAction AI community — share analyses, learn ICT/SMC concepts, get feedback on your setups, and connect with serious traders.</p>
+    <a class="join-btn" href="https://discord.gg/priceactionai" target="_blank">
+      <svg viewBox="0 0 24 24"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+      Join the Server
+    </a>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-num">FREE</div>
+      <div class="stat-label">Always Free to Join</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">24/7</div>
+      <div class="stat-label">Active Community</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">ICT · SMC</div>
+      <div class="stat-label">Concepts Covered</div>
+    </div>
+  </div>
+
+  <!-- CHANNELS -->
+  <div class="section-label">Server Channels</div>
+  <div class="channels-grid">
+    <div class="channel-card">
+      <div class="ch-icon green">📢</div>
+      <div>
+        <div class="ch-name">announcements</div>
+        <div class="ch-desc">Platform updates, new features, and important news from the PA AI team.</div>
+      </div>
+    </div>
+    <div class="channel-card">
+      <div class="ch-icon accent">👋</div>
+      <div>
+        <div class="ch-name">welcome</div>
+        <div class="ch-desc">Start here. Rules, roles, and how to get the most out of the server.</div>
+      </div>
+    </div>
+    <div class="channel-card">
+      <div class="ch-icon blue">💬</div>
+      <div>
+        <div class="ch-name">general-chat</div>
+        <div class="ch-desc">Off-topic talk, market vibes, and community discussion.</div>
+      </div>
+    </div>
+    <div class="channel-card">
+      <div class="ch-icon green">📊</div>
+      <div>
+        <div class="ch-name">chart-analysis</div>
+        <div class="ch-desc">Post your AI analyses and setups. Get feedback from the community.</div>
+      </div>
+    </div>
+    <div class="channel-card">
+      <div class="ch-icon amber">🎓</div>
+      <div>
+        <div class="ch-name">education</div>
+        <div class="ch-desc">ICT concepts, SMC breakdowns, timeframe guides, and learning resources.</div>
+      </div>
+    </div>
+    <div class="channel-card">
+      <div class="ch-icon blue">⚖️</div>
+      <div>
+        <div class="ch-name">risk-management</div>
+        <div class="ch-desc">Position sizing, R:R ratios, drawdown management. Protect your capital.</div>
+      </div>
+    </div>
+    <div class="channel-card">
+      <div class="ch-icon green">📈</div>
+      <div>
+        <div class="ch-name">trade-wins</div>
+        <div class="ch-desc">Share your W's. Screenshot your closed trades and celebrate with the community.</div>
+      </div>
+    </div>
+    <div class="channel-card">
+      <div class="ch-icon red">🐛</div>
+      <div>
+        <div class="ch-name">bug-reports</div>
+        <div class="ch-desc">Found a problem with the platform? Report it here with steps to reproduce.</div>
+      </div>
+    </div>
+    <div class="channel-card">
+      <div class="ch-icon blue">❓</div>
+      <div>
+        <div class="ch-name">help</div>
+        <div class="ch-desc">Questions about using PriceAction AI? The team and community are here.</div>
+      </div>
+    </div>
+    <div class="channel-card">
+      <div class="ch-icon accent">🤖</div>
+      <div>
+        <div class="ch-name">ai-tips</div>
+        <div class="ch-desc">How to get the best results from the AI. Prompt tips, chart prep guides, examples.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULES -->
+  <div class="section-label">Server Rules</div>
+  <div class="rules-list">
+    <div class="rule">
+      <span class="rule-num">01</span>
+      <div>
+        <div class="rule-title">No Financial Advice</div>
+        <div class="rule-desc">Nothing shared in this server — by members or the AI — is financial advice. This is an educational community only. Do not tell others to buy or sell specific assets. You are responsible for your own trades.</div>
+      </div>
+    </div>
+    <div class="rule">
+      <span class="rule-num">02</span>
+      <div>
+        <div class="rule-title">Respect Everyone</div>
+        <div class="rule-desc">No harassment, hate speech, discrimination, or personal attacks. Disagreements about charts and analysis are fine — be professional about it. Toxic behaviour results in an immediate ban.</div>
+      </div>
+    </div>
+    <div class="rule">
+      <span class="rule-num">03</span>
+      <div>
+        <div class="rule-title">No Spam or Self-Promotion</div>
+        <div class="rule-desc">No spamming messages, emojis, or images. Do not promote your own Discord, YouTube, Telegram, or any paid service without explicit permission from a moderator.</div>
+      </div>
+    </div>
+    <div class="rule">
+      <span class="rule-num">04</span>
+      <div>
+        <div class="rule-title">Post in the Right Channel</div>
+        <div class="rule-desc">Keep discussions relevant to the channel topic. Chart analyses go in #chart-analysis, questions in #help, bugs in #bug-reports. Off-topic posts will be moved or deleted.</div>
+      </div>
+    </div>
+    <div class="rule">
+      <span class="rule-num">05</span>
+      <div>
+        <div class="rule-title">No Scams or Pump & Dump</div>
+        <div class="rule-desc">Absolutely zero tolerance for scam links, phishing, pump-and-dump schemes, or fake giveaways. This results in a permanent ban and will be reported to Discord Trust & Safety.</div>
+      </div>
+    </div>
+    <div class="rule">
+      <span class="rule-num">06</span>
+      <div>
+        <div class="rule-title">Use English</div>
+        <div class="rule-desc">Please communicate in English in all public channels so moderators can keep the community safe. We may add language-specific channels as the server grows.</div>
+      </div>
+    </div>
+    <div class="rule">
+      <span class="rule-num">07</span>
+      <div>
+        <div class="rule-title">No NSFW Content</div>
+        <div class="rule-desc">This is a professional trading community. No NSFW images, links, or discussions anywhere in the server.</div>
+      </div>
+    </div>
+    <div class="rule">
+      <span class="rule-num">08</span>
+      <div>
+        <div class="rule-title">Follow Discord's Terms</div>
+        <div class="rule-desc">All members must follow Discord's Terms of Service and Community Guidelines at all times. You must be at least 13 years old to use Discord.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERKS -->
+  <div class="section-label">Why Join?</div>
+  <div class="perks-grid">
+    <div class="perk">
+      <div class="perk-icon">🧠</div>
+      <div class="perk-title">Learn ICT & SMC</div>
+      <div class="perk-desc">Deep-dive educational content on order blocks, liquidity grabs, fair value gaps, and institutional concepts.</div>
+    </div>
+    <div class="perk">
+      <div class="perk-icon">📊</div>
+      <div class="perk-title">Share Your Setups</div>
+      <div class="perk-desc">Post your AI analyses and get honest feedback from other traders who understand the methodology.</div>
+    </div>
+    <div class="perk">
+      <div class="perk-icon">🚀</div>
+      <div class="perk-title">Early Access</div>
+      <div class="perk-desc">Discord members get first access to new features, beta tools, and platform updates before anyone else.</div>
+    </div>
+    <div class="perk">
+      <div class="perk-icon">🛡️</div>
+      <div class="perk-title">Direct Support</div>
+      <div class="perk-desc">Get help from the PA AI team directly. Faster response times than email — issues resolved same day.</div>
+    </div>
+  </div>
+
+  <!-- DISCLAIMER -->
+  <div class="disclaimer-box">
+    <h3>Trading Risk Disclaimer</h3>
+    <p>All content shared in the PriceAction AI Discord server is for <strong style="color:var(--text)">educational purposes only</strong>. Nothing discussed constitutes financial advice. Trading financial instruments carries substantial risk of loss. Never trade with money you cannot afford to lose. Past results are not indicative of future performance. <a href="/disclaimer.html" style="color:var(--amber)">Read our full Risk Disclaimer →</a></p>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta">
+    <h2>Ready to Join?</h2>
+    <p>The community is free. Always will be. Come trade smarter.</p>
+    <a class="join-btn" href="https://discord.gg/priceactionai" target="_blank">
+      <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:#fff"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+      Join Free — discord.gg/priceactionai
+    </a>
+  </div>
+
+</div>
+</body>
+</html>
