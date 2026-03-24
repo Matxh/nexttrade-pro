@@ -2538,6 +2538,11 @@ function startLoading(count){
   let i=0;if(stepTmr)clearInterval(stepTmr);
   stepTmr=setInterval(()=>{if(i>0)$('s'+i).className='step done';if(i<6)$('s'+(i+1)).className='step on';i++;if(i>=6)clearInterval(stepTmr);},5000);
 }
+function stopLoading(){
+  if(stepTmr){clearInterval(stepTmr);stepTmr=null;}
+  $('stateLoading').classList.remove('on');
+  $('stateEmpty').classList.add('hidden');
+}
 
 function showErr(msg){
   if(stepTmr)clearInterval(stepTmr);$('stateLoading').classList.remove('on');$('stateEmpty').classList.add('hidden');
