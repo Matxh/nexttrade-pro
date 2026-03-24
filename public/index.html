@@ -1041,10 +1041,28 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
     </div>
     <!-- Trading Mode Switcher -->
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="mode-btn on" id="modeScalp" onclick="setMode('scalp',this)">⚡ Scalp <span style="font-size:9px;opacity:.7">1m·5m·15m</span></button>
-      <button class="mode-btn" id="modeDayTrade" onclick="setMode('dayTrade',this)">📈 Day Trade <span style="font-size:9px;opacity:.7">15m·1H·4H</span></button>
-      <button class="mode-btn" id="modeSwing" onclick="setMode('swing',this)">🌊 Swing <span style="font-size:9px;opacity:.7">1H·4H·1D</span></button>
+    <div style="margin-bottom:10px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">Select Trading Mode</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <button class="mode-btn on" id="modeScalp" onclick="setMode('scalp',this)" style="flex-direction:column;align-items:center;padding:12px 8px;height:auto">
+          <span style="font-size:20px">⚡</span>
+          <span style="font-size:13px;font-weight:700;margin-top:4px">Scalp</span>
+          <span style="font-size:9px;opacity:.7;margin-top:2px">1m · 5m · 15m</span>
+          <span style="font-size:9px;opacity:.6;margin-top:1px">2–15 min trades</span>
+        </button>
+        <button class="mode-btn" id="modeDayTrade" onclick="setMode('dayTrade',this)" style="flex-direction:column;align-items:center;padding:12px 8px;height:auto">
+          <span style="font-size:20px">📈</span>
+          <span style="font-size:13px;font-weight:700;margin-top:4px">Day Trade</span>
+          <span style="font-size:9px;opacity:.7;margin-top:2px">15m · 1H · 4H</span>
+          <span style="font-size:9px;opacity:.6;margin-top:1px">30 min–3 hr trades</span>
+        </button>
+        <button class="mode-btn" id="modeSwing" onclick="setMode('swing',this)" style="flex-direction:column;align-items:center;padding:12px 8px;height:auto">
+          <span style="font-size:20px">🌊</span>
+          <span style="font-size:13px;font-weight:700;margin-top:4px">Swing</span>
+          <span style="font-size:9px;opacity:.7;margin-top:2px">1H · 4H · 1D</span>
+          <span style="font-size:9px;opacity:.6;margin-top:1px">1–5 day trades</span>
+        </button>
+      </div>
     </div>
     <div id="modeHint" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px;padding:8px 12px;background:var(--bg2);border-radius:7px;border:1px solid var(--border)">
       ⚡ <strong style="color:var(--text2)">Scalp mode</strong> — Upload 1m (Slot 1), 5m (Slot 2), 15m (Slot 3). Trade lasts 2–15 mins. Best in first 30 min of NY open (9:30–10:00am EST). Execute on 15m chart.
@@ -1103,6 +1121,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <div style="flex:1;min-width:180px">
         <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:2px">📡 Analyze Live — No Screenshot Needed</div>
         <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Pulls real-time candle data automatically · ES1!, NQ1!, BTC/USD, EUR/USD, SPY...</div>
+        <div id="liveModeTag" style="font-family:var(--mono);font-size:10px;margin-top:4px">Mode: <span style="color:var(--accent);font-weight:700" id="liveModeLabel">⚡ Scalp (1m · 5m · 15m)</span></div>
       </div>
       <input id="liveSymInput" type="text" placeholder="ES1!" maxlength="12"
         style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;font-family:var(--mono);outline:none;width:120px;text-transform:uppercase"
@@ -1887,6 +1906,10 @@ function setMode(mode, btn){
   slotTF[0]=m.slotTF[0]; slotTF[1]=m.slotTF[1]; slotTF[2]=m.slotTF[2];
   const hint=$('modeHint');
   if(hint) hint.innerHTML=`${m.label.split(' ')[0]} <strong style="color:var(--text2)">${m.label}</strong> — ${m.hint}`;
+  const liveLabel=$('liveModeLabel');
+  const tfLabels={scalp:'1m · 5m · 15m',dayTrade:'15m · 1H · 4H',swing:'1H · 4H · 1D'};
+  const modeEmoji={scalp:'⚡ Scalp',dayTrade:'📈 Day Trade',swing:'🌊 Swing'};
+  if(liveLabel) liveLabel.textContent=`${modeEmoji[mode]} (${tfLabels[mode]})`;
   [0,1,2].forEach(i=>{ if(charts[i]) renderSlot(i); });
 }
 const slotTF=['1m','5m','15m'];
