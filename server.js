@@ -465,7 +465,7 @@ Return ONLY valid raw JSON — no markdown:
     ...charts.map((c,i) => [{ type:'text', text:`Chart ${i+1} (${c.label||'?'}):` }, img(c.base64, c.mime)]).flat(),
     { type:'text', text:`Scalp ${sym} NOW. ${lp} Session: ${mktCtx.session}. Give instant signal.` }
   ];
-  const raw = await claude(key, SONNET, sys, content, 1000);
+  const raw = await claude(key, HAIKU, sys, content, 900);
   // Normalise to pass3 shape so the rest of the route works unchanged
   return {
     verdict: raw.verdict, confidence: raw.confidence, signal_grade: raw.signal_grade,

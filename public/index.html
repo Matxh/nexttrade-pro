@@ -1611,8 +1611,20 @@ function loadFile(file,i){
   if(!file?.type.startsWith('image/'))return;
   const reader=new FileReader();
   reader.onload=e=>{
-    charts[i]={base64:e.target.result.split(',')[1],mime:file.type,src:e.target.result,name:file.name||'chart.png'};
-    renderSlot(i);updateAnalyzeBar();
+    // Compress image before storing — resize to max 1024px, JPEG 82%
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1024;
+      const scale=Math.min(1,MAX/Math.max(img.width,img.height));
+      const w=Math.round(img.width*scale), h=Math.round(img.height*scale);
+      const canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const compressed=canvas.toDataURL('image/jpeg',0.82);
+      charts[i]={base64:compressed.split(',')[1],mime:'image/jpeg',src:compressed,name:file.name||'chart.jpg'};
+      renderSlot(i);updateAnalyzeBar();
+    };
+    img.src=e.target.result;
   };
   reader.readAsDataURL(file);
 }
