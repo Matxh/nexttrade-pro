@@ -613,9 +613,10 @@ Return ONLY valid raw JSON:
 // ─────────────────────────────────────────────
 // PASS 3 — FINAL VERDICT (Opus)
 // ─────────────────────────────────────────────
-async function pass3(charts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode='dayTrade') {
+async function pass3(charts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode='dayTrade', personalEdge=null) {
   const lp = livePrice ? `Live: $${livePrice.price} (${livePrice.change24h||'?'}% 24h)` : 'Live: N/A';
   const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
+  const edgeNote = personalEdge ? `\nPERSONALIZED EDGE: ${personalEdge.summary}` : '';
   const modeCtx = tradeMode==='scalp'
     ? 'TRADE MODE: SCALP — Tight SL/TP. Trade lasts 2–15 mins. Prefer 1:1.5+ R:R minimum. Only signal during high-liquidity (NY open first 30 min). Require clear momentum candle.'
     : tradeMode==='swing'
@@ -684,7 +685,7 @@ Return ONLY valid raw JSON:
   const { p3, tokens } = getModels(tradeMode);
   return claude(key, p3, sys, [
     ...charts.map(c => img(c.base64, c.mime)),
-    { type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\nTrade Mode: ${tradeMode||'dayTrade'}\n${ws}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nVolume: ${JSON.stringify(reading.volume_analysis)}\nPre-market: ${JSON.stringify(reading.premarket_bias)}\nAt key level: ${reading.at_key_level} — ${reading.nearest_key_level}\n\nApply all 12 gates strictly. Apply G13/G14/G15 if dayTrade mode.` }
+    { type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\nTrade Mode: ${tradeMode||'dayTrade'}\n${ws}${edgeNote}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nVolume: ${JSON.stringify(reading.volume_analysis)}\nPre-market: ${JSON.stringify(reading.premarket_bias)}\nAt key level: ${reading.at_key_level} — ${reading.nearest_key_level}\n\nApply all 12 gates strictly. Apply G13/G14/G15 if dayTrade mode.` }
   ], tokens.p3);
 }
 
@@ -696,6 +697,124 @@ function getWinStats(allTrades) {
   const byGrade = {};
   trades.forEach(t => { if (!byGrade[t.grade]) byGrade[t.grade] = { wins:0, losses:0 }; byGrade[t.grade][t.outcome==='win'?'wins':'losses']++; });
   return { total:trades.length, wins, losses:trades.length-wins, winRate:Math.round(wins/trades.length*100), avgRR:avgRR.toFixed(2), byGrade };
+}
+
+// ─────────────────────────────────────────────
+// FEATURE 1: PERSONALIZED EDGE ANALYZER
+// ─────────────────────────────────────────────
+function getPersonalizedEdge(allTrades) {
+  const trades = (allTrades || []).filter(t => t.outcome);
+  if (trades.length < 3) return null;
+
+  // Win rate by hour
+  const byHour = {};
+  trades.forEach(t => {
+    if (!t.timestamp) return;
+    const h = new Date(t.timestamp).getHours();
+    if (!byHour[h]) byHour[h] = { wins:0, losses:0 };
+    byHour[h][t.outcome === 'win' ? 'wins' : 'losses']++;
+  });
+  let bestHour = null, bestHourWR = -1;
+  Object.entries(byHour).forEach(([h, d]) => {
+    const total = d.wins + d.losses;
+    if (total >= 2) {
+      const wr = d.wins / total;
+      if (wr > bestHourWR) { bestHourWR = wr; bestHour = parseInt(h); }
+    }
+  });
+
+  // Win rate by symbol
+  const bySymbol = {};
+  trades.forEach(t => {
+    const s = t.symbol || 'Unknown';
+    if (!bySymbol[s]) bySymbol[s] = { wins:0, losses:0 };
+    bySymbol[s][t.outcome === 'win' ? 'wins' : 'losses']++;
+  });
+  let bestSymbol = null, bestSymbolWR = -1;
+  Object.entries(bySymbol).forEach(([s, d]) => {
+    const total = d.wins + d.losses;
+    if (total >= 2) {
+      const wr = d.wins / total;
+      if (wr > bestSymbolWR) { bestSymbolWR = wr; bestSymbol = s; }
+    }
+  });
+
+  // Win rate by grade
+  const byGrade = {};
+  trades.forEach(t => {
+    const g = t.grade || 'B';
+    if (!byGrade[g]) byGrade[g] = { wins:0, losses:0 };
+    byGrade[g][t.outcome === 'win' ? 'wins' : 'losses']++;
+  });
+  let bestGrade = null, bestGradeWR = -1;
+  Object.entries(byGrade).forEach(([g, d]) => {
+    const total = d.wins + d.losses;
+    if (total >= 2) {
+      const wr = d.wins / total;
+      if (wr > bestGradeWR) { bestGradeWR = wr; bestGrade = g; }
+    }
+  });
+
+  // Win rate by verdict (BUY vs SELL)
+  const byVerdict = {};
+  trades.forEach(t => {
+    const v = t.verdict || 'WAIT';
+    if (!byVerdict[v]) byVerdict[v] = { wins:0, losses:0 };
+    byVerdict[v][t.outcome === 'win' ? 'wins' : 'losses']++;
+  });
+  const buyStats = byVerdict['BUY'] || { wins:0, losses:0 };
+  const sellStats = byVerdict['SELL'] || { wins:0, losses:0 };
+  const buyWR = (buyStats.wins + buyStats.losses) >= 2 ? Math.round(buyStats.wins / (buyStats.wins + buyStats.losses) * 100) : null;
+  const sellWR = (sellStats.wins + sellStats.losses) >= 2 ? Math.round(sellStats.wins / (sellStats.wins + sellStats.losses) * 100) : null;
+
+  // Best session: morning (before 12 UTC) vs afternoon (12-17 UTC) vs evening (17+ UTC)
+  const bySession = { morning:{wins:0,losses:0}, afternoon:{wins:0,losses:0}, evening:{wins:0,losses:0} };
+  trades.forEach(t => {
+    if (!t.timestamp) return;
+    const h = new Date(t.timestamp).getUTCHours();
+    const sess = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+    bySession[sess][t.outcome === 'win' ? 'wins' : 'losses']++;
+  });
+  let worstSession = null, worstSessionWR = 2;
+  ['morning','afternoon','evening'].forEach(s => {
+    const d = bySession[s];
+    const total = d.wins + d.losses;
+    if (total >= 2) {
+      const wr = d.wins / total;
+      if (wr < worstSessionWR) { worstSessionWR = wr; worstSession = s; }
+    }
+  });
+
+  // Build summary string
+  const parts = [];
+  const totalWins = trades.filter(t => t.outcome === 'win').length;
+  const overallWR = Math.round(totalWins / trades.length * 100);
+  parts.push(`Overall ${overallWR}% WR over ${trades.length} trades`);
+  if (bestGrade && bestGradeWR > 0) parts.push(`${bestGrade} grade: ${Math.round(bestGradeWR*100)}% WR`);
+  if (buyWR !== null && sellWR !== null) {
+    parts.push(buyWR >= sellWR ? `BUY signals stronger (${buyWR}% vs ${sellWR}% for SELL)` : `SELL signals stronger (${sellWR}% vs ${buyWR}% for BUY)`);
+  } else if (buyWR !== null) {
+    parts.push(`BUY: ${buyWR}% WR`);
+  } else if (sellWR !== null) {
+    parts.push(`SELL: ${sellWR}% WR`);
+  }
+  if (bestHour !== null) {
+    const h12 = bestHour % 12 || 12;
+    const ampm = bestHour >= 12 ? 'pm' : 'am';
+    const hNext = (bestHour + 1) % 12 || 12;
+    const ampmNext = (bestHour + 1) >= 12 ? 'pm' : 'am';
+    parts.push(`Best hour: ${h12}:00–${hNext}:00${ampm}`);
+  }
+  if (worstSession) parts.push(`Worst: ${worstSession} trades`);
+
+  return {
+    summary: 'Your edge: ' + parts.join(' | '),
+    overallWR, totalTrades: trades.length,
+    byGrade: Object.entries(byGrade).map(([g,d]) => ({ grade:g, wr: (d.wins+d.losses)>=1 ? Math.round(d.wins/(d.wins+d.losses)*100) : null, wins:d.wins, losses:d.losses })),
+    buyWR, sellWR,
+    bestHour, bestGrade, bestGradeWR: Math.round(bestGradeWR*100),
+    worstSession
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -720,6 +839,7 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
 
     const [livePrice, allTrades] = await Promise.all([fetchLivePrice(sym).catch(() => null), getTrades()]);
     const winStats    = getWinStats(allTrades);
+    const personalEdge = getPersonalizedEdge(allTrades.filter(t => t.userId === req.user.id));
     const mktCtx      = getMarketContext(sym);
 
     let result;
@@ -747,7 +867,7 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
         entry = await pass2(chartList, sym, reading, ctx, livePrice, key, tradeMode||'dayTrade');
         console.log(`[Pass 2] Entry:${entry.entry_price} SL:${entry.sl_price} Quality:${entry.entry_quality}`);
       }
-      result = await pass3(chartList, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode||'dayTrade');
+      result = await pass3(chartList, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode||'dayTrade', personalEdge);
     }
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
     console.log(`[Pass 3] ${result.verdict} Grade:${result.signal_grade} Conf:${result.confidence}% — ${elapsed}s`);
@@ -960,9 +1080,10 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`\n[LIVE] ═══ ${sym} ${tfs.join('+')} — ${tradeMode||'dayTrade'} — ${req.user.email} ═══`);
     const t0 = Date.now();
 
-    // Fetch all timeframes in parallel
-    const [allTrades, ...ohlcvResults] = await Promise.all([
+    // Fetch all timeframes in parallel (also fetch correlated assets for ES/NQ/SPY/QQQ)
+    const [allTrades, correlatedAssets, ...ohlcvResults] = await Promise.all([
       getTrades(),
+      fetchCorrelatedAssets(sym).catch(() => null),
       ...tfs.map(tf => fetchOHLCV(sym, tf, 100).catch(() => null))
     ]);
 
@@ -971,11 +1092,15 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 
     const livePrice  = { price: available[0].candles.slice(-1)[0]?.close, source: available[0].source };
     const winStats   = getWinStats(allTrades);
+    const personalEdge = getPersonalizedEdge(allTrades.filter(t => t.userId === req.user.id));
     const mktCtx     = getMarketContext(sym);
     const mode       = tradeMode || 'dayTrade';
 
     // Build text-based chart data for each TF
     const chartTexts = available.map(d => ohlcvToText(d));
+
+    // Build correlated assets context string
+    const corrNote = correlatedAssets ? `\nCORRELATED ASSETS: VIX=${correlatedAssets.vix?.level||'?'} (${correlatedAssets.vix?.price||'?'}), DXY proxy=${correlatedAssets.dxy?.price||'?'} (${correlatedAssets.dxy?.change||'?'}%), Bonds(TLT)=${correlatedAssets.bonds?.price||'?'} (${correlatedAssets.bonds?.change||'?'}%). ${correlatedAssets.note||''}` : '';
 
     let result;
     if (mode === 'scalp') {
@@ -988,7 +1113,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
         pass1B([], sym, livePrice, mktCtx, winStats, key, mode)
       ]);
       // Combine pass2+3 into one call for speed
-      result = await pass23CombinedLive(chartTexts, sym, tfs[tfs.length-1], reading, ctx, livePrice, mktCtx, winStats, key, mode);
+      result = await pass23CombinedLive(chartTexts, sym, tfs[tfs.length-1], reading, ctx, livePrice, mktCtx, winStats, key, mode, personalEdge);
     } else {
       // 🌊 Swing: 3 passes with Opus on final ~12-15s
       const [reading, ctx] = await Promise.all([
@@ -996,8 +1121,10 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
         pass1B([], sym, livePrice, mktCtx, winStats, key, mode)
       ]);
       const entry = await pass2Live(chartTexts, sym, reading, ctx, livePrice, key, mode, true);
-      result      = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, entry, livePrice, mktCtx, winStats, key, mode, true);
+      result      = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, entry, livePrice, mktCtx, winStats, key, mode, true, personalEdge);
     }
+    // Attach correlated assets to result
+    if (correlatedAssets) result._correlatedAssets = correlatedAssets;
 
     // Save to journal
     if (result?.verdict && result.verdict !== 'WAIT') {
@@ -1009,7 +1136,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 
     const elapsed = ((Date.now()-t0)/1000).toFixed(1);
     console.log(`[LIVE] Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
-    res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf) });
+    res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: result._correlatedAssets || correlatedAssets });
 
   } catch(e) {
     console.error('[LIVE] Error:', e.message);
@@ -1067,9 +1194,10 @@ Return ONLY valid raw JSON:
   return claude(key, p2, sys, [{ type:'text', text:`${sym} — Find best ${dir} entry.\n${lp}\nHTF bias: ${reading.htf_bias} | Alignment: ${reading.alignment_score}/100\nOB: ${JSON.stringify(reading.timeframes?.[0]?.key_ob)}\nKey levels: ${JSON.stringify(reading.key_levels?.slice(0,5))}\nContext: ${ctx.context_bias} | Session: ${ctx.session_quality}\n\nLIVE DATA:\n${chartTexts[0]?.substring(0,2000)}` }], tokens.p2);
 }
 
-async function pass3Live(chartTexts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode, live=false) {
+async function pass3Live(chartTexts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode, live=false, personalEdge=null) {
   const lp = livePrice ? `Live: $${livePrice.price}` : 'Live: N/A';
   const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
+  const edgeNote = personalEdge ? `\nPERSONALIZED EDGE: ${personalEdge.summary}` : '';
   const modeCtx = tradeMode==='scalp'
     ? 'TRADE MODE: SCALP — Tight SL/TP. 2–15 mins. 1:1.5+ R:R. NY open only.'
     : tradeMode==='swing'
@@ -1093,14 +1221,15 @@ Return ONLY valid raw JSON:
 "factors":[{"name":"HTF Trend","score":<0-100>,"note":"<>"},{"name":"Entry Quality","score":<0-100>,"note":"<>"},{"name":"Risk/Reward","score":<0-100>,"note":"<>"},{"name":"Session","score":<0-100>,"note":"<>"},{"name":"Volume","score":<0-100>,"note":"<>"}],
 "invalidation":"<price>","position_size":"1% risk",
 "fullAnalysis":"<15 sentences covering all aspects of the trade>"}`;
-  return claude(key, p3, sys, [{ type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\nMode: ${tradeMode}\n${ws}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nLIVE DATA SUMMARY:\n${chartTexts.map((t,i)=>t.split('\n').slice(0,8).join('\n')).join('\n---\n')}\n\nApply all gates strictly.` }], tokens.p3);
+  return claude(key, p3, sys, [{ type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\nMode: ${tradeMode}\n${ws}${edgeNote}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nLIVE DATA SUMMARY:\n${chartTexts.map((t,i)=>t.split('\n').slice(0,8).join('\n')).join('\n---\n')}\n\nApply all gates strictly.` }], tokens.p3);
 }
 
 // Combined Pass 2+3 for day trade live — saves one full API round trip
-async function pass23CombinedLive(chartTexts, sym, tf, reading, ctx, livePrice, mktCtx, winStats, key, tradeMode) {
+async function pass23CombinedLive(chartTexts, sym, tf, reading, ctx, livePrice, mktCtx, winStats, key, tradeMode, personalEdge=null) {
   const { p3, tokens } = getModels(tradeMode, true);
   const lp = livePrice ? `Live: $${livePrice.price}` : 'N/A';
   const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
+  const edgeNote = personalEdge ? `\nPERSONALIZED EDGE: ${personalEdge.summary}` : '';
   const sys = `You are an elite ICT trader. From live OHLCV data analysis, find the best entry AND make the final trading decision in one step.
 
 TRADE MODE: DAY TRADE — 30 mins–3 hrs. 1:2.5+ R:R. Best 9:30-11:30am EST. Volume required. Key levels only.
@@ -1119,7 +1248,7 @@ Return ONLY valid raw JSON:
 "factors":[{"name":"HTF Trend","score":<0-100>,"note":"<>"},{"name":"Entry Quality","score":<0-100>,"note":"<>"},{"name":"Risk/Reward","score":<0-100>,"note":"<>"},{"name":"Session","score":<0-100>,"note":"<>"},{"name":"Volume","score":<0-100>,"note":"<>"}],
 "invalidation":"<price>","position_size":"1% risk",
 "fullAnalysis":"<12 sentences covering all trade aspects>"}`;
-  return claude(key, p3, sys, [{ type:'text', text:`DAY TRADE DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\n${ws}\n\nSTRUCTURE:\n${JSON.stringify(reading)}\n\nCONTEXT:\n${JSON.stringify(ctx)}\n\nLIVE DATA:\n${chartTexts.map((t,i)=>t.split('\n').slice(0,15).join('\n')).join('\n---\n')}\n\nFind best entry and make final decision. Apply all gates.` }], tokens.p3);
+  return claude(key, p3, sys, [{ type:'text', text:`DAY TRADE DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\n${ws}${edgeNote}\n\nSTRUCTURE:\n${JSON.stringify(reading)}\n\nCONTEXT:\n${JSON.stringify(ctx)}\n\nLIVE DATA:\n${chartTexts.map((t,i)=>t.split('\n').slice(0,15).join('\n')).join('\n---\n')}\n\nFind best entry and make final decision. Apply all gates.` }], tokens.p3);
 }
 
 async function scalpFastLive(chartTexts, sym, livePrice, mktCtx, key) {
@@ -1137,6 +1266,267 @@ Return ONLY valid raw JSON:
 "gates_passed":["momentum ✓"],"gates_failed":[],"invalidation":"<price>"}`;
   return claude(key, HAIKU, sys, [{ type:'text', text:`SCALP — ${sym}\n${lp}\nSession: ${mktCtx.session}\n\n${chartTexts[0]?.substring(0,3000)}` }], 900);
 }
+
+// ─────────────────────────────────────────────
+// FEATURE 2: MULTI-SYMBOL SCANNER
+// ─────────────────────────────────────────────
+app.post('/api/scanner', authMiddleware, requirePlan, async (req, res) => {
+  const { symbols, tradeMode } = req.body;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+  const syms = (symbols || ['ES1!','NQ1!','CL1!','GC1!']).slice(0, 8);
+  const mode = tradeMode || 'dayTrade';
+
+  try {
+    console.log(`[SCANNER] Scanning ${syms.join(',')} — ${mode}`);
+    const tf = mode === 'scalp' ? '15m' : mode === 'swing' ? '4H' : '1H';
+
+    // Fetch all symbols in parallel
+    const results = await Promise.all(syms.map(async (sym) => {
+      try {
+        const data = await fetchOHLCV(sym.toUpperCase().trim(), tf, 60);
+        if (!data) return { symbol: sym, error: 'No data' };
+        const ohlcvText = ohlcvToText(data);
+        const livePrice = data.candles.slice(-1)[0]?.close;
+
+        // Fast single-pass Haiku analysis
+        const scanResult = await claude(key, HAIKU, `You are a fast trading signal scanner. Analyze OHLCV data and return a quick signal.
+Return ONLY valid raw JSON:
+{"verdict":"BUY/SELL/WAIT","grade":"A+/A/B/C/D","confidence":<40-95>,"entry":"<price>","sl":"<price>","tp1":"<price>","rr_tp1":"1:<X.X>","summary":"<2 sentences max>"}`,
+          [{ type:'text', text:`Quick scan ${sym} ${tf}. Live: ${livePrice}. Mode: ${mode}.\n${ohlcvText.substring(0,2000)}` }],
+          400);
+
+        return {
+          symbol: sym,
+          verdict: scanResult.verdict || 'WAIT',
+          grade: scanResult.grade || 'C',
+          confidence: scanResult.confidence || 50,
+          entry: scanResult.entry,
+          sl: scanResult.sl,
+          tp1: scanResult.tp1,
+          rr_tp1: scanResult.rr_tp1,
+          summary: scanResult.summary || '',
+          livePrice
+        };
+      } catch(e) {
+        return { symbol: sym, verdict: 'WAIT', grade: 'D', confidence: 0, summary: 'Error: ' + e.message };
+      }
+    }));
+
+    // Sort by grade (A+ first), then confidence
+    const gradeOrder = { 'A+':0, 'A':1, 'B':2, 'C':3, 'D':4 };
+    results.sort((a,b) => {
+      const ga = gradeOrder[a.grade] ?? 5;
+      const gb = gradeOrder[b.grade] ?? 5;
+      if (ga !== gb) return ga - gb;
+      return (b.confidence||0) - (a.confidence||0);
+    });
+
+    res.json({ results });
+  } catch(e) {
+    console.error('[SCANNER] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// FEATURE 3: MORNING MARKET BRIEFING
+// ─────────────────────────────────────────────
+app.get('/api/briefing', authMiddleware, async (req, res) => {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+
+  try {
+    // Fetch ES and NQ live data
+    const [esData, nqData] = await Promise.all([
+      fetchOHLCV('ES1!', '1H', 30).catch(() => null),
+      fetchOHLCV('NQ1!', '1H', 30).catch(() => null)
+    ]);
+
+    const today = new Date();
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dayName = dayNames[today.getDay()];
+    const dateStr = today.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+    const isFriday = today.getDay() === 5;
+    const isMonday = today.getDay() === 1;
+
+    const esText = esData ? ohlcvToText(esData).substring(0, 1500) : 'ES data unavailable';
+    const nqText = nqData ? ohlcvToText(nqData).substring(0, 1500) : 'NQ data unavailable';
+
+    const briefing = await claude(key, HAIKU, `You are a professional market analyst. Write a morning briefing for futures traders. Be concise and specific with price levels. Return ONLY valid raw JSON.`,
+      [{ type:'text', text:`Generate a morning market briefing for ${dayName}, ${dateStr}.
+
+ES1! DATA:\n${esText}
+
+NQ1! DATA:\n${nqText}
+
+${isFriday ? 'NOTE: It is FRIDAY — NFP risk if first Friday of month, position risk before weekend.' : ''}
+${isMonday ? 'NOTE: It is MONDAY — Watch for weekend gaps. Caution on gap fills.' : ''}
+
+Return JSON: {"bias":"Bullish/Bearish/Neutral","bias_note":"<1 sentence>","es_key_levels":"<support and resistance levels>","nq_key_levels":"<support and resistance levels>","best_windows":"<best times to trade today>","caution_notes":"<any specific warnings for today>","briefing":"<full formatted briefing text with sections: MARKET BIAS, ES KEY LEVELS, NQ KEY LEVELS, BEST WINDOWS, CAUTION — 150-200 words total>"}` }],
+      800);
+
+    res.json({ briefing: briefing.briefing, meta: { bias: briefing.bias, generatedAt: new Date().toISOString(), day: dayName } });
+  } catch(e) {
+    console.error('[BRIEFING] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// FEATURE 5: CORRELATED ASSETS
+// ─────────────────────────────────────────────
+const EQUITY_SYMBOLS = new Set(['ES','ES1!','NQ','NQ1!','SPY','QQQ','YM','YM1!','RTY','RTY1!','AAPL','NVDA','MSFT','AMZN','META','TSLA']);
+
+async function fetchCorrelatedAssets(symbol) {
+  const sym = (symbol || '').toUpperCase().replace('!','');
+  // Only fetch correlations for equity-adjacent instruments
+  if (!EQUITY_SYMBOLS.has(sym) && !EQUITY_SYMBOLS.has(sym.replace('1',''))) return null;
+
+  try {
+    const [vixData, uupData, tltData] = await Promise.all([
+      fetchOHLCV('^VIX', '1D', 5).catch(() => null),
+      fetchOHLCV('UUP', '1D', 5).catch(() => null),
+      fetchOHLCV('TLT', '1D', 5).catch(() => null)
+    ]);
+
+    const getLatest = (d) => {
+      if (!d?.candles?.length) return null;
+      const c = d.candles;
+      const last = c[c.length-1];
+      const prev = c[c.length-2];
+      const price = parseFloat(last?.close);
+      const prevPrice = parseFloat(prev?.close);
+      const change = prevPrice ? ((price - prevPrice)/prevPrice*100).toFixed(2) : null;
+      return { price: price?.toFixed(2), change };
+    };
+
+    const vix = getLatest(vixData);
+    const dxy = getLatest(uupData);
+    const bonds = getLatest(tltData);
+
+    const vixLevel = vix ? (parseFloat(vix.price) > 25 ? 'HIGH FEAR' : parseFloat(vix.price) > 18 ? 'ELEVATED' : 'LOW FEAR') : null;
+
+    // Build a 1-sentence interpretation
+    let note = '';
+    if (vix && dxy && bonds) {
+      const vixNum = parseFloat(vix.price);
+      const dxyChange = parseFloat(dxy.change);
+      const bondsChange = parseFloat(bonds.change);
+
+      if (vixNum > 25) note = 'High VIX indicates fear — reduce size, use wider stops.';
+      else if (vixNum < 15 && dxyChange < 0 && bondsChange > 0) note = 'Risk-on environment: low VIX + weak DXY + rising bonds favor longs.';
+      else if (dxyChange > 0.3) note = 'Strong DXY may pressure equities — watch for headwinds on ES/NQ.';
+      else if (bondsChange < -0.3) note = 'Falling bonds (TLT) signals risk-off — caution on equity longs.';
+      else note = 'Neutral macro backdrop — trade price action setups directly.';
+    }
+
+    return {
+      vix: vix ? { ...vix, level: vixLevel } : null,
+      dxy: dxy || null,
+      bonds: bonds || null,
+      note
+    };
+  } catch(e) {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────
+// FEATURE 7: BACKTEST
+// ─────────────────────────────────────────────
+app.post('/api/backtest', authMiddleware, requirePlan, async (req, res) => {
+  const { symbol, tradeMode, days } = req.body;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+  if (!symbol) return res.status(400).json({ error: 'Symbol required' });
+
+  const sym = symbol.toUpperCase().trim();
+  const numDays = Math.min(parseInt(days) || 5, 10); // Cap at 10 days
+  const mode = tradeMode || 'dayTrade';
+
+  try {
+    console.log(`[BACKTEST] ${sym} ${numDays} days — ${mode}`);
+
+    // Fetch daily data to identify trading days
+    const dailyData = await fetchOHLCV(sym, '1D', 30);
+    if (!dailyData) return res.status(400).json({ error: `Could not fetch data for ${sym}` });
+
+    // Get last N trading day dates
+    const tradingDays = dailyData.candles.slice(-numDays).map(c => c.datetime.split(' ')[0]);
+
+    // For each day, fetch intraday 15m data and run analysis
+    const dayResults = await Promise.all(tradingDays.map(async (date) => {
+      try {
+        // Fetch 15m data for that day
+        const intradayData = await fetchOHLCV(sym, '15m', 100);
+        if (!intradayData) return { date, result: 'no_data', grade: 'N/A', verdict: 'N/A', entry: null, sl: null, tp1: null, rr: null };
+
+        // Filter candles to morning session of that date (9:30-11:30am approximate)
+        const dayCandles = intradayData.candles.filter(c => c.datetime.startsWith(date));
+        const morningCandles = dayCandles.slice(0, 8); // First 8 × 15min = 2 hours
+        if (morningCandles.length < 3) return { date, result: 'insufficient_data', grade: 'N/A', verdict: 'N/A' };
+
+        // Build a text summary
+        const candleText = morningCandles.map(c =>
+          `${c.datetime} | O:${c.open} H:${c.high} L:${c.low} C:${c.close} V:${c.volume}`
+        ).join('\n');
+
+        const analysis = await claude(key, HAIKU, `You are a backtest AI. Analyze morning session candles and determine if there was a tradeable signal.
+Return ONLY valid raw JSON: {"verdict":"BUY/SELL/WAIT","grade":"A+/A/B/C/D","entry":"<price or null>","sl":"<price or null>","tp1":"<price or null>","rr":"1:<X.X or null>","reason":"<1 sentence>"}`,
+          [{ type:'text', text:`Backtest: ${sym} morning session on ${date} (15m candles)\n${candleText}\n\nWas there a BUY, SELL, or WAIT signal? If BUY/SELL, provide entry, SL, TP1.` }],
+          300);
+
+        // Simulate outcome: check remaining candles to see if TP1 or SL was hit
+        let result = 'open';
+        if (analysis.verdict !== 'WAIT' && analysis.entry && analysis.sl && analysis.tp1) {
+          const entry = parseFloat(analysis.entry);
+          const sl = parseFloat(analysis.sl);
+          const tp1 = parseFloat(analysis.tp1);
+          const remainingCandles = dayCandles.slice(8);
+
+          for (const c of remainingCandles) {
+            const high = parseFloat(c.high);
+            const low = parseFloat(c.low);
+            if (analysis.verdict === 'BUY') {
+              if (high >= tp1) { result = 'win'; break; }
+              if (low <= sl) { result = 'loss'; break; }
+            } else if (analysis.verdict === 'SELL') {
+              if (low <= tp1) { result = 'win'; break; }
+              if (high >= sl) { result = 'loss'; break; }
+            }
+          }
+        }
+
+        return {
+          date, verdict: analysis.verdict, grade: analysis.grade || 'C',
+          entry: analysis.entry, sl: analysis.sl, tp1: analysis.tp1,
+          rr: analysis.rr, result, reason: analysis.reason || ''
+        };
+      } catch(e) {
+        return { date, result: 'error', grade: 'N/A', verdict: 'N/A', error: e.message };
+      }
+    }));
+
+    // Calculate stats
+    const signals = dayResults.filter(d => d.verdict && d.verdict !== 'WAIT' && d.verdict !== 'N/A');
+    const wins = signals.filter(d => d.result === 'win').length;
+    const losses = signals.filter(d => d.result === 'loss').length;
+    const winRate = signals.length > 0 ? Math.round(wins / signals.length * 100) : 0;
+
+    res.json({
+      trades: dayResults,
+      totalSignals: signals.length,
+      wins, losses,
+      winRate,
+      profitFactor: losses > 0 ? (wins / losses).toFixed(2) : wins > 0 ? '∞' : 'N/A',
+      symbol: sym, days: numDays, mode
+    });
+  } catch(e) {
+    console.error('[BACKTEST] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.get('/sitemap.xml', (req, res) => {
   res.setHeader('Content-Type', 'application/xml');

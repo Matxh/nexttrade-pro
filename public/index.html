@@ -606,6 +606,36 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 .dd-bar-wrap{height:10px;background:var(--border);border-radius:5px;overflow:hidden;margin:10px 0}
 .dd-bar-fill{height:100%;border-radius:5px;transition:width .4s,background .4s}
 
+/* ── SCANNER CARDS ── */
+.scanner-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;transition:all .2s;cursor:pointer}
+.scanner-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.scanner-card.buy{border-color:rgba(0,230,118,.25)}
+.scanner-card.sell{border-color:rgba(255,61,90,.25)}
+.scanner-card.best{box-shadow:0 0 20px rgba(0,229,180,.2);border-color:rgba(0,229,180,.5) !important}
+.sc-sym{font-size:16px;font-weight:800;margin-bottom:8px}
+.sc-meta{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.sc-levels{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
+.sc-lvl{background:var(--bg3);border-radius:6px;padding:6px 8px;border:1px solid var(--border)}
+.sc-lvl-lbl{font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:1px;text-transform:uppercase}
+.sc-lvl-val{font-family:var(--mono);font-size:11px;font-weight:600}
+.sc-summary{font-size:11px;color:var(--text2);line-height:1.6}
+
+/* ── CORRELATED CHIPS ── */
+.corr-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-family:var(--mono);font-size:10px;border:1px solid var(--border);background:var(--bg3)}
+.corr-chip.vix-high{border-color:rgba(255,61,90,.3);color:var(--red)}
+.corr-chip.vix-low{border-color:rgba(0,230,118,.3);color:var(--green)}
+.corr-chip.neutral{color:var(--text2)}
+
+/* ── PSYCHOLOGY / EDGE CARDS ── */
+.psych-score-ring{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:4px solid var(--border);flex-shrink:0}
+.pattern-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.pattern-card.warn{border-color:rgba(255,179,0,.25);background:var(--amber-dim)}
+.pattern-card.danger{border-color:rgba(255,61,90,.25);background:var(--red-dim)}
+.pattern-card.good{border-color:rgba(0,230,118,.25);background:var(--green-dim)}
+.edge-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);margin-bottom:6px}
+.edge-label{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.edge-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent)}
+
 /* ── WATCHLIST ── */
 .watchlist-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px}
 .wl-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:4px 10px;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;transition:all .15s;white-space:nowrap}
@@ -640,6 +670,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <a class="nav-link" onclick="goTo('pricing')">Pricing</a>
     <a class="nav-link" onclick="goTo('how')">How It Works</a>
     <a class="nav-link" onclick="showPage('analyzer')">Analyzer</a>
+    <a class="nav-link" onclick="showPage('scanner')">Scanner</a>
     <a class="nav-link" onclick="showPage('journal')">Journal</a>
     <a class="nav-link" onclick="showPage('calculator')">Risk Calc</a>
     <a class="nav-link" href="/trading-guide.html" target="_blank">Trading Guide</a>
@@ -1144,6 +1175,59 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     </div>
     <div class="paste-row"><span class="kbd">Ctrl+V</span><span>paste chart to slot 1 · or drag & drop onto any slot</span></div>
 
+    <!-- Morning Briefing Panel -->
+    <div class="j-panel" style="margin-bottom:16px" id="briefingPanel">
+      <div class="j-head" style="cursor:pointer" onclick="togglePanel('briefingBody','briefingToggle')">
+        <span class="j-title">📰 Morning Briefing</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="briefingToggle">▼ expand</span>
+      </div>
+      <div id="briefingBody" style="display:none;padding:16px 20px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <button onclick="generateBriefing()" id="briefingBtn" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer">Generate Briefing</button>
+          <span id="briefingTime" style="font-family:var(--mono);font-size:10px;color:var(--text3)"></span>
+        </div>
+        <div id="briefingLoading" style="display:none;font-family:var(--mono);font-size:11px;color:var(--text2);padding:8px 0">Generating briefing...</div>
+        <div id="briefingContent" style="font-size:13px;color:var(--text2);line-height:1.8;white-space:pre-wrap;display:none"></div>
+      </div>
+    </div>
+
+    <!-- Backtest Panel -->
+    <div class="j-panel" style="margin-bottom:16px" id="backtestPanel">
+      <div class="j-head" style="cursor:pointer" onclick="togglePanel('backtestBody','backtestToggle')">
+        <span class="j-title">📊 Backtest</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="backtestToggle">▼ expand</span>
+      </div>
+      <div id="backtestBody" style="display:none;padding:16px 20px">
+        <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Symbol</div>
+            <input id="backtestSym" type="text" placeholder="ES1!" style="background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;width:100px;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Days</div>
+            <select id="backtestDays" style="background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none">
+              <option value="5">5 days</option>
+              <option value="10">10 days</option>
+              <option value="20">20 days (max 10)</option>
+            </select>
+          </div>
+          <button onclick="runBacktest()" id="backtestBtn" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:9px 20px;font-weight:700;font-size:13px;cursor:pointer">Run Backtest</button>
+        </div>
+        <div id="backtestLoading" style="display:none;font-family:var(--mono);font-size:11px;color:var(--text2);padding:8px 0">Running backtest... (this may take 30-60 seconds)</div>
+        <div id="backtestError" style="display:none;background:var(--red-dim);border:1px solid rgba(255,61,90,.25);border-radius:7px;padding:10px;color:var(--red);font-family:var(--mono);font-size:11px;margin-bottom:10px"></div>
+        <div id="backtestResults" style="display:none">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="backtestStats"></div>
+          <div style="overflow-x:auto">
+            <table class="j-table" id="backtestTable">
+              <thead><tr><th>Date</th><th>Signal</th><th>Grade</th><th>Entry</th><th>SL</th><th>TP1</th><th>R:R</th><th>Result</th><th>Reason</th></tr></thead>
+              <tbody id="backtestBody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px;font-family:var(--mono);font-size:9px;color:var(--text3);text-align:center">⚠️ Simplified backtest — for research only. Past performance does not guarantee future results.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Alert Preferences Panel -->
     <div class="j-panel" style="margin-bottom:16px" id="alertPrefsPanel">
       <div class="j-head" style="cursor:pointer" onclick="toggleAlertPanel()">
@@ -1220,6 +1304,10 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
           </div>
           <div class="verdict-summary" id="vSummary"></div>
         </div>
+        <div id="rCorrelated" style="display:none;padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.1)">
+          <div class="block-label" style="margin-bottom:8px">Correlated Assets</div>
+          <div id="correlatedChips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
         <div class="r-levels" id="rLevels">
           <div class="block-label">Trade Levels</div>
           <div class="levels-grid">
@@ -1283,6 +1371,28 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <div class="grade-cell"><div class="grade-letter D">D</div><div class="grade-stats">No data</div></div>
       </div>
     </div>
+    <!-- YOUR EDGE PANEL (Feature 1) -->
+    <div class="j-panel" id="edgePanel" style="margin-bottom:20px">
+      <div class="j-head" style="cursor:pointer" onclick="togglePanel('edgeBody','edgeToggle')">
+        <span class="j-title">🎯 Your Edge</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="edgeToggle">▼ expand</span>
+      </div>
+      <div id="edgeBody" style="display:none;padding:18px 20px">
+        <div id="edgeContent"><div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Log more trades to see your personalized edge.</div></div>
+      </div>
+    </div>
+
+    <!-- PSYCHOLOGY PANEL (Feature 6) -->
+    <div class="j-panel" id="psychPanel" style="margin-bottom:20px">
+      <div class="j-head" style="cursor:pointer" onclick="togglePanel('psychBody','psychToggle')">
+        <span class="j-title">🧘 Psychology Tracker</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="psychToggle">▼ expand</span>
+      </div>
+      <div id="psychBody" style="display:none;padding:18px 20px">
+        <div id="psychContent"><div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Log more trades to see psychology insights.</div></div>
+      </div>
+    </div>
+
     <div class="j-panel" id="weeklyPerfPanel">
       <div class="j-head"><span class="j-title">This Week's Performance</span><span class="rc-badge" id="weekBadge">0 trades</span></div>
       <div style="padding:16px 18px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="weeklyGrid">
@@ -1419,6 +1529,60 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
     </div>
 
+    <!-- Prop Firm Mode Panel (Feature 4) -->
+    <div class="j-panel" style="margin-bottom:20px" id="propFirmPanel">
+      <div class="j-head" style="cursor:pointer" onclick="togglePanel('propFirmBody','propFirmToggle')">
+        <span class="j-title">🎯 Prop Firm Mode</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="propFirmToggle">▼ expand</span>
+      </div>
+      <div id="propFirmBody" style="display:none;padding:20px">
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:160px">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Account Type</div>
+            <select id="pfAccountType" onchange="onPropFirmChange()" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none">
+              <option value="ftmo">FTMO</option>
+              <option value="topstep">TopStep</option>
+              <option value="mff">MyForexFunds</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div style="width:120px">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Max Daily Loss %</div>
+            <input id="pfDailyLossPct" type="number" step="0.5" min="0.5" max="20" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcPropFirm()">
+          </div>
+          <div style="width:120px">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Max Drawdown %</div>
+            <input id="pfMaxDDPct" type="number" step="0.5" min="1" max="30" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcPropFirm()">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Account Size ($)</div>
+            <input id="pfAccountSize" type="number" placeholder="100000" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcPropFirm()">
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Today's P&L ($)</div>
+            <input id="pfTodayPnl" type="number" placeholder="0 (negative = loss)" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none" oninput="calcPropFirm()">
+          </div>
+        </div>
+        <div id="pfResult" style="display:none">
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <span style="font-family:var(--mono);font-size:12px;color:var(--text2)">Daily Loss Buffer Used</span>
+              <span style="font-family:var(--mono);font-size:16px;font-weight:800" id="pfBufferPct">0%</span>
+            </div>
+            <div style="height:10px;background:var(--border);border-radius:5px;overflow:hidden">
+              <div id="pfBufferFill" style="height:100%;border-radius:5px;transition:width .4s,background .4s;width:0%"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--text3)">
+              <span>$0</span><span id="pfDailyLimitAmt">$0 daily limit</span>
+            </div>
+          </div>
+          <div id="pfWarning" style="display:none;border-radius:8px;padding:12px 16px;font-size:13px;font-weight:700;text-align:center;margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Scale-In Planner -->
     <div class="j-panel" style="margin-bottom:20px">
       <div class="j-head"><span class="j-title">Scale-In Planner</span></div>
@@ -1480,6 +1644,46 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ════════ SCANNER PAGE ════════ -->
+<div class="page" id="page-scanner">
+  <div class="app-wrap">
+    <div class="app-header">
+      <div style="flex:1">
+        <div class="app-title">📡 Multi-Symbol Scanner</div>
+        <div class="app-sub">Scan multiple markets simultaneously — ranked by signal grade</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Symbols to scan</div>
+        <input id="scannerSymsInput" type="text" value="ES1!,NQ1!,CL1!,GC1!,SPY,QQQ,BTC/USD,EUR/USD"
+          style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none"
+          placeholder="comma-separated symbols">
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Mode</div>
+        <select id="scannerMode" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none">
+          <option value="dayTrade">Day Trade</option>
+          <option value="scalp">Scalp</option>
+          <option value="swing">Swing</option>
+        </select>
+      </div>
+      <div style="padding-top:20px">
+        <button onclick="runScanner()" id="scannerBtn" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:11px 28px;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Scan Now
+        </button>
+      </div>
+    </div>
+    <div id="scannerLoading" style="display:none;text-align:center;padding:32px;font-family:var(--mono);font-size:12px;color:var(--text2)">
+      <div class="scan-bar" style="max-width:300px;margin:0 auto 14px"><div class="scan-fill"></div></div>
+      Scanning all symbols in parallel...
+    </div>
+    <div id="scannerError" style="display:none;background:var(--red-dim);border:1px solid rgba(255,61,90,.25);border-radius:8px;padding:14px;color:var(--red);font-family:var(--mono);font-size:12px;margin-bottom:14px"></div>
+    <div id="scannerResults" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px"></div>
   </div>
 </div>
 
@@ -2392,6 +2596,549 @@ async function saveAlertPrefs() {
   }
 }
 loadAlertPrefs();
+
+// ════════════════════════════════════
+// SHARED PANEL TOGGLE UTILITY
+// ════════════════════════════════════
+function togglePanel(bodyId, toggleId) {
+  const body = $(bodyId);
+  const tog  = $(toggleId);
+  if (!body) return;
+  const open = body.style.display === 'none' || body.style.display === '';
+  body.style.display = open ? 'block' : 'none';
+  if (tog) tog.textContent = open ? '▲ collapse' : '▼ expand';
+}
+
+// Fix toggleAlertPanel to use same pattern
+function toggleAlertPanel() {
+  togglePanel('alertPrefsBody', 'alertPanelToggle');
+}
+
+// ════════════════════════════════════
+// FEATURE 2: MULTI-SYMBOL SCANNER
+// ════════════════════════════════════
+async function runScanner() {
+  if (!currentUser) { showAuth('login'); return; }
+  const rawSyms = ($('scannerSymsInput').value || '').trim();
+  const symbols = rawSyms.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0,8);
+  if (!symbols.length) return;
+  const tradeMode = $('scannerMode').value;
+  const btn = $('scannerBtn');
+  btn.disabled = true; btn.textContent = 'Scanning...';
+  $('scannerLoading').style.display = '';
+  $('scannerError').style.display = 'none';
+  $('scannerResults').innerHTML = '';
+
+  try {
+    const res = await fetch('/api/scanner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+      body: JSON.stringify({ symbols, tradeMode })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Scanner failed');
+
+    $('scannerLoading').style.display = 'none';
+    const results = data.results || [];
+    if (!results.length) { $('scannerResults').innerHTML = '<div style="color:var(--text3);font-family:var(--mono);font-size:12px;text-align:center;padding:32px">No results</div>'; return; }
+
+    $('scannerResults').innerHTML = results.map((r, i) => {
+      const isBest = i === 0 && r.verdict !== 'WAIT';
+      const cardClass = `scanner-card ${r.verdict === 'BUY' ? 'buy' : r.verdict === 'SELL' ? 'sell' : ''} ${isBest ? 'best' : ''}`;
+      const gradeClass = (r.grade||'C').replace('+','p');
+      const confColor = (r.confidence||0) >= 75 ? 'var(--green)' : (r.confidence||0) >= 55 ? 'var(--amber)' : 'var(--red)';
+      return `<div class="${cardClass}" onclick="scannerCardClick('${r.symbol}')">
+        ${isBest ? '<div style="font-family:var(--mono);font-size:9px;color:var(--accent);margin-bottom:6px;letter-spacing:1px">★ BEST SIGNAL</div>' : ''}
+        <div class="sc-sym">${r.symbol}</div>
+        <div class="sc-meta">
+          <span class="verdict-pill ${r.verdict||'WAIT'}" style="font-size:12px;padding:4px 12px">${r.verdict||'WAIT'}</span>
+          <span class="grade-badge ${gradeClass}" style="font-size:10px">${r.grade||'C'}</span>
+          <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:${confColor}">${r.confidence||0}%</span>
+        </div>
+        ${r.entry ? `<div class="sc-levels">
+          <div class="sc-lvl"><div class="sc-lvl-lbl">Entry</div><div class="sc-lvl-val" style="color:var(--blue)">${r.entry}</div></div>
+          <div class="sc-lvl"><div class="sc-lvl-lbl">SL</div><div class="sc-lvl-val" style="color:var(--red)">${r.sl||'—'}</div></div>
+          <div class="sc-lvl"><div class="sc-lvl-lbl">TP1</div><div class="sc-lvl-val" style="color:var(--green)">${r.tp1||'—'}</div></div>
+        </div>` : ''}
+        ${r.rr_tp1 ? `<div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:7px">R:R ${r.rr_tp1}</div>` : ''}
+        <div class="sc-summary">${r.summary||''}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    $('scannerLoading').style.display = 'none';
+    $('scannerError').textContent = e.message;
+    $('scannerError').style.display = '';
+  } finally {
+    btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Scan Now';
+  }
+}
+
+function scannerCardClick(sym) {
+  // Switch to analyzer and set symbol
+  showPage('analyzer');
+  const liveInput = $('liveSymInput');
+  if (liveInput) liveInput.value = sym;
+  const symInput = $('sym');
+  if (symInput) { symInput.value = sym; updateAnalyzeBar(); }
+}
+
+// ════════════════════════════════════
+// FEATURE 3: MORNING BRIEFING
+// ════════════════════════════════════
+async function generateBriefing() {
+  if (!currentUser) { showAuth('login'); return; }
+
+  // Check localStorage cache (1 hour TTL)
+  try {
+    const cached = JSON.parse(localStorage.getItem('nt_briefing') || 'null');
+    if (cached && (Date.now() - cached.ts) < 3600000) {
+      showBriefing(cached.briefing, cached.generatedAt);
+      return;
+    }
+  } catch(e) {}
+
+  const btn = $('briefingBtn');
+  btn.disabled = true; btn.textContent = 'Generating...';
+  $('briefingLoading').style.display = '';
+  $('briefingContent').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/briefing', {
+      headers: { 'Authorization': 'Bearer ' + authToken }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Briefing failed');
+
+    // Cache for 1 hour
+    localStorage.setItem('nt_briefing', JSON.stringify({ briefing: data.briefing, generatedAt: data.meta?.generatedAt, ts: Date.now() }));
+    showBriefing(data.briefing, data.meta?.generatedAt);
+  } catch(e) {
+    $('briefingLoading').style.display = 'none';
+    $('briefingContent').textContent = 'Error: ' + e.message;
+    $('briefingContent').style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Generate Briefing';
+  }
+}
+
+function showBriefing(text, generatedAt) {
+  $('briefingLoading').style.display = 'none';
+  $('briefingContent').textContent = text || 'No briefing available.';
+  $('briefingContent').style.display = '';
+  if (generatedAt) {
+    const t = new Date(generatedAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    $('briefingTime').textContent = 'Generated at ' + t;
+  }
+}
+
+// ════════════════════════════════════
+// FEATURE 4: PROP FIRM MODE
+// ════════════════════════════════════
+const PF_PRESETS = {
+  ftmo:    { dailyLoss: 5, maxDD: 10 },
+  topstep: { dailyLoss: 3, maxDD: 6  },
+  mff:     { dailyLoss: 5, maxDD: 12 },
+  other:   { dailyLoss: 5, maxDD: 10 }
+};
+
+function onPropFirmChange() {
+  const type = $('pfAccountType').value;
+  const preset = PF_PRESETS[type] || PF_PRESETS.other;
+  $('pfDailyLossPct').value = preset.dailyLoss;
+  $('pfMaxDDPct').value = preset.maxDD;
+  calcPropFirm();
+}
+
+function calcPropFirm() {
+  const accountSize = parseFloat($('pfAccountSize').value);
+  const dailyLossPct = parseFloat($('pfDailyLossPct').value);
+  const todayPnl = parseFloat($('pfTodayPnl').value) || 0;
+  const pfResult = $('pfResult');
+  if (!accountSize || !dailyLossPct) { pfResult.style.display = 'none'; return; }
+
+  const dailyLimitAmt = accountSize * dailyLossPct / 100;
+  const todayLoss = todayPnl < 0 ? Math.abs(todayPnl) : 0;
+  const used = Math.min(100, (todayLoss / dailyLimitAmt) * 100);
+  const remaining = dailyLimitAmt - todayLoss;
+
+  pfResult.style.display = '';
+  $('pfBufferPct').textContent = used.toFixed(1) + '% used';
+  $('pfDailyLimitAmt').textContent = '$' + dailyLimitAmt.toFixed(0) + ' daily limit';
+
+  const fill = $('pfBufferFill');
+  fill.style.width = used + '%';
+  fill.style.background = used >= 90 ? 'var(--red)' : used >= 80 ? 'var(--amber)' : 'var(--green)';
+  $('pfBufferPct').style.color = used >= 90 ? 'var(--red)' : used >= 80 ? 'var(--amber)' : 'var(--green)';
+
+  const warn = $('pfWarning');
+  if (used >= 90) {
+    warn.style.display = '';
+    warn.style.background = 'var(--red-dim)';
+    warn.style.color = 'var(--red)';
+    warn.style.border = '1px solid rgba(255,61,90,.3)';
+    warn.textContent = `🚨 STOP TRADING — $${remaining.toFixed(0)} from daily limit breach`;
+  } else if (used >= 80) {
+    warn.style.display = '';
+    warn.style.background = 'var(--amber-dim)';
+    warn.style.color = 'var(--amber)';
+    warn.style.border = '1px solid rgba(255,179,0,.3)';
+    warn.textContent = `⚠️ Only $${remaining.toFixed(0)} left today — use 0.5% risk max`;
+  } else {
+    warn.style.display = 'none';
+  }
+
+  // Save to localStorage
+  savePropFirmSettings();
+}
+
+function savePropFirmSettings() {
+  try {
+    localStorage.setItem('nt_propfirm', JSON.stringify({
+      accountType: $('pfAccountType').value,
+      dailyLossPct: $('pfDailyLossPct').value,
+      maxDDPct: $('pfMaxDDPct').value,
+      accountSize: $('pfAccountSize').value
+    }));
+  } catch(e) {}
+}
+
+function loadPropFirmSettings() {
+  try {
+    const raw = localStorage.getItem('nt_propfirm');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.accountType && $('pfAccountType')) $('pfAccountType').value = s.accountType;
+    if (s.dailyLossPct && $('pfDailyLossPct')) $('pfDailyLossPct').value = s.dailyLossPct;
+    if (s.maxDDPct && $('pfMaxDDPct')) $('pfMaxDDPct').value = s.maxDDPct;
+    if (s.accountSize && $('pfAccountSize')) $('pfAccountSize').value = s.accountSize;
+  } catch(e) {}
+}
+
+// ════════════════════════════════════
+// FEATURE 5: CORRELATED ASSETS DISPLAY
+// ════════════════════════════════════
+function showCorrelatedAssets(corr) {
+  if (!corr) { $('rCorrelated').style.display = 'none'; return; }
+  const chips = [];
+  if (corr.vix) {
+    const level = corr.vix.level || 'N/A';
+    const cls = level === 'HIGH FEAR' ? 'vix-high' : level === 'LOW FEAR' ? 'vix-low' : 'neutral';
+    chips.push(`<span class="corr-chip ${cls}">VIX ${corr.vix.price||'?'} · ${level}</span>`);
+  }
+  if (corr.dxy) {
+    const chg = parseFloat(corr.dxy.change||0);
+    const cls = chg > 0.3 ? 'vix-high' : chg < -0.3 ? 'vix-low' : 'neutral';
+    chips.push(`<span class="corr-chip ${cls}">DXY ${corr.dxy.price||'?'} (${chg >= 0 ? '+' : ''}${corr.dxy.change||'0'}%)</span>`);
+  }
+  if (corr.bonds) {
+    const chg = parseFloat(corr.bonds.change||0);
+    const cls = chg < -0.3 ? 'vix-high' : chg > 0.3 ? 'vix-low' : 'neutral';
+    chips.push(`<span class="corr-chip ${cls}">TLT ${corr.bonds.price||'?'} (${chg >= 0 ? '+' : ''}${corr.bonds.change||'0'}%)</span>`);
+  }
+  if (corr.note) {
+    chips.push(`<span style="font-family:var(--mono);font-size:10px;color:var(--text3);align-self:center">${corr.note}</span>`);
+  }
+  $('correlatedChips').innerHTML = chips.join('');
+  $('rCorrelated').style.display = chips.length > 0 ? '' : 'none';
+}
+
+// ════════════════════════════════════
+// FEATURE 6: PSYCHOLOGY TRACKER
+// ════════════════════════════════════
+function renderPsychPanel(trades) {
+  const content = $('psychContent');
+  if (!content) return;
+  const completed = trades.filter(t => t.outcome);
+  if (completed.length < 3) {
+    content.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Log at least 3 completed trades to see psychology insights.</div>';
+    return;
+  }
+
+  const sorted = [...trades].sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  // Revenge trading: 2+ trades within 30 min of a loss
+  let revengeCount = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].outcome === 'loss') {
+      const lossTime = new Date(sorted[i].timestamp).getTime();
+      let quickTrades = 0;
+      for (let j = i+1; j < sorted.length; j++) {
+        const tradeTime = new Date(sorted[j].timestamp).getTime();
+        if (tradeTime - lossTime <= 30 * 60 * 1000) quickTrades++;
+        else break;
+      }
+      if (quickTrades >= 2) revengeCount++;
+    }
+  }
+
+  // Overtrading: more than 5 trades in one day
+  const byDay = {};
+  trades.forEach(t => {
+    const d = new Date(t.timestamp).toISOString().split('T')[0];
+    if (!byDay[d]) byDay[d] = 0;
+    byDay[d]++;
+  });
+  const overtradingDays = Object.entries(byDay).filter(([,v]) => v > 5).length;
+
+  // Best/worst hour by win rate
+  const byHour = {};
+  completed.forEach(t => {
+    const h = new Date(t.timestamp).getHours();
+    if (!byHour[h]) byHour[h] = { wins:0, losses:0 };
+    byHour[h][t.outcome === 'win' ? 'wins' : 'losses']++;
+  });
+  let bestHour = null, bestHourWR = -1, worstHour = null, worstHourWR = 2;
+  Object.entries(byHour).forEach(([h, d]) => {
+    const total = d.wins + d.losses;
+    if (total >= 2) {
+      const wr = d.wins / total;
+      if (wr > bestHourWR) { bestHourWR = wr; bestHour = parseInt(h); }
+      if (wr < worstHourWR) { worstHourWR = wr; worstHour = parseInt(h); }
+    }
+  });
+
+  // Tilt: win rate after 2 consecutive losses
+  let tiltTrades = 0, tiltWins = 0;
+  for (let i = 2; i < sorted.length; i++) {
+    if (sorted[i-1].outcome === 'loss' && sorted[i-2].outcome === 'loss') {
+      tiltTrades++;
+      if (sorted[i].outcome === 'win') tiltWins++;
+    }
+  }
+  const tiltWR = tiltTrades > 0 ? Math.round(tiltWins / tiltTrades * 100) : null;
+
+  // Consistency score: 0-100
+  let score = 50;
+  const winTotal = completed.filter(t => t.outcome === 'win').length;
+  const overallWR = Math.round(winTotal / completed.length * 100);
+  score = overallWR; // base score = win rate
+  // Grade quality bonus
+  const aPlus = trades.filter(t => t.grade === 'A+').length;
+  const aGrade = trades.filter(t => t.grade === 'A').length;
+  const cDGrade = trades.filter(t => t.grade === 'C' || t.grade === 'D').length;
+  if (trades.length > 0) {
+    score += Math.round(((aPlus * 2 + aGrade) / trades.length) * 20);
+    score -= Math.round((cDGrade / trades.length) * 20);
+    score -= revengeCount * 5;
+    score -= overtradingDays * 3;
+  }
+  score = Math.max(0, Math.min(100, score));
+
+  const scoreColor = score >= 70 ? 'var(--green)' : score >= 50 ? 'var(--amber)' : 'var(--red)';
+
+  const fmt = (h) => { if (h === null) return '—'; const h12 = h % 12 || 12; return `${h12}:00 ${h >= 12 ? 'PM' : 'AM'}`; };
+
+  const patterns = [];
+  if (revengeCount > 0) patterns.push({ type:'danger', icon:'🔥', text:`Revenge trading detected: ${revengeCount} time(s) — multiple trades within 30min of a loss.` });
+  if (overtradingDays > 0) patterns.push({ type:'warn', icon:'⚡', text:`Overtrading on ${overtradingDays} day(s) — more than 5 trades in a single day.` });
+  if (tiltWR !== null && tiltWR < 40) patterns.push({ type:'warn', icon:'😤', text:`Tilt detected: only ${tiltWR}% win rate after 2 consecutive losses — consider stopping when down 2.` });
+  if (worstHour !== null && worstHourWR < 0.4) patterns.push({ type:'warn', icon:'🕐', text:`Your win rate drops significantly around ${fmt(worstHour)} — consider avoiding trades at this time.` });
+  if (bestHour !== null) patterns.push({ type:'good', icon:'⭐', text:`Best trading hour: ${fmt(bestHour)} — ${Math.round(bestHourWR*100)}% win rate. Focus your best setups here.` });
+  if (score >= 70) patterns.push({ type:'good', icon:'✅', text:`Consistency score ${score}/100 — great trading discipline!` });
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">
+      <div class="psych-score-ring" style="border-color:${scoreColor}">
+        <div style="text-align:center">
+          <div style="font-size:22px;font-weight:900;color:${scoreColor}">${score}</div>
+          <div style="font-family:var(--mono);font-size:8px;color:var(--text3)">SCORE</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:4px">Psychology Score: <span style="color:${scoreColor}">${score}/100</span></div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.6">${score >= 70 ? 'Excellent discipline. Keep it up.' : score >= 50 ? 'Room for improvement — review patterns below.' : 'Significant emotional trading detected — review patterns carefully.'}</div>
+      </div>
+    </div>
+    ${patterns.map(p => `<div class="pattern-card ${p.type}">${p.icon} ${p.text}</div>`).join('')}
+    <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="edge-row"><span class="edge-label">Best Hour</span><span class="edge-val">${fmt(bestHour)}</span></div>
+      <div class="edge-row"><span class="edge-label">Worst Hour</span><span class="edge-val" style="color:var(--red)">${fmt(worstHour)}</span></div>
+      <div class="edge-row"><span class="edge-label">After 2 Losses WR</span><span class="edge-val" style="color:${tiltWR !== null && tiltWR < 40 ? 'var(--red)' : 'var(--accent)'}">${tiltWR !== null ? tiltWR+'%' : '—'}</span></div>
+      <div class="edge-row"><span class="edge-label">Overall WR</span><span class="edge-val">${overallWR}%</span></div>
+    </div>`;
+}
+
+// ════════════════════════════════════
+// FEATURE 1: YOUR EDGE PANEL
+// ════════════════════════════════════
+function renderEdgePanel(trades) {
+  const content = $('edgeContent');
+  if (!content) return;
+  const completed = trades.filter(t => t.outcome);
+  if (completed.length < 3) {
+    content.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Log at least 3 completed trades to see your personalized edge.</div>';
+    return;
+  }
+
+  // Group by grade
+  const grades = ['A+', 'A', 'B', 'C', 'D'];
+  const byGrade = {};
+  completed.forEach(t => {
+    const g = t.grade || 'B';
+    if (!byGrade[g]) byGrade[g] = { wins:0, losses:0 };
+    byGrade[g][t.outcome === 'win' ? 'wins' : 'losses']++;
+  });
+
+  // BUY vs SELL
+  const buyT = completed.filter(t => t.verdict === 'BUY');
+  const sellT = completed.filter(t => t.verdict === 'SELL');
+  const buyWR = buyT.length >= 2 ? Math.round(buyT.filter(t => t.outcome === 'win').length / buyT.length * 100) : null;
+  const sellWR = sellT.length >= 2 ? Math.round(sellT.filter(t => t.outcome === 'win').length / sellT.length * 100) : null;
+
+  // Best hour
+  const byHour = {};
+  completed.forEach(t => {
+    const h = new Date(t.timestamp).getHours();
+    if (!byHour[h]) byHour[h] = { wins:0, losses:0 };
+    byHour[h][t.outcome === 'win' ? 'wins' : 'losses']++;
+  });
+  let bestHour = null, bestHourWR = -1;
+  Object.entries(byHour).forEach(([h, d]) => {
+    const total = d.wins + d.losses;
+    if (total >= 2) { const wr = d.wins/total; if (wr > bestHourWR) { bestHourWR = wr; bestHour = parseInt(h); } }
+  });
+
+  const fmt = (h) => { if (h === null) return '—'; const h12 = h % 12 || 12; return `${h12}:00 ${h >= 12 ? 'PM' : 'AM'}`; };
+
+  // Personalized tip
+  let tip = '';
+  const topGrade = grades.find(g => { const d = byGrade[g]; return d && (d.wins + d.losses) >= 2 && (d.wins / (d.wins + d.losses)) >= 0.7; });
+  if (topGrade) tip = `Focus on ${topGrade} grade setups — that's where your edge is strongest.`;
+  else if (buyWR !== null && sellWR !== null && Math.abs(buyWR - sellWR) >= 15) {
+    tip = buyWR > sellWR ? `You perform significantly better on BUY signals (${buyWR}% vs ${sellWR}%). Prioritize long setups.` : `You perform significantly better on SELL signals (${sellWR}% vs ${buyWR}%). Prioritize short setups.`;
+  } else if (bestHour !== null) {
+    tip = `Your best trading hour is ${fmt(bestHour)}. Schedule your analysis sessions around this time.`;
+  } else {
+    const overallWR = Math.round(completed.filter(t => t.outcome === 'win').length / completed.length * 100);
+    tip = `Overall ${overallWR}% win rate — keep logging trades to discover your deeper edge.`;
+  }
+
+  content.innerHTML = `
+    <div style="margin-bottom:14px">
+      ${grades.map(g => {
+        const d = byGrade[g] || { wins:0, losses:0 };
+        const total = d.wins + d.losses;
+        const wr = total >= 1 ? Math.round(d.wins/total*100) : null;
+        const cls = g.replace('+','p');
+        const color = wr !== null ? (wr >= 60 ? 'var(--green)' : wr >= 40 ? 'var(--amber)' : 'var(--red)') : 'var(--text3)';
+        return `<div class="edge-row">
+          <span class="edge-label"><span class="j-badge ${cls}" style="margin-right:8px">${g}</span> Grade</span>
+          <span class="edge-val" style="color:${color}">${wr !== null ? wr+'% WR' : '—'} <span style="color:var(--text3);font-size:10px">(${d.wins}W/${d.losses}L)</span></span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="edge-row"><span class="edge-label">BUY Win Rate</span><span class="edge-val" style="color:var(--green)">${buyWR !== null ? buyWR+'%' : '—'}</span></div>
+      <div class="edge-row"><span class="edge-label">SELL Win Rate</span><span class="edge-val" style="color:var(--red)">${sellWR !== null ? sellWR+'%' : '—'}</span></div>
+      <div class="edge-row"><span class="edge-label">Best Hour</span><span class="edge-val">${fmt(bestHour)}</span></div>
+    </div>
+    <div style="background:var(--accent-dim);border:1px solid rgba(0,229,180,.25);border-radius:10px;padding:14px;font-size:13px;color:var(--text)">
+      💡 <strong>Personalized Tip:</strong> ${tip}
+    </div>`;
+}
+
+// ════════════════════════════════════
+// FEATURE 7: BACKTEST
+// ════════════════════════════════════
+async function runBacktest() {
+  if (!currentUser) { showAuth('login'); return; }
+  const sym = ($('backtestSym').value || $('liveSymInput')?.value || 'ES1!').trim().toUpperCase();
+  const days = parseInt($('backtestDays').value) || 5;
+  const btn = $('backtestBtn');
+  btn.disabled = true; btn.textContent = 'Running...';
+  $('backtestLoading').style.display = '';
+  $('backtestError').style.display = 'none';
+  $('backtestResults').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/backtest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+      body: JSON.stringify({ symbol: sym, tradeMode: 'dayTrade', days })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Backtest failed');
+
+    $('backtestLoading').style.display = 'none';
+    $('backtestResults').style.display = '';
+
+    // Stats cards
+    $('backtestStats').innerHTML = [
+      { label:'Signals', val: data.totalSignals, color:'var(--blue)' },
+      { label:'Win Rate', val: data.winRate+'%', color: data.winRate >= 60 ? 'var(--green)' : data.winRate >= 40 ? 'var(--amber)' : 'var(--red)' },
+      { label:'Wins/Losses', val: `${data.wins}/${data.losses}`, color:'var(--text)' },
+      { label:'Profit Factor', val: data.profitFactor, color:'var(--accent)' }
+    ].map(s => `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">${s.label}</div>
+      <div style="font-size:20px;font-weight:800;color:${s.color};font-family:var(--mono)">${s.val}</div>
+    </div>`).join('');
+
+    // Table
+    $('backtestBody').innerHTML = (data.trades || []).map(t => {
+      const resultColor = t.result === 'win' ? 'var(--green)' : t.result === 'loss' ? 'var(--red)' : 'var(--text3)';
+      const gc = (t.grade||'N/A').replace('+','p');
+      return `<tr>
+        <td style="font-family:var(--mono);font-size:11px">${t.date||'—'}</td>
+        <td><span class="j-badge ${t.verdict||'WAIT'}">${t.verdict||'N/A'}</span></td>
+        <td><span class="j-badge ${gc}">${t.grade||'N/A'}</span></td>
+        <td style="color:var(--blue);font-family:var(--mono);font-size:11px">${t.entry||'—'}</td>
+        <td style="color:var(--red);font-family:var(--mono);font-size:11px">${t.sl||'—'}</td>
+        <td style="color:var(--green);font-family:var(--mono);font-size:11px">${t.tp1||'—'}</td>
+        <td style="font-family:var(--mono);font-size:11px">${t.rr||'—'}</td>
+        <td style="color:${resultColor};font-weight:700;font-family:var(--mono);font-size:11px">${t.result||'—'}</td>
+        <td style="font-size:10px;color:var(--text3);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.reason||''}">${t.reason||'—'}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    $('backtestLoading').style.display = 'none';
+    $('backtestError').textContent = 'Error: ' + e.message;
+    $('backtestError').style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Run Backtest';
+  }
+}
+
+// ════════════════════════════════════
+// HOOK INTO EXISTING showResult & loadJournal
+// ════════════════════════════════════
+const _origShowResult = showResult;
+showResult = function(d) {
+  _origShowResult(d);
+  // Feature 5: Correlated assets
+  if (d._correlatedAssets) showCorrelatedAssets(d._correlatedAssets);
+  else $('rCorrelated').style.display = 'none';
+};
+
+const _origLoadJournal = loadJournal;
+loadJournal = async function() {
+  await _origLoadJournal();
+  // Feature 1 & 6: Render edge and psychology panels after journal loads
+  renderEdgePanel(allTrades);
+  renderPsychPanel(allTrades);
+};
+
+// ════════════════════════════════════
+// UPDATE showPage to handle scanner + calc
+// ════════════════════════════════════
+const _origShowPage = showPage;
+showPage = function(id) {
+  _origShowPage(id);
+  if (id === 'calculator') {
+    loadPropFirmSettings();
+    // Set default prop firm values if empty
+    if (!$('pfDailyLossPct').value) onPropFirmChange();
+  }
+  if (id === 'scanner') {
+    // Auto-fill backtest sym from live input
+    const liveSym = $('liveSymInput')?.value;
+    if (liveSym && $('backtestSym') && !$('backtestSym').value) $('backtestSym').value = liveSym;
+  }
+};
+
+// ════════════════════════════════════
+// INIT NEW FEATURES
+// ════════════════════════════════════
+loadPropFirmSettings();
 </script>
 
 </body>
