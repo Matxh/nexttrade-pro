@@ -1120,46 +1120,10 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     // Build text-based chart data for each TF
     const chartTexts = available.map(d => ohlcvToText(d));
 
-    // ── STEP 2: AI Analysis ───────────────────────────────────────────────
-    let result;
-    if (mode === 'scalp') {
-      console.log(`[LIVE] Step 2: scalp fast path (Haiku)`);
-      result = await scalpFastLive(chartTexts, sym, livePrice, mktCtx, key);
-
-    } else if (mode === 'dayTrade') {
-      console.log(`[LIVE] Step 2a: pass1A structure (Sonnet)`);
-      const reading = await pass1ALive(chartTexts, sym, key, mode, true);
-      console.log(`[LIVE] Step 2a done — bias:${reading.htf_bias} align:${reading.alignment_score} in ${((Date.now()-t0)/1000).toFixed(1)}s`);
-
-      const ctx = {
-        session: mktCtx.session,
-        session_quality: (mktCtx.session||'').includes('Excellent') || (mktCtx.session||'').includes('Good') || (mktCtx.session||'').includes('High') ? 'Good' : 'Poor',
-        news_risk: mktCtx.risk_events.length ? 'Medium' : 'Low',
-        day_of_week_risk: [0,6].includes(new Date().getDay()) ? 'High' : 'Low',
-        context_bias: 'Proceed', context_score: 70, risk_multiplier: 1.0,
-        summary: `Session: ${mktCtx.session}. Market hours: ${mktCtx.market_hours}.`
-      };
-      console.log(`[LIVE] Step 2b: pass2+3 combined (Sonnet)`);
-      result = await pass23CombinedLive(chartTexts, sym, tfs[tfs.length-1], reading, ctx, livePrice, mktCtx, winStats, key, mode, personalEdge);
-      console.log(`[LIVE] Step 2b done — ${result?.verdict} ${result?.signal_grade||''} in ${((Date.now()-t0)/1000).toFixed(1)}s`);
-
-    } else {
-      // swing
-      console.log(`[LIVE] Step 2a: pass1A structure (Sonnet)`);
-      const reading = await pass1ALive(chartTexts, sym, key, mode, true);
-      console.log(`[LIVE] Step 2a done — bias:${reading.htf_bias} in ${((Date.now()-t0)/1000).toFixed(1)}s`);
-
-      const ctx = {
-        session: mktCtx.session, session_quality: 'Good',
-        news_risk: mktCtx.risk_events.length ? 'Medium' : 'Low',
-        day_of_week_risk: [0,6].includes(new Date().getDay()) ? 'High' : 'Low',
-        context_bias: 'Proceed', context_score: 70, risk_multiplier: 1.0,
-        summary: `Session: ${mktCtx.session}.`
-      };
-      console.log(`[LIVE] Step 2b: pass3 final verdict (Opus)`);
-      result = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, {}, livePrice, mktCtx, winStats, key, mode, true, personalEdge);
-      console.log(`[LIVE] Step 2b done — ${result?.verdict} ${result?.signal_grade||''} in ${((Date.now()-t0)/1000).toFixed(1)}s`);
-    }
+    // ── STEP 2: Single-pass AI analysis (all modes) ──────────────────────
+    console.log(`[LIVE] Step 2: single-pass analysis (${mode})`);
+    const result = await analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, winStats, personalEdge, key, mode);
+    console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     // ── STEP 3: Await background enrichment (already running) ─────────────
     console.log(`[LIVE] Step 3: awaiting background enrichment`);
@@ -1189,127 +1153,76 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
   }
 });
 
-// Live-data versions of pass1A, pass2, pass3 (text-based, no image)
-async function pass1ALive(chartTexts, sym, key, tradeMode, live=false) {
-  const { p1a, tokens } = getModels(tradeMode, live);
-  const sys = `You are an ICT/SMC chart reading machine. You receive LIVE OHLCV data tables instead of chart images. Perform the same objective analysis.
+// ─────────────────────────────────────────────────────────────────────────────
+// SINGLE-PASS LIVE ANALYSIS — one Claude call for all modes, always returns signal
+// ─────────────────────────────────────────────────────────────────────────────
+async function analyzeOneLive(chartTexts, sym, tf, livePrice, mktCtx, winStats, personalEdge, key, tradeMode) {
+  const lp   = livePrice ? `Live price: $${livePrice.price}` : 'Live price: N/A';
+  const ws   = winStats  ? `Win rate: ${winStats.winRate}% over ${winStats.total} trades` : '';
+  const edge = personalEdge ? `User edge: ${personalEdge.summary}` : '';
+  const session = mktCtx.session || 'Unknown session';
 
-DEFINITIONS:
-- Order Block (OB): LAST up-candle before strong bearish displacement, or LAST down-candle before strong bullish displacement.
-- Fair Value Gap (FVG): 3-candle pattern — candle 1's high doesn't overlap candle 3's low (bullish FVG).
-- BOS: Price closes beyond most recent swing high (bullish) or swing low (bearish).
-- CHOCH: First BOS AGAINST current trend.
-- Liquidity: BSL = equal highs above. SSL = equal lows below.
-- Premium: Above 50% equilibrium. Discount: Below 50% equilibrium.
+  const modeInstructions = tradeMode === 'scalp'
+    ? `SCALP TRADE — hold 2–15 min. Use tight SL. Min 1:1.5 R:R. Entry on 1m/5m momentum candle.`
+    : tradeMode === 'swing'
+    ? `SWING TRADE — hold 1–5 days. Wide SL beyond structure. Min 1:3 R:R. Daily/4H level entries.`
+    : `DAY TRADE — hold 30 min–3 hrs. Min 1:2.5 R:R. Enter at key OB/FVG/S-R levels.`;
 
-Analyze the OHLCV tables carefully. Identify swing highs/lows, structure, OBs, FVGs from the price data.
+  const model  = tradeMode === 'swing' ? SONNET : HAIKU;
+  const tokens = tradeMode === 'swing' ? 1600   : 1100;
 
-Return ONLY valid raw JSON:
-{"timeframes":[${chartTexts.map((_,i)=>`{"chart_index":${i+1},"trend":"Bullish/Bearish/Sideways","structure":"HH+HL/LH+LL/Ranging","swing_high":"<price>","swing_low":"<price>","last_bos":"<price and direction>","last_choch":"<price or None>","key_ob":{"type":"Bullish/Bearish/None","zone":"<low>-<high>","fresh":true},"fvg":{"type":"Bullish/Bearish/None","range":"<low>-<high>"},"liquidity":{"bsl":"<price>","ssl":"<price>"},"bias":"Bullish/Bearish/Neutral"}`).join(',')}],
-"htf_bias":"Bullish/Bearish/Neutral","mtf_alignment":"Perfect Bull/Perfect Bear/Partial/Mixed/Conflicting",
-"alignment_score":<0-100>,"tradeable_direction":"Long/Short/Wait",
-"current_price":"<from data>","price_position":"Premium/Discount/Equilibrium",
-"htf_support":"<price>","htf_resistance":"<price>","liquidity_target":"<next likely grab>",
-"key_levels":[{"price":"<>","type":"Resistance/Support/OB/FVG","strength":"Major/Minor","reason":"<>"}],
-"volume_analysis":{"volume_trend":"Increasing/Decreasing/Flat","volume_confirms_move":true,"volume_note":"<>"},
-"at_key_level":true,"nearest_key_level":"<price and type>",
-"reading_confidence":<0-100>,
-"summary":"<5 sentences: HTF bias, structure, OB/FVG, liquidity, setup quality>"}`;
-  const content = [{ type:'text', text: chartTexts.map((t,i)=>`=== CHART ${i+1} ===\n${t}`).join('\n\n') + `\n\nAnalyze ${sym} from this live data.` }];
-  return claude(key, p1a, sys, content, tokens.p1a);
-}
+  const sys = `You are an elite ICT/SMC trading analyst. Analyze LIVE OHLCV price data and deliver a complete trading signal.
 
-async function pass2Live(chartTexts, sym, reading, ctx, livePrice, key, tradeMode, live=false) {
-  const { p2, tokens } = getModels(tradeMode, live);
-  const lp  = livePrice ? `Live price: $${livePrice.price}` : 'Live price: N/A';
-  const dir = reading.tradeable_direction;
-  const sys = `You are an elite ICT entry specialist. Find the SINGLE best entry setup at institutional price levels from live OHLCV data.
+${modeInstructions}
 
-ENTRY HIERARCHY: OB+FVG confluence=A+, Fresh OB at HTF level=A, FVG fill=A, Key S/R=B, Other=C/D
-STOP LOSS: Below OB low (longs) or above OB high (shorts). Min 1:2.5 R:R.
+IMPORTANT RULES:
+- ALWAYS give a directional verdict (BUY, SELL, or WAIT). Never leave fields empty.
+- ALWAYS provide exact entry, sl, tp1, tp2 price levels — even on WAIT, show the next key setup.
+- Session timing affects confidence score, NOT the verdict. Analyze price action objectively.
+- ICT concepts: Order Blocks (last candle before displacement), FVG (3-candle gap), BOS/CHOCH, liquidity grabs, premium/discount zones.
+- BUY if: bullish structure (HH+HL), price at discount/OB/FVG, clear upside target above.
+- SELL if: bearish structure (LH+LL), price at premium/OB/FVG, clear downside target below.
+- WAIT if: price in middle of range with no clear OB/FVG, conflicting timeframes, no liquidity target.
 
-Return ONLY valid raw JSON:
-{"entry_type":"Limit/Stop-Limit/Market/Wait","entry_price":"<exact>","entry_zone":"<low>-<high>",
-"entry_trigger":"<specific condition>","entry_quality":"A+/A/B/C/D",
-"sl_price":"<exact>","sl_reason":"<structural>","sl_pct":"<%>",
-"tp1_price":"<exact>","tp1_reason":"<>","tp1_rr":"1:<X.X>",
-"tp2_price":"<exact>","tp2_rr":"1:<X.X>",
-"tp3_price":"<exact>","tp3_rr":"1:<X.X>",
-"invalidation":"<price>","summary":"<3 sentences>"}`;
-  return claude(key, p2, sys, [{ type:'text', text:`${sym} — Find best ${dir} entry.\n${lp}\nHTF bias: ${reading.htf_bias} | Alignment: ${reading.alignment_score}/100\nOB: ${JSON.stringify(reading.timeframes?.[0]?.key_ob)}\nKey levels: ${JSON.stringify(reading.key_levels?.slice(0,5))}\nContext: ${ctx.context_bias} | Session: ${ctx.session_quality}\n\nLIVE DATA:\n${chartTexts[0]?.substring(0,2000)}` }], tokens.p2);
-}
+Return ONLY valid raw JSON (no markdown, no text outside JSON):
+{
+  "verdict": "BUY or SELL or WAIT",
+  "confidence": <40-95>,
+  "signal_grade": "A+ or A or B or C or D",
+  "market_bias": "Strongly Bullish or Bullish or Neutral or Bearish or Strongly Bearish",
+  "entry": "<exact price>",
+  "entry_trigger": "<what to wait for before entering>",
+  "entry_zone": "<low>-<high>",
+  "sl": "<exact stop loss price>",
+  "sl_reason": "<why this stop placement>",
+  "tp1": "<exact TP1 price>",
+  "tp1_reason": "<what level>",
+  "tp2": "<exact TP2 price>",
+  "tp3": "<exact TP3 or same as tp2>",
+  "rr_tp1": "1:<X.X>",
+  "rr_tp2": "1:<X.X>",
+  "invalidation": "<price that kills the setup>",
+  "wait_reason": "<if WAIT, explain what needs to happen for a signal>",
+  "summary": "<5 sentences: overall bias, key structure, best entry setup, risk levels, session note>",
+  "fullAnalysis": "<10 sentences: HTF bias, structure analysis, OB/FVG locations, liquidity, entry plan, SL logic, TP targets, confluences, session context, trade management>",
+  "confluences": ["<confluence 1>", "<confluence 2>", "<confluence 3>"],
+  "key_levels": { "major_resistance": "<price>", "major_support": "<price>", "equilibrium": "<price>" },
+  "factors": [
+    { "name": "HTF Trend",     "score": <0-100>, "note": "<brief>" },
+    { "name": "Entry Quality", "score": <0-100>, "note": "<brief>" },
+    { "name": "Risk/Reward",   "score": <0-100>, "note": "<brief>" },
+    { "name": "Session",       "score": <0-100>, "note": "<brief>" },
+    { "name": "Volume",        "score": <0-100>, "note": "<brief>" }
+  ],
+  "gates_passed": ["<gate> ✓"],
+  "gates_failed": ["<gate> ✗ — reason"],
+  "position_size": "1% risk"
+}`;
 
-async function pass3Live(chartTexts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode, live=false, personalEdge=null) {
-  const lp = livePrice ? `Live: $${livePrice.price}` : 'Live: N/A';
-  const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
-  const edgeNote = personalEdge ? `\nPERSONALIZED EDGE: ${personalEdge.summary}` : '';
-  const modeCtx = tradeMode==='scalp'
-    ? 'TRADE MODE: SCALP — Tight SL/TP. 2–15 mins. 1:1.5+ R:R. NY open only.'
-    : tradeMode==='swing'
-    ? 'TRADE MODE: SWING — Wide SL/TP. 1–5 days. 1:3+ R:R.'
-    : `TRADE MODE: DAY TRADE — 30 mins–3 hrs. 1:2.5+ R:R. Best 9:30-11:30am EST. Volume required. Key levels only.`;
-  const { p3, tokens } = getModels(tradeMode, live);
-  const sys = `You are the Chief Trading Officer. Make FINAL trading decision from live OHLCV data analysis. Apply 12 quality gates strictly.
-${modeCtx}
-GATES: G1:alignment<65→WAIT G2:direction=Wait→WAIT G3:session Poor/Avoid→WAIT G4:news High→WAIT G5:day risk High→WAIT G6:entry C/D→WAIT G7:rr<1:2.5→WAIT G8:obstacle to TP1→WAIT G9:Premium+Long→WAIT G10:Discount+Short→WAIT G11:no trigger→WAIT G12:context Avoid→WAIT G13:no volume spike→WAIT G14:middle of range→WAIT G15:dead zone+grade<A→WAIT
+  const dataBlock = chartTexts.map((t, i) => `=== TF ${i+1} ===\n${t}`).join('\n\n');
+  const userMsg = `Analyze ${sym} — ${tradeMode} signal\n${lp}\nSession: ${session}\n${ws}${edge ? '\n'+edge : ''}\n\n${dataBlock}`;
 
-Return ONLY valid raw JSON:
-{"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A+/A/B/C/D",
-"gates_passed":["G1 ✓"],"gates_failed":["G8 ✗ — reason"],
-"wait_reason":"<if WAIT>","market_bias":"Strongly Bullish/Bullish/Neutral/Bearish/Strongly Bearish",
-"summary":"<10 sentences: bias, structure, SMC, gates, session, entry, SL/TP, management>",
-"entry":"<exact>","entry_trigger":"<confirmation>","entry_zone":"<low>-<high>",
-"sl":"<exact>","sl_reason":"<>","tp1":"<exact>","tp1_reason":"<>","tp2":"<exact>","tp3":"<exact>",
-"rr_tp1":"1:<X.X>","rr_tp2":"1:<X.X>",
-"confluences":["<1>","<2>","<3>","<4>","<5>"],
-"key_levels":{"major_resistance":"<>","major_support":"<>","equilibrium":"<>"},
-"factors":[{"name":"HTF Trend","score":<0-100>,"note":"<>"},{"name":"Entry Quality","score":<0-100>,"note":"<>"},{"name":"Risk/Reward","score":<0-100>,"note":"<>"},{"name":"Session","score":<0-100>,"note":"<>"},{"name":"Volume","score":<0-100>,"note":"<>"}],
-"invalidation":"<price>","position_size":"1% risk",
-"fullAnalysis":"<15 sentences covering all aspects of the trade>"}`;
-  return claude(key, p3, sys, [{ type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\nMode: ${tradeMode}\n${ws}${edgeNote}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nLIVE DATA SUMMARY:\n${chartTexts.map((t,i)=>t.split('\n').slice(0,8).join('\n')).join('\n---\n')}\n\nApply all gates strictly.` }], tokens.p3);
-}
-
-// Combined Pass 2+3 for day trade live — saves one full API round trip
-async function pass23CombinedLive(chartTexts, sym, tf, reading, ctx, livePrice, mktCtx, winStats, key, tradeMode, personalEdge=null) {
-  const { p3, tokens } = getModels(tradeMode, true);
-  const lp = livePrice ? `Live: $${livePrice.price}` : 'N/A';
-  const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
-  const edgeNote = personalEdge ? `\nPERSONALIZED EDGE: ${personalEdge.summary}` : '';
-  const sys = `You are an elite ICT trader. From live OHLCV data analysis, find the best entry AND make the final trading decision in one step.
-
-TRADE MODE: DAY TRADE — 30 mins–3 hrs. 1:2.5+ R:R. Best 9:30-11:30am EST. Volume required. Key levels only.
-GATES: alignment<65→WAIT, session Poor→WAIT, news High→WAIT, entry C/D→WAIT, rr<2.5→WAIT, no volume→WAIT, middle of range→WAIT, dead zone+<A→WAIT.
-
-Return ONLY valid raw JSON:
-{"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A+/A/B/C/D",
-"gates_passed":["G1 ✓"],"gates_failed":["G8 ✗ — reason"],"wait_reason":"<if WAIT>",
-"market_bias":"Strongly Bullish/Bullish/Neutral/Bearish/Strongly Bearish",
-"summary":"<8 sentences: bias, structure, gates, session, entry plan, SL/TP>",
-"entry":"<exact>","entry_trigger":"<confirmation>","entry_zone":"<low>-<high>",
-"sl":"<exact>","sl_reason":"<>","tp1":"<exact>","tp1_reason":"<>","tp2":"<exact>","tp3":"<exact>",
-"rr_tp1":"1:<X.X>","rr_tp2":"1:<X.X>",
-"confluences":["<1>","<2>","<3>","<4>","<5>"],
-"key_levels":{"major_resistance":"<>","major_support":"<>","equilibrium":"<>"},
-"factors":[{"name":"HTF Trend","score":<0-100>,"note":"<>"},{"name":"Entry Quality","score":<0-100>,"note":"<>"},{"name":"Risk/Reward","score":<0-100>,"note":"<>"},{"name":"Session","score":<0-100>,"note":"<>"},{"name":"Volume","score":<0-100>,"note":"<>"}],
-"invalidation":"<price>","position_size":"1% risk",
-"fullAnalysis":"<12 sentences covering all trade aspects>"}`;
-  return claude(key, p3, sys, [{ type:'text', text:`DAY TRADE DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\n${ws}${edgeNote}\n\nSTRUCTURE:\n${JSON.stringify(reading)}\n\nCONTEXT:\n${JSON.stringify(ctx)}\n\nLIVE DATA:\n${chartTexts.map((t,i)=>t.split('\n').slice(0,15).join('\n')).join('\n---\n')}\n\nFind best entry and make final decision. Apply all gates.` }], tokens.p3);
-}
-
-async function scalpFastLive(chartTexts, sym, livePrice, mktCtx, key) {
-  const lp = livePrice ? `Live: $${livePrice.price}` : '';
-  const sys = `You are a scalp trading AI. Analyze LIVE OHLCV data for a quick scalp signal. Fast, decisive, clean.
-Rules: Only signal during high-liquidity (NY open 9:30-11:30am EST). Need clear momentum. Tight SL. Min 1:1.5 R:R.
-Return ONLY valid raw JSON:
-{"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A/B/C",
-"entry":"<exact>","sl":"<exact>","tp1":"<exact>","tp2":"<exact>","rr_tp1":"1:<X.X>",
-"entry_trigger":"<confirmation>","wait_reason":"<if WAIT>",
-"summary":"<3 sentences>","fullAnalysis":"<5 sentences>",
-"key_levels":{"major_resistance":"<>","major_support":"<>","equilibrium":"<>"},
-"factors":[{"name":"Momentum","score":<0-100>,"note":"<>"},{"name":"Level","score":<0-100>,"note":"<>"},{"name":"Volume","score":<0-100>,"note":"<>"}],
-"confluences":["<1>","<2>","<3>"],"market_bias":"Bullish/Bearish/Neutral",
-"gates_passed":["momentum ✓"],"gates_failed":[],"invalidation":"<price>"}`;
-  return claude(key, HAIKU, sys, [{ type:'text', text:`SCALP — ${sym}\n${lp}\nSession: ${mktCtx.session}\n\n${chartTexts[0]?.substring(0,3000)}` }], 900);
+  return claude(key, model, sys, [{ type:'text', text: userMsg }], tokens);
 }
 
 // ─────────────────────────────────────────────
