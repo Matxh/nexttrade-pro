@@ -489,7 +489,15 @@ Return ONLY valid raw JSON — no markdown:
 }
 
 // Model selector based on trade mode
-function getModels(tradeMode) {
+// live=true uses reduced tokens since text data is more concise than images
+function getModels(tradeMode, live=false) {
+  if (live) {
+    // Live mode — text-based, needs fewer tokens, faster models where possible
+    if (tradeMode === 'scalp')    return { p1a: HAIKU,  p1b: HAIKU, p2: HAIKU,  p3: HAIKU,  tokens: { p1a:700,  p1b:250, p2:600,  p3:700  } };
+    if (tradeMode === 'swing')    return { p1a: SONNET, p1b: HAIKU, p2: SONNET, p3: OPUS,   tokens: { p1a:1200, p1b:300, p2:900,  p3:1400 } };
+    /* dayTrade live */           return { p1a: SONNET, p1b: HAIKU, p2: HAIKU,  p3: SONNET, tokens: { p1a:1000, p1b:300, p2:700,  p3:1200 } };
+  }
+  // Screenshot mode — needs more tokens for image interpretation
   if (tradeMode === 'scalp') return { p1a: SONNET, p1b: HAIKU, p2: HAIKU,  p3: SONNET, tokens: { p1a:1200, p1b:400, p2:800,  p3:1000 } };
   if (tradeMode === 'swing') return { p1a: OPUS,   p1b: HAIKU, p2: OPUS,   p3: OPUS,   tokens: { p1a:3000, p1b:600, p2:2000, p3:2500 } };
   /* dayTrade default */     return { p1a: SONNET, p1b: HAIKU, p2: SONNET, p3: OPUS,   tokens: { p1a:2000, p1b:500, p2:1500, p3:2000 } };
@@ -971,14 +979,24 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 
     let result;
     if (mode === 'scalp') {
+      // ⚡ Scalp: single Haiku pass ~1-2s
       result = await scalpFastLive(chartTexts, sym, livePrice, mktCtx, key);
-    } else {
+    } else if (mode === 'dayTrade') {
+      // 📈 Day Trade: 2 parallel passes then 1 combined verdict ~5-7s
       const [reading, ctx] = await Promise.all([
-        pass1ALive(chartTexts, sym, key, mode),
+        pass1ALive(chartTexts, sym, key, mode, true),
         pass1B([], sym, livePrice, mktCtx, winStats, key, mode)
       ]);
-      const entry = await pass2Live(chartTexts, sym, reading, ctx, livePrice, key, mode);
-      result      = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, entry, livePrice, mktCtx, winStats, key, mode);
+      // Combine pass2+3 into one call for speed
+      result = await pass23CombinedLive(chartTexts, sym, tfs[tfs.length-1], reading, ctx, livePrice, mktCtx, winStats, key, mode);
+    } else {
+      // 🌊 Swing: 3 passes with Opus on final ~12-15s
+      const [reading, ctx] = await Promise.all([
+        pass1ALive(chartTexts, sym, key, mode, true),
+        pass1B([], sym, livePrice, mktCtx, winStats, key, mode)
+      ]);
+      const entry = await pass2Live(chartTexts, sym, reading, ctx, livePrice, key, mode, true);
+      result      = await pass3Live(chartTexts, sym, tfs[tfs.length-1], reading, ctx, entry, livePrice, mktCtx, winStats, key, mode, true);
     }
 
     // Save to journal
@@ -1000,8 +1018,8 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 });
 
 // Live-data versions of pass1A, pass2, pass3 (text-based, no image)
-async function pass1ALive(chartTexts, sym, key, tradeMode) {
-  const { p1a, tokens } = getModels(tradeMode);
+async function pass1ALive(chartTexts, sym, key, tradeMode, live=false) {
+  const { p1a, tokens } = getModels(tradeMode, live);
   const sys = `You are an ICT/SMC chart reading machine. You receive LIVE OHLCV data tables instead of chart images. Perform the same objective analysis.
 
 DEFINITIONS:
@@ -1029,8 +1047,8 @@ Return ONLY valid raw JSON:
   return claude(key, p1a, sys, content, tokens.p1a);
 }
 
-async function pass2Live(chartTexts, sym, reading, ctx, livePrice, key, tradeMode) {
-  const { p2, tokens } = getModels(tradeMode);
+async function pass2Live(chartTexts, sym, reading, ctx, livePrice, key, tradeMode, live=false) {
+  const { p2, tokens } = getModels(tradeMode, live);
   const lp  = livePrice ? `Live price: $${livePrice.price}` : 'Live price: N/A';
   const dir = reading.tradeable_direction;
   const sys = `You are an elite ICT entry specialist. Find the SINGLE best entry setup at institutional price levels from live OHLCV data.
@@ -1049,7 +1067,7 @@ Return ONLY valid raw JSON:
   return claude(key, p2, sys, [{ type:'text', text:`${sym} — Find best ${dir} entry.\n${lp}\nHTF bias: ${reading.htf_bias} | Alignment: ${reading.alignment_score}/100\nOB: ${JSON.stringify(reading.timeframes?.[0]?.key_ob)}\nKey levels: ${JSON.stringify(reading.key_levels?.slice(0,5))}\nContext: ${ctx.context_bias} | Session: ${ctx.session_quality}\n\nLIVE DATA:\n${chartTexts[0]?.substring(0,2000)}` }], tokens.p2);
 }
 
-async function pass3Live(chartTexts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode) {
+async function pass3Live(chartTexts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode, live=false) {
   const lp = livePrice ? `Live: $${livePrice.price}` : 'Live: N/A';
   const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
   const modeCtx = tradeMode==='scalp'
@@ -1057,7 +1075,7 @@ async function pass3Live(chartTexts, sym, tf, reading, ctx, entry, livePrice, mk
     : tradeMode==='swing'
     ? 'TRADE MODE: SWING — Wide SL/TP. 1–5 days. 1:3+ R:R.'
     : `TRADE MODE: DAY TRADE — 30 mins–3 hrs. 1:2.5+ R:R. Best 9:30-11:30am EST. Volume required. Key levels only.`;
-  const { p3, tokens } = getModels(tradeMode);
+  const { p3, tokens } = getModels(tradeMode, live);
   const sys = `You are the Chief Trading Officer. Make FINAL trading decision from live OHLCV data analysis. Apply 12 quality gates strictly.
 ${modeCtx}
 GATES: G1:alignment<65→WAIT G2:direction=Wait→WAIT G3:session Poor/Avoid→WAIT G4:news High→WAIT G5:day risk High→WAIT G6:entry C/D→WAIT G7:rr<1:2.5→WAIT G8:obstacle to TP1→WAIT G9:Premium+Long→WAIT G10:Discount+Short→WAIT G11:no trigger→WAIT G12:context Avoid→WAIT G13:no volume spike→WAIT G14:middle of range→WAIT G15:dead zone+grade<A→WAIT
@@ -1076,6 +1094,32 @@ Return ONLY valid raw JSON:
 "invalidation":"<price>","position_size":"1% risk",
 "fullAnalysis":"<15 sentences covering all aspects of the trade>"}`;
   return claude(key, p3, sys, [{ type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\nMode: ${tradeMode}\n${ws}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nLIVE DATA SUMMARY:\n${chartTexts.map((t,i)=>t.split('\n').slice(0,8).join('\n')).join('\n---\n')}\n\nApply all gates strictly.` }], tokens.p3);
+}
+
+// Combined Pass 2+3 for day trade live — saves one full API round trip
+async function pass23CombinedLive(chartTexts, sym, tf, reading, ctx, livePrice, mktCtx, winStats, key, tradeMode) {
+  const { p3, tokens } = getModels(tradeMode, true);
+  const lp = livePrice ? `Live: $${livePrice.price}` : 'N/A';
+  const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
+  const sys = `You are an elite ICT trader. From live OHLCV data analysis, find the best entry AND make the final trading decision in one step.
+
+TRADE MODE: DAY TRADE — 30 mins–3 hrs. 1:2.5+ R:R. Best 9:30-11:30am EST. Volume required. Key levels only.
+GATES: alignment<65→WAIT, session Poor→WAIT, news High→WAIT, entry C/D→WAIT, rr<2.5→WAIT, no volume→WAIT, middle of range→WAIT, dead zone+<A→WAIT.
+
+Return ONLY valid raw JSON:
+{"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A+/A/B/C/D",
+"gates_passed":["G1 ✓"],"gates_failed":["G8 ✗ — reason"],"wait_reason":"<if WAIT>",
+"market_bias":"Strongly Bullish/Bullish/Neutral/Bearish/Strongly Bearish",
+"summary":"<8 sentences: bias, structure, gates, session, entry plan, SL/TP>",
+"entry":"<exact>","entry_trigger":"<confirmation>","entry_zone":"<low>-<high>",
+"sl":"<exact>","sl_reason":"<>","tp1":"<exact>","tp1_reason":"<>","tp2":"<exact>","tp3":"<exact>",
+"rr_tp1":"1:<X.X>","rr_tp2":"1:<X.X>",
+"confluences":["<1>","<2>","<3>","<4>","<5>"],
+"key_levels":{"major_resistance":"<>","major_support":"<>","equilibrium":"<>"},
+"factors":[{"name":"HTF Trend","score":<0-100>,"note":"<>"},{"name":"Entry Quality","score":<0-100>,"note":"<>"},{"name":"Risk/Reward","score":<0-100>,"note":"<>"},{"name":"Session","score":<0-100>,"note":"<>"},{"name":"Volume","score":<0-100>,"note":"<>"}],
+"invalidation":"<price>","position_size":"1% risk",
+"fullAnalysis":"<12 sentences covering all trade aspects>"}`;
+  return claude(key, p3, sys, [{ type:'text', text:`DAY TRADE DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\n${ws}\n\nSTRUCTURE:\n${JSON.stringify(reading)}\n\nCONTEXT:\n${JSON.stringify(ctx)}\n\nLIVE DATA:\n${chartTexts.map((t,i)=>t.split('\n').slice(0,15).join('\n')).join('\n---\n')}\n\nFind best entry and make final decision. Apply all gates.` }], tokens.p3);
 }
 
 async function scalpFastLive(chartTexts, sym, livePrice, mktCtx, key) {
