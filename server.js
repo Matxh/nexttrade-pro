@@ -522,10 +522,13 @@ Return ONLY valid raw JSON:
 "indicators":{"ema_stack":"<>","rsi":"<>","macd":"<>","volume":"<>"},
 "patterns":[{"name":"<>","type":"bull/bear/neutral","reliability":"Low/Medium/High","location":"<price>"}],
 "reading_confidence":<0-100>,
-"summary":"<5 sentences: HTF bias, structure phase, key OB/FVG, liquidity, setup quality>"}`;
+"volume_analysis":{"current_volume":"Above/Below/Average","volume_trend":"Increasing/Decreasing/Flat","volume_confirms_move":true,"volume_note":"<>"},
+"premarket_bias":{"gap_direction":"Up/Down/Flat","gap_size_pct":"<number>","overnight_range":"<low>-<high>","bias_note":"<how this affects intraday direction>"},
+"at_key_level":true,"nearest_key_level":"<price and type>","distance_from_key_level":"<pips/points>",
+"summary":"<5 sentences: HTF bias, structure phase, key OB/FVG, liquidity, volume, setup quality>"}`;
   const content = [
     ...charts.map((c, i) => [{ type:'text', text:`Chart ${i+1}:` }, img(c.base64, c.mime)]).flat(),
-    { type:'text', text:`Read all ${n} chart${n>1?'s':''} for ${sym}. Report exact prices.` }
+    { type:'text', text:`Read all ${n} chart${n>1?'s':''} for ${sym}. Report exact prices. Analyze volume bars if visible. Check if price is AT a key level or in the middle of a range.` }
   ];
   return claude(key, p1a, sys, content, tokens.p1a);
 }
@@ -547,6 +550,8 @@ SESSION QUALITY:
 - End of NY / Pre-Asia (20:00-22:00 UTC): Avoid
 
 DAY RISK: Monday=Caution, Tue-Thu=Low, Friday=Medium, Weekend=High for non-crypto
+NEWS FILTER: High impact events (CPI, FOMC, NFP, GDP, earnings) → block 5 min before AND after. Medium impact → Caution.
+PRE-MARKET: Check if there's a significant gap from previous close. Gap >0.5% = wider stops needed. Gap >1% = Caution.
 
 Return ONLY valid raw JSON:
 {"session":"<name>","session_quality":"Excellent/Good/Poor/Avoid","session_note":"<why>",
@@ -607,7 +612,16 @@ async function pass3(charts, sym, tf, reading, ctx, entry, livePrice, mktCtx, wi
     ? 'TRADE MODE: SCALP — Tight SL/TP. Trade lasts 2–15 mins. Prefer 1:1.5+ R:R minimum. Only signal during high-liquidity (NY open first 30 min). Require clear momentum candle.'
     : tradeMode==='swing'
     ? 'TRADE MODE: SWING — Wide SL/TP. Trade lasts 1–5 days. Prefer 1:3+ R:R. Session timing less critical. Require strong daily/4H structure alignment.'
-    : 'TRADE MODE: DAY TRADE — Standard SL/TP. Trade lasts 30 mins–3 hrs. Best during NY session. Require 1:2.5+ R:R.';
+    : `TRADE MODE: DAY TRADE — Standard SL/TP. Trade lasts 30 mins–3 hrs. Require 1:2.5+ R:R.
+DAY TRADE STRICT RULES:
+- ONLY signal in NY session (13:30-20:00 UTC / 9:30am-4pm EST)
+- BEST windows: 9:30-11:30am EST (open) OR 2:00-4:00pm EST (afternoon)
+- DEAD ZONE 11:30am-2:00pm EST → WAIT unless A+ setup
+- Pre-market gap analysis: if price gapped up, look for shorts back to fill; if gapped down, look for longs
+- Volume required: entry candle MUST have above-average volume (look for volume spike on chart)
+- Key levels only: never enter in the MIDDLE of a range — must be at clear S/R, OB, or FVG
+- News: avoid 5 min before/after any scheduled news event (CPI, FOMC, NFP, earnings)
+- If pre-market range > 1%: CAUTION — wider stops needed, reduce size`;
   const sys = `You are the Chief Trading Officer of a top-tier hedge fund. You receive a full ICT/SMC analysis and make the FINAL trading decision. Apply 12 strict quality gates.
 
 ${modeCtx}
@@ -625,6 +639,10 @@ G9:  price_position is "Premium" for Long → WAIT
 G10: price_position is "Discount" for Short → WAIT
 G11: No displacement candle / no entry trigger → WAIT
 G12: context_bias is "Avoid" → WAIT
+DAY TRADE EXTRA GATES (apply if tradeMode=dayTrade):
+G13: Entry candle has NO volume spike / below-average volume → WAIT
+G14: Price is in the MIDDLE of a range (not at key level) → WAIT
+G15: Time is in dead zone 11:30am-2:00pm EST AND grade < A → WAIT
 
 GRADING:
 A+: All 12 pass + 6+ confluences + 1:3+ R:R + alignment ≥ 80
@@ -658,7 +676,7 @@ Return ONLY valid raw JSON:
   const { p3, tokens } = getModels(tradeMode);
   return claude(key, p3, sys, [
     ...charts.map(c => img(c.base64, c.mime)),
-    { type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\n${ws}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nApply all 12 gates strictly.` }
+    { type:'text', text:`FINAL DECISION — ${sym} ${tf}\n${lp}\nSession: ${mktCtx.session}\nTrade Mode: ${tradeMode||'dayTrade'}\n${ws}\n\nPASS 1A:\n${JSON.stringify(reading)}\n\nPASS 1B:\n${JSON.stringify(ctx)}\n\nPASS 2:\n${JSON.stringify(entry)}\n\nVolume: ${JSON.stringify(reading.volume_analysis)}\nPre-market: ${JSON.stringify(reading.premarket_bias)}\nAt key level: ${reading.at_key_level} — ${reading.nearest_key_level}\n\nApply all 12 gates strictly. Apply G13/G14/G15 if dayTrade mode.` }
   ], tokens.p3);
 }
 
