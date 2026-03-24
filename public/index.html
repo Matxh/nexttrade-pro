@@ -238,6 +238,9 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:48px 40p
 .sym-input::placeholder{color:var(--text3)}
 .tf-wrap{display:flex;gap:5px}
 .tf-btn{padding:9px 11px;border-radius:7px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text2);transition:all .15s}
+.mode-btn{padding:9px 16px;border-radius:8px;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text2);transition:all .15s;display:flex;align-items:center;gap:6px}
+.mode-btn:hover{border-color:var(--border2);color:var(--text)}
+.mode-btn.on{background:var(--accent-dim);border-color:rgba(0,229,180,.4);color:var(--accent)}
 .tf-btn:hover{border-color:var(--border2);color:var(--text)}
 .tf-btn.on{background:var(--accent-dim);border-color:rgba(0,229,180,.4);color:var(--accent)}
 .charts-label{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px}
@@ -1005,17 +1008,17 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <a style="color:var(--accent);cursor:pointer;font-size:10px" onclick="startCheckout('pro')">Upgrade to Pro →</a>
       </div>
     </div>
+    <!-- Trading Mode Switcher -->
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="mode-btn on" id="modeScalp" onclick="setMode('scalp',this)">⚡ Scalp <span style="font-size:9px;opacity:.7">1m·5m·15m</span></button>
+      <button class="mode-btn" id="modeDayTrade" onclick="setMode('dayTrade',this)">📈 Day Trade <span style="font-size:9px;opacity:.7">15m·1H·4H</span></button>
+      <button class="mode-btn" id="modeSwing" onclick="setMode('swing',this)">🌊 Swing <span style="font-size:9px;opacity:.7">1H·4H·1D</span></button>
+    </div>
+    <div id="modeHint" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px;padding:8px 12px;background:var(--bg2);border-radius:7px;border:1px solid var(--border)">
+      ⚡ <strong style="color:var(--text2)">Scalp mode</strong> — Upload 1m (Slot 1), 5m (Slot 2), 15m (Slot 3). Trade lasts 2–15 mins. Best in first 30 min of NY open (9:30–10:00am EST). Execute on 15m chart.
+    </div>
     <div class="config-row">
-      <input class="sym-input" id="sym" placeholder="Symbol (BTC, NVDA…)">
-      <div class="tf-wrap">
-        <button class="tf-btn" onclick="setTF(this,'1m')">1m</button>
-        <button class="tf-btn" onclick="setTF(this,'5m')">5m</button>
-        <button class="tf-btn" onclick="setTF(this,'15m')">15m</button>
-        <button class="tf-btn on" onclick="setTF(this,'1H')">1H</button>
-        <button class="tf-btn" onclick="setTF(this,'4H')">4H</button>
-        <button class="tf-btn" onclick="setTF(this,'1D')">1D</button>
-        <button class="tf-btn" onclick="setTF(this,'1W')">1W</button>
-      </div>
+      <input class="sym-input" id="sym" placeholder="Symbol (ES, NQ, BTC…)">
     </div>
     <div class="charts-label">Chart Screenshots (upload up to 3 timeframes)</div>
     <div class="charts-grid">
@@ -1566,7 +1569,35 @@ function calcPosition() {
 
 // ── TF & SLOTS ──
 const ALL_TFS=['1m','5m','15m','30m','1H','2H','4H','8H','1D','1W'];
-const slotTF=['4H','1H','15m'];
+let tradeMode='scalp';
+const MODES={
+  scalp:{
+    slotTF:['1m','5m','15m'],
+    label:'⚡ Scalp mode',
+    hint:'Upload 1m (Slot 1), 5m (Slot 2), 15m (Slot 3). Trade lasts 2–15 mins. Best in first 30 min of NY open (9:30–10:00am EST). Execute on 15m chart.'
+  },
+  dayTrade:{
+    slotTF:['4H','1H','15m'],
+    label:'📈 Day Trade mode',
+    hint:'Upload 4H (Slot 1), 1H (Slot 2), 15m (Slot 3). Trade lasts 30 mins–3 hrs. Best 9:30–11:30am EST. Execute on 15m chart.'
+  },
+  swing:{
+    slotTF:['1D','4H','1H'],
+    label:'🌊 Swing mode',
+    hint:'Upload Daily (Slot 1), 4H (Slot 2), 1H (Slot 3). Trade lasts 1–5 days. No overnight risk rules — set wide SL/TP. Execute on 1H chart.'
+  }
+};
+function setMode(mode, btn){
+  tradeMode=mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const m=MODES[mode];
+  slotTF[0]=m.slotTF[0]; slotTF[1]=m.slotTF[1]; slotTF[2]=m.slotTF[2];
+  const hint=$('modeHint');
+  if(hint) hint.innerHTML=`${m.label.split(' ')[0]} <strong style="color:var(--text2)">${m.label}</strong> — ${m.hint}`;
+  [0,1,2].forEach(i=>{ if(charts[i]) renderSlot(i); });
+}
+const slotTF=['1m','5m','15m'];
 const slotSuggest=[
   ['1m','5m','15m','30m','1H','2H','4H','8H','1D','1W'],
   ['1m','5m','15m','30m','1H','2H','4H','8H','1D','1W'],
@@ -1686,7 +1717,7 @@ async function runAnalysis(){
     const res=await fetch('/api/analyze',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
-      body:JSON.stringify({charts:charts.reduce((acc,c,i)=>c?[...acc,{base64:c.base64,mime:c.mime,label:slotTF[i]||tf}]:acc,[]),symbol:sym,timeframe:tf})
+      body:JSON.stringify({charts:charts.reduce((acc,c,i)=>c?[...acc,{base64:c.base64,mime:c.mime,label:slotTF[i]||tf}]:acc,[]),symbol:sym,timeframe:tf,tradeMode})
     });
     const json=await res.json();
     if(!res.ok){

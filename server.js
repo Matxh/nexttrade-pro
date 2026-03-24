@@ -531,10 +531,17 @@ Return ONLY valid raw JSON:
 // ─────────────────────────────────────────────
 // PASS 3 — FINAL VERDICT (Opus)
 // ─────────────────────────────────────────────
-async function pass3(charts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key) {
+async function pass3(charts, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode='dayTrade') {
   const lp = livePrice ? `Live: $${livePrice.price} (${livePrice.change24h||'?'}% 24h)` : 'Live: N/A';
   const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
+  const modeCtx = tradeMode==='scalp'
+    ? 'TRADE MODE: SCALP — Tight SL/TP. Trade lasts 2–15 mins. Prefer 1:1.5+ R:R minimum. Only signal during high-liquidity (NY open first 30 min). Require clear momentum candle.'
+    : tradeMode==='swing'
+    ? 'TRADE MODE: SWING — Wide SL/TP. Trade lasts 1–5 days. Prefer 1:3+ R:R. Session timing less critical. Require strong daily/4H structure alignment.'
+    : 'TRADE MODE: DAY TRADE — Standard SL/TP. Trade lasts 30 mins–3 hrs. Best during NY session. Require 1:2.5+ R:R.';
   const sys = `You are the Chief Trading Officer of a top-tier hedge fund. You receive a full ICT/SMC analysis and make the FINAL trading decision. Apply 12 strict quality gates.
+
+${modeCtx}
 
 12 QUALITY GATES — ALL must pass for BUY/SELL:
 G1:  alignment_score < 65 → WAIT
@@ -599,7 +606,7 @@ function getWinStats(allTrades) {
 // MAIN ANALYZE ENDPOINT
 // ─────────────────────────────────────────────
 app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
-  const { charts, imageBase64, imageMime, symbol, timeframe } = req.body;
+  const { charts, imageBase64, imageMime, symbol, timeframe, tradeMode } = req.body;
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
@@ -638,7 +645,7 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
       console.log(`[Pass 2] Entry:${entry.entry_price} SL:${entry.sl_price} Quality:${entry.entry_quality}`);
     }
 
-    const result  = await pass3(chartList, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key);
+    const result  = await pass3(chartList, sym, tf, reading, ctx, entry, livePrice, mktCtx, winStats, key, tradeMode||'dayTrade');
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
     console.log(`[Pass 3] ${result.verdict} Grade:${result.signal_grade} Conf:${result.confidence}% — ${elapsed}s`);
 
