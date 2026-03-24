@@ -1,9 +1,10 @@
 require('dotenv').config();
-const express  = require('express');
-const fetch    = require('node-fetch');
-const path     = require('path');
-const fs       = require('fs');
-const crypto   = require('crypto');
+const express      = require('express');
+const fetch        = require('node-fetch');
+const path         = require('path');
+const fs           = require('fs');
+const crypto       = require('crypto');
+const { jsonrepair } = require('jsonrepair'); // top-level so Vercel bundles it correctly
 
 const app = express();
 
@@ -18,6 +19,11 @@ app.use((req, res, next) => {
 
 app.use('/api/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '50mb' }));
+
+// ── Static files — must be FIRST before any auth routes ──────────────
+// Explicitly serve PWA files so they never hit auth middleware
+app.get('/manifest.json', (req, res) => res.sendFile(path.join(__dirname, 'public', 'manifest.json')));
+app.get('/sw.js',         (req, res) => res.sendFile(path.join(__dirname, 'public', 'sw.js')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -433,7 +439,6 @@ async function claude(apiKey, model, system, content, tokens = 2000) {
   if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${r.status}`); }
   const d   = await r.json();
   const raw = (d.content || []).map(c => c.text || '').join('').trim();
-  const { jsonrepair } = require('jsonrepair');
   // Strip markdown fences
   let s = raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
   // Extract first JSON object if wrapped in text
