@@ -1181,7 +1181,44 @@ function buildLiveQualityContext(ohlcvResults, tradeMode) {
   return { frames, alignedTrend, primary, higher, qualityScore, warnings };
 }
 
-function validateLiveSignal(result, quality, tradeMode) {
+function classifyInstrument(symbol) {
+  const sym = (symbol || '').toUpperCase();
+  if (sym.includes('BTC') || sym.includes('ETH') || sym.includes('SOL') || sym.includes('XRP')) return 'crypto';
+  if (sym.includes('/') || /^[A-Z]{6}$/.test(sym)) return 'forex';
+  if (sym.includes('1!') || ['ES','NQ','YM','RTY','CL','GC','SI','NG'].includes(sym.replace('1!',''))) return 'futures';
+  return 'equity';
+}
+
+function getModeThresholds(tradeMode, instrumentType) {
+  const byMode = {
+    scalp: { minRR: 1.2, minConfidence: 56, minRiskAtr: 0.16 },
+    dayTrade: { minRR: 1.7, minConfidence: 60, minRiskAtr: 0.24 },
+    swing: { minRR: 2.2, minConfidence: 64, minRiskAtr: 0.4 }
+  };
+  const base = { ...(byMode[tradeMode] || byMode.dayTrade) };
+  if (instrumentType === 'crypto') {
+    base.minRiskAtr += 0.06;
+    base.minRR += 0.1;
+  } else if (instrumentType === 'forex') {
+    base.minRiskAtr -= 0.03;
+  }
+  return base;
+}
+
+function confirmLiveSignal(result, quality) {
+  if (!result || !quality?.primary) return { confirmed: false, reason: 'missing_quality_context' };
+  const verdict = result.verdict === 'SELL' ? 'SELL' : result.verdict === 'BUY' ? 'BUY' : 'WAIT';
+  if (verdict === 'WAIT') return { confirmed: true, reason: 'wait_ok' };
+  const frame = quality.primary;
+  const directionAligned = (verdict === 'BUY' && frame.trend === 'bullish') || (verdict === 'SELL' && frame.trend === 'bearish');
+  const momentumAligned = verdict === 'BUY' ? frame.momentumPct >= -0.05 : frame.momentumPct <= 0.05;
+  const volumeHealthy = frame.lastVol >= frame.avgVol * 0.65;
+  const confirmed = directionAligned && momentumAligned && volumeHealthy;
+  const reason = !directionAligned ? 'trend_mismatch' : !momentumAligned ? 'momentum_mismatch' : !volumeHealthy ? 'weak_volume' : 'confirmed';
+  return { confirmed, reason };
+}
+
+function validateLiveSignal(result, quality, tradeMode, personalEdge = null, marketContext = null, symbol = '') {
   if (!result || !quality?.primary) return result;
   const out = JSON.parse(JSON.stringify(result));
   const verdict = out.verdict === 'SELL' ? 'SELL' : out.verdict === 'BUY' ? 'BUY' : 'WAIT';
@@ -1190,6 +1227,8 @@ function validateLiveSignal(result, quality, tradeMode) {
   const tp1 = parseFloat(out.tp1);
   const tp2 = parseFloat(out.tp2);
   const atr = quality.primary.atr || Math.max(Math.abs(quality.primary.close) * 0.003, 0.01);
+  const thresholds = getModeThresholds(tradeMode, classifyInstrument(symbol));
+  const confirmation = confirmLiveSignal(out, quality);
   const notes = [];
 
   if (verdict !== 'WAIT') {
@@ -1203,8 +1242,8 @@ function validateLiveSignal(result, quality, tradeMode) {
   if (out.verdict !== 'WAIT' && [entry, sl, tp1].every(Number.isFinite)) {
     const risk = Math.abs(entry - sl);
     const reward = Math.abs(tp1 - entry);
-    const minRisk = atr * (tradeMode === 'scalp' ? 0.18 : tradeMode === 'swing' ? 0.45 : 0.28);
-    const minRR = tradeMode === 'scalp' ? 1.3 : tradeMode === 'swing' ? 2.0 : 1.7;
+    const minRisk = atr * thresholds.minRiskAtr;
+    const minRR = thresholds.minRR;
     const rr = risk > 0 ? reward / risk : 0;
     if (risk < minRisk) {
       out.verdict = 'WAIT';
@@ -1215,9 +1254,31 @@ function validateLiveSignal(result, quality, tradeMode) {
     }
   }
 
+  if (out.verdict !== 'WAIT' && !confirmation.confirmed) {
+    out.verdict = 'WAIT';
+    notes.push(`Rejected: confirmation failed (${confirmation.reason}).`);
+  }
+
+  if (marketContext?.session && /Lower liquidity|Low liquidity|Weekend/i.test(marketContext.session + ' ' + (marketContext.market_hours || '')) && tradeMode !== 'swing') {
+    out.confidence = Math.max(42, (parseInt(out.confidence) || 55) - 8);
+    notes.push('Caution: current session is lower-liquidity for live entries.');
+  }
+
   const baseConfidence = parseInt(out.confidence) || 55;
   let adjustedConfidence = Math.round((baseConfidence * 0.65) + (quality.qualityScore * 0.35));
   if (quality.warnings.length) adjustedConfidence -= Math.min(12, quality.warnings.length * 4);
+  if (personalEdge) {
+    if (personalEdge.bestHour !== null) {
+      const hour = new Date().getHours();
+      if (Math.abs(hour - personalEdge.bestHour) <= 1) adjustedConfidence += 4;
+    }
+    if (out.verdict === 'BUY' && personalEdge.buyWR !== null && personalEdge.buyWR >= 60) adjustedConfidence += 3;
+    if (out.verdict === 'SELL' && personalEdge.sellWR !== null && personalEdge.sellWR >= 60) adjustedConfidence += 3;
+    if (personalEdge.buyWR !== null && personalEdge.sellWR !== null) {
+      if (out.verdict === 'BUY' && personalEdge.buyWR + 12 < personalEdge.sellWR) adjustedConfidence -= 6;
+      if (out.verdict === 'SELL' && personalEdge.sellWR + 12 < personalEdge.buyWR) adjustedConfidence -= 6;
+    }
+  }
   adjustedConfidence = Math.max(out.verdict === 'WAIT' ? 40 : 45, Math.min(95, adjustedConfidence));
   out.confidence = adjustedConfidence;
 
@@ -1229,7 +1290,8 @@ function validateLiveSignal(result, quality, tradeMode) {
   out.factors.push(
     { name: 'Trend', score: quality.alignedTrend === 'mixed' ? 45 : 78, note: `Alignment: ${quality.alignedTrend}` },
     { name: 'Volatility', score: Math.min(85, Math.round((atr / Math.max(Math.abs(quality.primary.close), 0.01)) * 3000)), note: `ATR ${roundPrice(atr)}` },
-    { name: 'Regime', score: quality.warnings.length ? 48 : 72, note: quality.warnings[0] || 'Clean session structure' }
+    { name: 'Regime', score: quality.warnings.length ? 48 : 72, note: quality.warnings[0] || 'Clean session structure' },
+    { name: 'Confirmation', score: confirmation.confirmed ? 74 : 38, note: confirmation.reason }
   );
 
   const warnings = [...quality.warnings, ...notes];
@@ -1413,7 +1475,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
           40000
         )
       : heuristicLiveAnalysis(available, sym, mode);
-    const result = validateLiveSignal(rawResult, qualityCtx, mode);
+    const result = validateLiveSignal(rawResult, qualityCtx, mode, personalEdge, mktCtx, sym);
     console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     // ── STEP 3: Await correlated assets (already running since T+0) ───────
