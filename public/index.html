@@ -1326,12 +1326,17 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px;box-shadow:0 12px 40px rgba(0,0,0,.18)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);flex-wrap:wrap">
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--text)">Live Chart</div>
-          <div id="liveChartMeta" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px">ES1! · 5m · TradingView</div>
-        </div>
-        <button onclick="refreshLiveChart()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:11px;cursor:pointer">
-          Refresh Chart
-        </button>
+<div style="font-size:13px;font-weight:700;color:var(--text)">Live Chart</div>
+<div id="liveChartMeta" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px">ES1! · 5m · TradingView</div>
+</div>
+<div style="display:flex;gap:8px;align-items:center">
+  <a id="liveChartOpenLink" href="https://www.tradingview.com" target="_blank" rel="noopener noreferrer" style="background:transparent;color:var(--text3);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:11px;text-decoration:none">
+    Open Full Chart
+  </a>
+  <button onclick="refreshLiveChart()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:11px;cursor:pointer">
+    Refresh Chart
+  </button>
+</div>
       </div>
       <div id="liveChartFrameWrap" style="height:420px;background:var(--bg2)">
         <iframe id="liveChartFrame" title="Live market chart" loading="lazy" referrerpolicy="origin" style="width:100%;height:100%;border:0;display:block;background:var(--bg2)"></iframe>
@@ -2850,39 +2855,68 @@ function getLiveChartInterval() {
 
 function getLiveChartExchangeSymbol(rawSymbol) {
   const sym = (rawSymbol || 'ES1!').trim().toUpperCase();
+  if (!sym) return 'CME_MINI:ES1!';
+  if (sym.includes(':')) return sym;
+
   const futuresMap = {
-    'ES':'CME_MINI:ES1!',
-    'ES1!':'CME_MINI:ES1!',
-    'NQ':'CME_MINI:NQ1!',
-    'NQ1!':'CME_MINI:NQ1!',
-    'YM':'CBOT_MINI:YM1!',
-    'YM1!':'CBOT_MINI:YM1!',
-    'RTY':'CME_MINI:RTY1!',
-    'RTY1!':'CME_MINI:RTY1!',
-    'CL':'NYMEX:CL1!',
-    'CL1!':'NYMEX:CL1!',
-    'GC':'COMEX:GC1!',
-    'GC1!':'COMEX:GC1!',
-    'SI':'COMEX:SI1!',
-    'SI1!':'COMEX:SI1!',
-    'NG':'NYMEX:NG1!',
-    'NG1!':'NYMEX:NG1!'
+    ES: 'CME_MINI:ES1!',
+    MES: 'CME_MINI:MES1!',
+    NQ: 'CME_MINI:NQ1!',
+    MNQ: 'CME_MINI:MNQ1!',
+    YM: 'CBOT_MINI:YM1!',
+    MYM: 'CBOT_MINI:MYM1!',
+    RTY: 'CME_MINI:RTY1!',
+    M2K: 'CME_MINI:M2K1!',
+    CL: 'NYMEX:CL1!',
+    MCL: 'NYMEX:MCL1!',
+    NG: 'NYMEX:NG1!',
+    RB: 'NYMEX:RB1!',
+    HO: 'NYMEX:HO1!',
+    GC: 'COMEX:GC1!',
+    MGC: 'COMEX:MGC1!',
+    SI: 'COMEX:SI1!',
+    SIL: 'COMEX:SIL1!',
+    HG: 'COMEX:HG1!',
+    PA: 'NYMEX:PA1!',
+    PL: 'NYMEX:PL1!',
+    ZB: 'CBOT:ZB1!',
+    ZN: 'CBOT:ZN1!',
+    ZF: 'CBOT:ZF1!',
+    ZT: 'CBOT:ZT1!',
+    6E: 'CME:6E1!',
+    6B: 'CME:6B1!',
+    6J: 'CME:6J1!',
+    6C: 'CME:6C1!',
+    6A: 'CME:6A1!',
+    6S: 'CME:6S1!'
   };
-  if (futuresMap[sym]) return futuresMap[sym];
+  const compact = sym.replace(/\s+/g, '').replace(/=F$/,'').replace(/!$/,'');
+  const explicitRoot = compact.endsWith('1') ? compact.slice(0, -1) : compact;
+  if (futuresMap[compact]) return futuresMap[compact];
+  if (futuresMap[explicitRoot]) return futuresMap[explicitRoot];
+  if (/^[A-Z0-9]{1,4}1!$/.test(sym)) {
+    const root = sym.replace('1!', '');
+    if (futuresMap[root]) return futuresMap[root];
+  }
   if (sym.includes('/')) {
-    const compact = sym.replace('/', '');
-    if (compact.endsWith('USD')) {
-      const base = compact.slice(0, -3);
+    const pair = sym.replace('/', '');
+    if (pair.endsWith('USD')) {
+      const base = pair.slice(0, -3);
       if (['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'ADA', 'AVAX', 'LTC'].includes(base)) {
         return `BINANCE:${base}USDT`;
       }
-      return `FX:${compact}`;
+      return `FX:${pair}`;
     }
-    return `FX:${compact}`;
+    return `FX:${pair}`;
   }
   if (/^[A-Z]{6}$/.test(sym)) return `FX:${sym}`;
   if (['SPY', 'QQQ', 'DIA', 'IWM'].includes(sym)) return `AMEX:${sym}`;
   return `NASDAQ:${sym}`;
+}
+
+function buildLiveChartOpenUrl(rawSymbol) {
+  const resolved = getLiveChartExchangeSymbol(rawSymbol);
+  return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(resolved)}`;
 }
 
 function buildLiveChartUrl(rawSymbol) {
@@ -2907,9 +2941,12 @@ function renderLiveChart(symbol) {
   const rawSymbol = (symbol || $('liveSymInput')?.value || 'ES1!').trim().toUpperCase() || 'ES1!';
   const iframe = $('liveChartFrame');
   if (!iframe) return;
+  const resolved = getLiveChartExchangeSymbol(rawSymbol);
   iframe.src = buildLiveChartUrl(rawSymbol) + `#${++_liveChartRefreshToken}`;
   const meta = $('liveChartMeta');
-  if (meta) meta.textContent = `${rawSymbol} · ${getLiveChartInterval()}m · TradingView`;
+  if (meta) meta.textContent = `${rawSymbol} → ${resolved} · ${getLiveChartInterval()}m · TradingView`;
+  const openLink = $('liveChartOpenLink');
+  if (openLink) openLink.href = buildLiveChartOpenUrl(rawSymbol);
 }
 
 function refreshLiveChart() {
