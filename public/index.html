@@ -2613,13 +2613,14 @@ async function analyzeLive(){
   const resetBtn=()=>{btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Analyze Live';};
   btn.disabled=true; btn.textContent='Fetching live data...';
   startLoading(1);
+  console.log('[Live] START', sym, tradeMode);
 
-  // Client-side abort after 58s — ensures loading always clears even if server hangs
   const controller = new AbortController();
-  const clientTimeout = setTimeout(() => controller.abort(), 58000);
+  const clientTimeout = setTimeout(() => { console.log('[Live] CLIENT TIMEOUT — aborting'); controller.abort(); }, 58000);
 
   try{
     const tfs = tradeMode==='scalp'?['15m','5m','1m']:tradeMode==='swing'?['1D','4H','1H']:['4H','1H','15m'];
+    console.log('[Live] fetching TFs:', tfs);
     const res = await fetch('/api/analyze-live',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
@@ -2627,26 +2628,22 @@ async function analyzeLive(){
       signal: controller.signal
     });
     clearTimeout(clientTimeout);
+    console.log('[Live] response status:', res.status);
 
-    // Guard against empty 500 body
     let d;
     try { d = await res.json(); }
     catch(parseErr) {
-      stopLoading();
-      showErr('Server error — please try again in a moment');
-      resetBtn(); return;
+      console.error('[Live] JSON parse failed:', parseErr.message);
+      stopLoading(); showErr('Server error — please try again in a moment'); resetBtn(); return;
     }
+    console.log('[Live] response data:', d);
 
     if(!res.ok || d.error){
-      stopLoading();
-      showErr(d.error||'Live analysis failed — check symbol and try again');
-      resetBtn(); return;
+      stopLoading(); showErr(d.error||'Live analysis failed — check symbol and try again'); resetBtn(); return;
     }
 
-    // Store for calc autofill
     try{ localStorage.setItem('nt_last_analysis',JSON.stringify({symbol:sym,verdict:d.verdict,entry:d.entry,sl:d.sl,tp1:d.tp1,grade:d.signal_grade})); }catch(e){}
 
-    // Add to history
     analysisHistory.unshift({...d,symbol:sym,tf:tfs[tfs.length-1],thumbSrc:null,source:'live'});
     if(analysisHistory.length>8) analysisHistory.pop();
     $('histCount').textContent=analysisHistory.length+' chart'+(analysisHistory.length!==1?'s':'');
@@ -2655,13 +2652,14 @@ async function analyzeLive(){
       return `<div class="hist-item" onclick="showResult(analysisHistory[${i}])"><div class="hist-thumb" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3)">${h.source==='live'?'📡':'📷'}</div><div class="hist-info"><div class="hist-sym">${h.symbol} · ${h.tf}${h.signal_grade?' · '+h.signal_grade:''}</div><div class="hist-time">${t} · ${h.confidence||'?'}% · ${h.source==='live'?'Live':'Screenshot'}</div></div><div class="hist-v ${h.verdict||'WAIT'}">${h.verdict||'?'}</div></div>`;
     }).join('');
 
+    console.log('[Live] calling showResult');
     showResult(d);
     if($('sym')) $('sym').value=sym;
   } catch(e) {
     clearTimeout(clientTimeout);
+    console.error('[Live] CATCH:', e.name, e.message);
     stopLoading();
-    const msg = e.name==='AbortError' ? 'Request timed out — server took too long, please try again' : (e.message||'Unknown error');
-    showErr(msg);
+    showErr(e.name==='AbortError' ? 'Request timed out — please try again' : (e.message||'Unknown error'));
   } finally {
     resetBtn();
   }

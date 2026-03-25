@@ -225,6 +225,31 @@ try {
 app.get('/api/ping', (req, res) => res.json({ ok: true }));
 app.get('/api/dbping', (req, res) => res.json({ ok: true, storage: 'Vercel KV — persistent storage' }));
 
+// ── LIVE DIAGNOSTIC — tests each step and returns timing ────────────────────
+app.get('/api/test-live', async (req, res) => {
+  const sym = (req.query.sym || 'SPY').toUpperCase();
+  const key = process.env.ANTHROPIC_API_KEY;
+  const out = { sym, steps: {} };
+  const t0 = Date.now();
+  try {
+    // Step 1: OHLCV
+    try {
+      const d = await withTimeout(fetchOHLCV(sym, '15m', 10), 8000);
+      out.steps.ohlcv = d ? `OK — ${d.candles.length} candles from ${d.source}` : 'FAIL — no data';
+    } catch(e) { out.steps.ohlcv = 'FAIL — ' + e.message; }
+    // Step 2: Claude
+    if (!key) { out.steps.claude = 'SKIP — ANTHROPIC_API_KEY not set'; }
+    else {
+      try {
+        const r = await withTimeout(claude(key, HAIKU, 'Reply with only valid JSON: {"ok":true}', [{ type:'text', text:'ping' }], 20), 15000);
+        out.steps.claude = r?.ok === true ? 'OK' : 'FAIL — unexpected response: ' + JSON.stringify(r);
+      } catch(e) { out.steps.claude = 'FAIL — ' + e.message; }
+    }
+    out.totalMs = Date.now() - t0;
+    res.json(out);
+  } catch(e) { res.status(500).json({ error: e.message, out }); }
+});
+
 // ─────────────────────────────────────────────
 // AUTH ENDPOINTS
 // ─────────────────────────────────────────────
