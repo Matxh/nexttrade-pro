@@ -1218,7 +1218,46 @@ function confirmLiveSignal(result, quality) {
   return { confirmed, reason };
 }
 
-function validateLiveSignal(result, quality, tradeMode, personalEdge = null, marketContext = null, symbol = '') {
+function assessLiveConsensus(result, fallbackResult, quality) {
+  const primaryVerdict = result?.verdict === 'SELL' ? 'SELL' : result?.verdict === 'BUY' ? 'BUY' : 'WAIT';
+  const fallbackVerdict = fallbackResult?.verdict === 'SELL' ? 'SELL' : fallbackResult?.verdict === 'BUY' ? 'BUY' : 'WAIT';
+  const notes = [];
+  let score = 50;
+  let confidenceAdjustment = 0;
+  let forceWait = false;
+
+  if (primaryVerdict === fallbackVerdict) {
+    score += primaryVerdict === 'WAIT' ? 12 : 28;
+    confidenceAdjustment += primaryVerdict === 'WAIT' ? 0 : 6;
+    notes.push(primaryVerdict === 'WAIT'
+      ? 'AI and technical model both prefer patience.'
+      : `AI and technical model both favor ${primaryVerdict}.`);
+  } else if (primaryVerdict === 'WAIT' || fallbackVerdict === 'WAIT') {
+    score -= 10;
+    confidenceAdjustment -= 5;
+    notes.push('Signal is only partially confirmed by the fallback technical model.');
+    if (quality?.qualityScore < 62 || quality?.alignedTrend === 'mixed') {
+      forceWait = true;
+      notes.push('Low-quality regime plus partial disagreement forced a WAIT.');
+    }
+  } else {
+    score -= 26;
+    confidenceAdjustment -= 12;
+    forceWait = true;
+    notes.push(`AI and technical model disagree (${primaryVerdict} vs ${fallbackVerdict}).`);
+  }
+
+  if (quality?.warnings?.length) confidenceAdjustment -= Math.min(6, quality.warnings.length * 2);
+
+  return {
+    score: Math.max(20, Math.min(95, score)),
+    confidenceAdjustment,
+    forceWait,
+    notes
+  };
+}
+
+function validateLiveSignal(result, quality, tradeMode, personalEdge = null, marketContext = null, symbol = '', fallbackResult = null) {
   if (!result || !quality?.primary) return result;
   const out = JSON.parse(JSON.stringify(result));
   const verdict = out.verdict === 'SELL' ? 'SELL' : out.verdict === 'BUY' ? 'BUY' : 'WAIT';
@@ -1229,6 +1268,7 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
   const atr = quality.primary.atr || Math.max(Math.abs(quality.primary.close) * 0.003, 0.01);
   const thresholds = getModeThresholds(tradeMode, classifyInstrument(symbol));
   const confirmation = confirmLiveSignal(out, quality);
+  const consensus = assessLiveConsensus(out, fallbackResult, quality);
   const notes = [];
 
   if (verdict !== 'WAIT') {
@@ -1259,6 +1299,11 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
     notes.push(`Rejected: confirmation failed (${confirmation.reason}).`);
   }
 
+  if (out.verdict !== 'WAIT' && consensus.forceWait) {
+    out.verdict = 'WAIT';
+    notes.push(...consensus.notes);
+  }
+
   if (marketContext?.session && /Lower liquidity|Low liquidity|Weekend/i.test(marketContext.session + ' ' + (marketContext.market_hours || '')) && tradeMode !== 'swing') {
     out.confidence = Math.max(42, (parseInt(out.confidence) || 55) - 8);
     notes.push('Caution: current session is lower-liquidity for live entries.');
@@ -1279,6 +1324,7 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
       if (out.verdict === 'SELL' && personalEdge.sellWR + 12 < personalEdge.buyWR) adjustedConfidence -= 6;
     }
   }
+  adjustedConfidence += consensus.confidenceAdjustment;
   adjustedConfidence = Math.max(out.verdict === 'WAIT' ? 40 : 45, Math.min(95, adjustedConfidence));
   out.confidence = adjustedConfidence;
 
@@ -1291,7 +1337,8 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
     { name: 'Trend', score: quality.alignedTrend === 'mixed' ? 45 : 78, note: `Alignment: ${quality.alignedTrend}` },
     { name: 'Volatility', score: Math.min(85, Math.round((atr / Math.max(Math.abs(quality.primary.close), 0.01)) * 3000)), note: `ATR ${roundPrice(atr)}` },
     { name: 'Regime', score: quality.warnings.length ? 48 : 72, note: quality.warnings[0] || 'Clean session structure' },
-    { name: 'Confirmation', score: confirmation.confirmed ? 74 : 38, note: confirmation.reason }
+    { name: 'Confirmation', score: confirmation.confirmed ? 74 : 38, note: confirmation.reason },
+    { name: 'Consensus', score: consensus.score, note: consensus.notes[0] || 'No fallback consensus data' }
   );
 
   const warnings = [...quality.warnings, ...notes];
@@ -1463,6 +1510,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     const mktCtx       = getMarketContext(sym);
     const mode         = tradeMode || 'dayTrade';
     const qualityCtx   = buildLiveQualityContext(available, mode);
+    const fallbackResult = heuristicLiveAnalysis(available, sym, mode);
 
     // Build text-based chart data for each TF
     const chartTexts = available.map(d => ohlcvToText(d));
@@ -1474,8 +1522,8 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
           analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, winStats, personalEdge, key, mode, qualityCtx),
           40000
         )
-      : heuristicLiveAnalysis(available, sym, mode);
-    const result = validateLiveSignal(rawResult, qualityCtx, mode, personalEdge, mktCtx, sym);
+      : fallbackResult;
+    const result = validateLiveSignal(rawResult, qualityCtx, mode, personalEdge, mktCtx, sym, fallbackResult);
     console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     // ── STEP 3: Await correlated assets (already running since T+0) ───────
