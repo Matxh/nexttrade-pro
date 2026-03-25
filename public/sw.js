@@ -1,4 +1,4 @@
-const CACHE_NAME = 'priceaction-v1';
+const CACHE_NAME = 'priceaction-v2';
 const ASSETS = ['/', '/index.html', '/logo.svg', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -21,6 +21,29 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (!url.startsWith('http://') && !url.startsWith('https://')) return;
   if (url.includes('/api/')) return;
+
+  // Always prefer the network for app shell documents so production updates
+  // are visible immediately after deploys instead of serving stale HTML.
+  if (e.request.mode === 'navigate' || e.request.destination === 'document') {
+    e.respondWith(
+      fetch(e.request).then(response => {
+        if (response && response.status === 200) {
+          const toCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put('/index.html', toCache));
+        }
+        return response;
+      }).catch(() =>
+        caches.match('/index.html').then(r => r || new Response(
+          `<!DOCTYPE html><html><head><title>PriceAction AI - Offline</title>
+          <style>body{background:#06080d;color:#dce8f5;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+          h1{color:#00e5b4}p{color:#5a7a96}</style></head>
+          <body><div><h1>You're offline</h1><p>PriceAction AI requires an internet connection.<br>Please reconnect and try again.</p></div></body></html>`,
+          { headers: { 'Content-Type': 'text/html' } }
+        ))
+      )
+    );
+    return;
+  }
 
   e.respondWith(
     caches.match(e.request).then(cached => {
