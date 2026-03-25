@@ -2196,6 +2196,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 // ── STATE ──
 const charts=[null,null,null];
 let tf='1H',analysisHistory=[],stepTmr=null,allTrades=[],journalFilter='all';
+let _liveTurboTimer=null,_liveTurboAttempts=0;
 let currentUser=null,authToken=null,authMode='login';
 let _liveChartRefreshToken = 0;
 const $=id=>document.getElementById(id);
@@ -2811,14 +2812,18 @@ function showResult(d){
 }
 
 // ── ANALYZE ──
-async function analyzeLive(){
+async function analyzeLive(silent=false){
   if(!currentUser){showAuth('login');return;}
   const sym=($('liveSymInput').value||'ES1!').trim().toUpperCase();
   renderLiveChart(sym);
-  const btn=$('liveBtn');
+  const btn=$("liveBtn");
   const resetBtn=()=>{btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Analyze Live';};
-  btn.disabled=true; btn.textContent='Fetching live data...';
-  if(typeof startLoading==='function') startLoading(1);
+  if(!silent){
+    clearTimeout(_liveTurboTimer);
+    _liveTurboAttempts = 0;
+    btn.disabled=true; btn.textContent='Fetching live data...';
+    if(typeof startLoading==='function') startLoading(1);
+  }
   try{
     const tfs = tradeMode==='scalp'?['15m','5m','1m']:tradeMode==='swing'?['1D','4H','1H']:['4H','1H','15m'];
     const res = await fetch('/api/analyze-live',{
@@ -2831,15 +2836,15 @@ async function analyzeLive(){
     let d;
     try { d = await res.json(); }
     catch(parseErr) {
-      if(typeof stopLoading==='function') stopLoading();
+      if(typeof stopLoading==='function' && !silent) stopLoading();
       showToast('⚠️ Server error (500) — try again in a moment','error');
-      resetBtn(); return;
+      if(!silent) resetBtn(); return;
     }
 
     if(!res.ok || d.error){
-      if(typeof stopLoading==='function') stopLoading();
+      if(typeof stopLoading==='function' && !silent) stopLoading();
       showToast('⚠️ '+(d.error||'Live fetch failed'),'error');
-      resetBtn(); return;
+      if(!silent) resetBtn(); return;
     }
 
     // Store for calc autofill
@@ -2859,14 +2864,22 @@ async function analyzeLive(){
       return `<div class="hist-item" onclick="showResult(analysisHistory[${i}])"><div class="hist-thumb" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3)">${h.source==='live'?'📡':'📷'}</div><div class="hist-info"><div class="hist-sym">${h.symbol} · ${h.tf}${h.signal_grade?' · '+h.signal_grade:''}</div><div class="hist-time">${t} · ${h.confidence||'?'}% · ${h.source==='live'?'Live':'Screenshot'}</div></div><div class="hist-v ${h.verdict||'WAIT'}">${h.verdict||'?'}</div></div>`;
     }).join('');
 
-    if(typeof stopLoading==='function') stopLoading();
+    if(typeof stopLoading==='function' && !silent) stopLoading();
     showResult(d);
+    if(d._turboPending && _liveTurboAttempts < 3){
+      _liveTurboAttempts++;
+      _liveTurboTimer = setTimeout(() => analyzeLive(true), 1800);
+      if(!silent) showToast('Turbo mode active � upgrading with AI...','success');
+    } else if (!d._turboPending) {
+      _liveTurboAttempts = 0;
+      if(silent && (d._cachedFromTurbo || d._cached)) showToast('AI-upgraded live read ready','success');
+    }
     if($('sym')) $('sym').value=sym;
   } catch(e) {
-    if(typeof stopLoading==='function') stopLoading();
+    if(typeof stopLoading==='function' && !silent) stopLoading();
     showToast('⚠️ '+(e.message||'Unknown error'),'error');
   } finally {
-    resetBtn();
+    if(!silent) resetBtn();
   }
 }
 
@@ -4865,5 +4878,9 @@ renderLiveChart();
 
 </body>
 </html>
+
+
+
+
 
 
