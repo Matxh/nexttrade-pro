@@ -1261,7 +1261,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     // ── STEP 3: Await correlated assets (already running since T+0) ───────
-    const correlatedAssets = await correlatedPromise;
+    const correlatedData = await correlatedPromise;
 
     // ── STEP 4: Fire-and-forget journal save — never blocks the response ───
     if (result?.verdict && result.verdict !== 'WAIT') {
@@ -1276,7 +1276,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`[LIVE] ✅ Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
     clearTimeout(masterTimer);
     if (!res.headersSent) {
-      res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: correlatedAssets, _newsSentiment: null });
+      res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: correlatedData, _newsSentiment: null });
     }
 
   } catch(e) {
