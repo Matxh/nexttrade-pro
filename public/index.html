@@ -4549,7 +4549,9 @@ function triggerPWAInstall() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(e => console.warn('[SW] Registration failed:', e));
+  navigator.serviceWorker.getRegistrations()
+    .then(registrations => Promise.all(registrations.map(reg => reg.unregister())))
+    .catch(e => console.warn('[SW] Cleanup failed:', e));
 }
 
 // ══════════════════════════════════════════════════════════════
