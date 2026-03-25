@@ -448,7 +448,8 @@ async function claude(apiKey, model, system, content, tokens = 2000) {
   const r = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01' },
-    body: JSON.stringify({ model, max_tokens:tokens, system, messages:[{ role:'user', content }] })
+    body: JSON.stringify({ model, max_tokens:tokens, system, messages:[{ role:'user', content }] }),
+    timeout: 30000   // 30s hard cap — prevents silent AI hangs
   });
   if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${r.status}`); }
   const d   = await r.json();

@@ -2611,32 +2611,53 @@ async function analyzeLive(){
   if(!currentUser){showAuth('login');return;}
   const sym=($('liveSymInput').value||'ES1!').trim().toUpperCase();
   const btn=$('liveBtn');
+  const resetBtn=()=>{btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Analyze Live';};
   btn.disabled=true; btn.textContent='Fetching live data...';
-  startLoading(1);
+  if(typeof startLoading==='function') startLoading(1);
   try{
     const tfs = tradeMode==='scalp'?['15m','5m','1m']:tradeMode==='swing'?['1D','4H','1H']:['4H','1H','15m'];
-    const res=await fetch('/api/analyze-live',{
+    const res = await fetch('/api/analyze-live',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
       body:JSON.stringify({symbol:sym,timeframes:tfs,tradeMode})
     });
-    const d=await res.json();
-    if(!res.ok||d.error){stopLoading();showToast('⚠️ '+(d.error||'Live fetch failed'),'error');btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Analyze Live';return;}
-    // store for calc autofill
-    localStorage.setItem('nt_last_analysis',JSON.stringify({symbol:sym,verdict:d.verdict,entry:d.entry,sl:d.sl,tp1:d.tp1,grade:d.signal_grade}));
-    // add to history
+
+    // Safely parse JSON — a 500 empty body throws without this guard
+    let d;
+    try { d = await res.json(); }
+    catch(parseErr) {
+      if(typeof stopLoading==='function') stopLoading();
+      showToast('⚠️ Server error (500) — try again in a moment','error');
+      resetBtn(); return;
+    }
+
+    if(!res.ok || d.error){
+      if(typeof stopLoading==='function') stopLoading();
+      showToast('⚠️ '+(d.error||'Live fetch failed'),'error');
+      resetBtn(); return;
+    }
+
+    // Store for calc autofill
+    try{ localStorage.setItem('nt_last_analysis',JSON.stringify({symbol:sym,verdict:d.verdict,entry:d.entry,sl:d.sl,tp1:d.tp1,grade:d.signal_grade})); }catch(e){}
+
+    // Add to history
     analysisHistory.unshift({...d,symbol:sym,tf:tfs[tfs.length-1],thumbSrc:null,source:'live'});
-    if(analysisHistory.length>8)analysisHistory.pop();
+    if(analysisHistory.length>8) analysisHistory.pop();
     $('histCount').textContent=analysisHistory.length+' chart'+(analysisHistory.length!==1?'s':'');
     $('histList').innerHTML=analysisHistory.map((h,i)=>{
       const t=new Date(Date.now()-i*60000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       return `<div class="hist-item" onclick="showResult(analysisHistory[${i}])"><div class="hist-thumb" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3)">${h.source==='live'?'📡':'📷'}</div><div class="hist-info"><div class="hist-sym">${h.symbol} · ${h.tf}${h.signal_grade?' · '+h.signal_grade:''}</div><div class="hist-time">${t} · ${h.confidence||'?'}% · ${h.source==='live'?'Live':'Screenshot'}</div></div><div class="hist-v ${h.verdict||'WAIT'}">${h.verdict||'?'}</div></div>`;
     }).join('');
-    stopLoading(); showResult(d);
-    // Update sym input
-    if($('sym'))$('sym').value=sym;
-  }catch(e){stopLoading();showToast('⚠️ '+e.message,'error');}
-  finally{btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Analyze Live';}
+
+    if(typeof stopLoading==='function') stopLoading();
+    showResult(d);
+    if($('sym')) $('sym').value=sym;
+  } catch(e) {
+    if(typeof stopLoading==='function') stopLoading();
+    showToast('⚠️ '+(e.message||'Unknown error'),'error');
+  } finally {
+    resetBtn();
+  }
 }
 
 async function runAnalysis(){
