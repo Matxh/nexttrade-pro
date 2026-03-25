@@ -1,4 +1,4 @@
-const CACHE_NAME = 'priceaction-v1';
+const CACHE_NAME = 'priceaction-v2';
 const ASSETS = ['/', '/index.html', '/logo.svg', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -16,8 +16,11 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Skip non-GET and API requests
-  if (e.request.method !== 'GET' || e.request.url.includes('/api/')) return;
+  const url = e.request.url;
+  // Skip non-GET, API requests, and unsupported schemes (chrome-extension, etc.)
+  if (e.request.method !== 'GET') return;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return;
+  if (url.includes('/api/')) return;
 
   e.respondWith(
     caches.match(e.request).then(cached => {
