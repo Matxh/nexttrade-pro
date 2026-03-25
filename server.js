@@ -1059,10 +1059,19 @@ const FUTURES_MAP = {
 const TF_MAP_YAHOO = { '1m':'1m','5m':'5m','15m':'15m','30m':'30m','1H':'1h','4H':'1h','1D':'1d','1W':'1wk' };
 const TF_MAP_12    = { '1m':'1min','5m':'5min','15m':'15min','30m':'30min','1H':'1h','4H':'4h','1D':'1day','1W':'1week' };
 const TF_RANGE     = { '1m':'1d','5m':'2d','15m':'5d','30m':'5d','1H':'1mo','4H':'3mo','1D':'1y','1W':'5y' };
+const _ohlcvCache = {};
+const _liveAnalysisCache = {};
+const OHLCV_CACHE_TTL = 8000;
+const LIVE_ANALYSIS_CACHE_TTL = 12000;
 
 async function fetchOHLCV(symbol, timeframe, bars=100) {
   const sym = symbol.toUpperCase().trim();
   const yahooSym = FUTURES_MAP[sym];
+  const cacheKey = `${sym}|${timeframe}|${bars}`;
+  const cached = _ohlcvCache[cacheKey];
+  if (cached && Date.now() - cached.ts < OHLCV_CACHE_TTL) {
+    return cached.data;
+  }
 
   // Try Yahoo Finance first (futures + stocks)
   try {
@@ -1082,7 +1091,9 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
       volume: q.volume?.[i] || 0
     })).filter(c => c.open && c.close);
     if (candles.length < 10) throw new Error('Not enough candles');
-    return { candles: candles.slice(-bars), source:'Yahoo', symbol: yahooSym||sym, tf: timeframe };
+    const data = { candles: candles.slice(-bars), source:'Yahoo', symbol: yahooSym||sym, tf: timeframe };
+    _ohlcvCache[cacheKey] = { ts: Date.now(), data };
+    return data;
   } catch {}
 
   // Fallback: TwelveData (stocks/forex/crypto)
@@ -1097,7 +1108,9 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     const candles = d.values.reverse().map(v => ({
       datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
     }));
-    return { candles, source:'TwelveData', symbol:sym, tf: timeframe };
+    const data = { candles, source:'TwelveData', symbol:sym, tf: timeframe };
+    _ohlcvCache[cacheKey] = { ts: Date.now(), data };
+    return data;
   } catch {}
 
   return null;
@@ -1626,6 +1639,17 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 
   const tfs = timeframes || (tradeMode==='scalp' ? ['15m','5m','1m'] : tradeMode==='swing' ? ['1D','4H','1H'] : ['4H','1H','15m']);
   const sym = symbol.toUpperCase().trim();
+  const mode = tradeMode || 'dayTrade';
+  const liveCacheKey = `${req.user.id}|${sym}|${mode}|${tfs.join(',')}`;
+  const cachedLive = _liveAnalysisCache[liveCacheKey];
+  if (cachedLive && Date.now() - cachedLive.ts < LIVE_ANALYSIS_CACHE_TTL) {
+    return res.json({
+      ...cachedLive.payload,
+      elapsed: '0.0',
+      _cached: true,
+      _cachedAgeMs: Date.now() - cachedLive.ts
+    });
+  }
 
   // Master timeout — guarantees a response before Vercel's 60s hard kill
   const masterTimer = setTimeout(() => {
@@ -1662,7 +1686,6 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     const winStats     = getWinStats(allTrades);
     const personalEdge = getPersonalizedEdge(allTrades.filter(t => t.userId === req.user.id));
     const mktCtx       = getMarketContext(sym);
-    const mode         = tradeMode || 'dayTrade';
     const qualityCtx   = buildLiveQualityContext(available, mode);
     const fallbackResult = heuristicLiveAnalysis(available, sym, mode);
 
@@ -1681,7 +1704,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     // ── STEP 3: Await correlated assets (already running since T+0) ───────
-    const correlatedData = await correlatedPromise;
+    const correlatedData = null;
 
     // ── STEP 4: Fire-and-forget journal save — never blocks the response ───
     if (result?.verdict && result.verdict !== 'WAIT') {
@@ -1696,7 +1719,11 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`[LIVE] ✅ Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
     clearTimeout(masterTimer);
     if (!res.headersSent) {
-      res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: correlatedData, _newsSentiment: null, _qualityContext: qualityCtx });
+      const responsePayload = { ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: correlatedData, _newsSentiment: null, _qualityContext: qualityCtx };
+      const { _trade_id, ...cacheablePayload } = responsePayload;
+      _liveAnalysisCache[liveCacheKey] = { ts: Date.now(), payload: cacheablePayload };
+      correlatedPromise.then(() => null).catch(() => null);
+      res.json(responsePayload);
     }
 
   } catch(e) {
@@ -2390,4 +2417,6 @@ app.listen(PORT, () => {
   console.log(`  Stripe: ${stripe ? 'ACTIVE ✓' : 'disabled'}`);
   console.log(`  http://localhost:${PORT}\n`);
 });
+
+
 

@@ -2843,6 +2843,11 @@ async function analyzeLive(){
     }
 
     // Store for calc autofill
+
+    if(d._cached){
+      const age = Math.max(0, Math.round((d._cachedAgeMs || 0) / 1000));
+      showToast('Instant live read loaded' + (age ? ' • refreshed ' + age + 's ago' : ''),'success');
+    }
     try{ localStorage.setItem('nt_last_analysis',JSON.stringify({symbol:sym,verdict:d.verdict,entry:d.entry,sl:d.sl,tp1:d.tp1,grade:d.signal_grade})); }catch(e){}
 
     // Add to history
@@ -4860,4 +4865,5 @@ renderLiveChart();
 
 </body>
 </html>
+
 
