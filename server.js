@@ -1052,6 +1052,29 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
   return null;
 }
 
+app.get('/api/live-chart', authMiddleware, requirePlan, async (req, res) => {
+  try {
+    const symbol = String(req.query.symbol || '').trim().toUpperCase();
+    const timeframe = String(req.query.timeframe || '15m').trim();
+    const bars = Math.max(20, Math.min(parseInt(req.query.bars, 10) || 80, 200));
+    if (!symbol) return res.status(400).json({ error: 'Symbol required' });
+    const data = await fetchOHLCV(symbol, timeframe, bars);
+    if (!data?.candles?.length) {
+      return res.status(404).json({ error: `No chart data found for ${symbol}` });
+    }
+    res.json({
+      symbol,
+      requestedTimeframe: timeframe,
+      source: data.source,
+      resolvedSymbol: data.symbol,
+      tf: data.tf,
+      candles: data.candles.slice(-bars)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load chart data' });
+  }
+});
+
 function ohlcvToText(data) {
   if (!data) return 'No data available';
   const c = data.candles;
