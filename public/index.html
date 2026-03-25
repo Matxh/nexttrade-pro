@@ -2202,8 +2202,8 @@ const $=id=>document.getElementById(id);
 const FCOLORS={Trend:'#00e676',Volume:'#3d9eff',Momentum:'#ffb300',Structure:'#a78bfa','Price Action':'#00e5b4',Confluence:'#00e5b4','Risk/Reward':'#f59e0b'};
 
 // ── AUTH STATE ──
-function saveAuthState(token,user){authToken=token;currentUser=user;localStorage.setItem('nt_token',token);localStorage.setItem('nt_user',JSON.stringify(user));}
-function clearAuthState(){authToken=null;currentUser=null;localStorage.removeItem('nt_token');localStorage.removeItem('nt_user');}
+function saveAuthState(token,user){authToken=token;currentUser=user;localStorage.setItem('nt_token',token);localStorage.setItem('nt_user',JSON.stringify(user));setTimeout(()=>{if(typeof updateBrokerUI==='function')updateBrokerUI(true);},0);}
+function clearAuthState(){authToken=null;currentUser=null;localStorage.removeItem('nt_token');localStorage.removeItem('nt_user');setTimeout(()=>{if(typeof updateBrokerUI==='function')updateBrokerUI(false);},0);}
 
 function updateNavUI(){
   if(currentUser){
@@ -4099,6 +4099,7 @@ showResult = function(d) {
   // Feature 5: Correlated assets
   if (d._correlatedAssets) showCorrelatedAssets(d._correlatedAssets);
   else $('rCorrelated').style.display = 'none';
+  renderSignalEdgeSummary(d._personalEdge, d);
 };
 
 const _origLoadJournal = loadJournal;
@@ -4511,73 +4512,181 @@ function deletePaperTrade(id) {
 
 // ══════════════════════════════════════════════════════════════
 // FEATURE 7: BROKER INTEGRATION
-// ══════════════════════════════════════════════════════════════
+// ================================================================
 let _brokerConnected = false;
 let _pendingBrokerOrder = null;
+let _brokerProfile = null;
+let _brokerRecentOrders = [];
+let _brokerStatusPromise = null;
 
 function openBrokerModal(brokerName) {
   $('brokerModalTitle').textContent = 'Connect ' + brokerName;
-  const stored = getBrokerCreds();
-  if (stored) { $('brokerApiKey').value = stored.key || ''; }
-  $('brokerTestResult').style.display = 'none';
+  $('brokerApiKey').value = '';
+  $('brokerApiSecret').value = '';
+  setBrokerTestState('', 'neutral');
   $('brokerModal').classList.add('open');
 }
 
 function closeBrokerModal() { $('brokerModal').classList.remove('open'); }
 function closeBrokerOrderModal() { $('brokerOrderModal').classList.remove('open'); }
 
-function getBrokerCreds() {
-  try { return JSON.parse(localStorage.getItem('nt_broker_creds') || 'null'); } catch { return null; }
-}
-
-function saveBrokerCredentials() {
-  const key = $('brokerApiKey').value.trim();
-  const secret = $('brokerApiSecret').value.trim();
-  if (!key || !secret) { $('brokerTestResult').textContent = 'Please enter both API Key and Secret.'; $('brokerTestResult').style.display = ''; $('brokerTestResult').style.color = 'var(--red)'; return; }
-  // Store encrypted (simple btoa for demo)
-  localStorage.setItem('nt_broker_creds', JSON.stringify({ key, secret: btoa(secret), broker: 'Tradovate' }));
-  _brokerConnected = true;
-  $('brokerConnectedStatus').style.display = '';
-  updateBrokerUI();
-  closeBrokerModal();
-  showToast('Tradovate credentials saved. One-click orders enabled.', 'success');
-}
-
-function testBrokerConnection() {
-  const key = $('brokerApiKey').value.trim();
-  const secret = $('brokerApiSecret').value.trim();
+function setBrokerTestState(message, type = 'neutral') {
   const res = $('brokerTestResult');
-  if (!key || !secret) { res.textContent = 'Please enter API Key and Secret first.'; res.style.color = 'var(--red)'; res.style.background = 'var(--red-dim)'; res.style.display = ''; return; }
-  res.textContent = 'Connection verified ✓';
-  res.style.color = 'var(--green)';
-  res.style.background = 'var(--green-dim)';
-  res.style.border = '1px solid rgba(0,230,118,.25)';
-  res.style.borderRadius = '6px';
+  if (!res) return;
+  if (!message) { res.style.display = 'none'; return; }
+  res.textContent = message;
   res.style.display = '';
+  if (type === 'error') {
+    res.style.color = 'var(--red)';
+    res.style.background = 'var(--red-dim)';
+    res.style.border = '1px solid rgba(255,61,90,.25)';
+  } else if (type === 'success') {
+    res.style.color = 'var(--green)';
+    res.style.background = 'var(--green-dim)';
+    res.style.border = '1px solid rgba(0,230,118,.25)';
+  } else {
+    res.style.color = 'var(--text2)';
+    res.style.background = 'var(--bg3)';
+    res.style.border = '1px solid var(--border)';
+  }
+  res.style.borderRadius = '6px';
 }
 
-function updateBrokerUI() {
-  const creds = getBrokerCreds();
-  _brokerConnected = !!creds;
+async function fetchBrokerStatus(force = false) {
+  if (!authToken) {
+    _brokerConnected = false;
+    _brokerProfile = null;
+    _brokerRecentOrders = [];
+    return { connected: false };
+  }
+  if (_brokerStatusPromise && !force) return _brokerStatusPromise;
+  _brokerStatusPromise = fetch('/api/broker/status', {
+    headers: { Authorization: 'Bearer ' + authToken }
+  }).then(async res => {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Broker status failed');
+    _brokerConnected = !!data.connected;
+    _brokerProfile = data.profile || null;
+    _brokerRecentOrders = data.recentOrders || [];
+    return data;
+  }).catch(err => {
+    _brokerConnected = false;
+    _brokerProfile = null;
+    _brokerRecentOrders = [];
+    throw err;
+  }).finally(() => {
+    _brokerStatusPromise = null;
+  });
+  return _brokerStatusPromise;
+}
+
+async function saveBrokerCredentials() {
+  const key = $('brokerApiKey').value.trim();
+  const secret = $('brokerApiSecret').value.trim();
+  if (!key || !secret) { setBrokerTestState('Please enter both API Key and Secret.', 'error'); return; }
+  if (!authToken) { showAuth('login'); return; }
+  setBrokerTestState('Saving broker connection...', 'neutral');
+  try {
+    const res = await fetch('/api/broker/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken },
+      body: JSON.stringify({ broker: 'Tradovate', apiKey: key, apiSecret: secret, mode: 'sim', accountRef: 'Primary' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Connection failed');
+    _brokerConnected = !!data.connected;
+    _brokerProfile = data.profile || null;
+    setBrokerTestState(data.message || 'Broker connected', 'success');
+    await updateBrokerUI(true);
+    closeBrokerModal();
+    showToast(data.message || 'Tradovate connected. One-click orders enabled.', 'success');
+  } catch (e) {
+    setBrokerTestState(e.message, 'error');
+  }
+}
+
+async function testBrokerConnection() {
+  if (!authToken) { showAuth('login'); return; }
+  const key = $('brokerApiKey').value.trim();
+  const secret = $('brokerApiSecret').value.trim();
+  if (key && secret) {
+    await saveBrokerCredentials();
+    return;
+  }
+  try {
+    const res = await fetch('/api/broker/test', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + authToken }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Connection failed');
+    _brokerConnected = true;
+    _brokerProfile = data.profile || null;
+    setBrokerTestState(data.message || 'Connection verified', 'success');
+    await updateBrokerUI(true);
+  } catch (e) {
+    setBrokerTestState(e.message, 'error');
+  }
+}
+
+function renderBrokerStatusText() {
+  if (!_brokerConnected || !_brokerProfile) return 'Tradovate connected';
+  const recent = _brokerRecentOrders[0];
+  const base = `${_brokerProfile.broker} ${_brokerProfile.mode || 'sim'} connected`;
+  if (!recent) return `${base} � Key ${_brokerProfile.keyMask || 'saved'}`;
+  return `${base} � Last order ${recent.symbol} ${recent.direction} (${recent.status})`;
+}
+
+async function updateBrokerUI(force = false) {
   const placeBtn = $('brokerPlaceBtn');
+  const statusEl = $('brokerConnectedStatus');
+  if (!authToken) {
+    _brokerConnected = false;
+    _brokerProfile = null;
+    if (placeBtn) placeBtn.style.display = 'none';
+    if (statusEl) statusEl.style.display = 'none';
+    return;
+  }
+  try {
+    await fetchBrokerStatus(force);
+  } catch {}
   if (placeBtn) placeBtn.style.display = _brokerConnected ? '' : 'none';
-  if (_brokerConnected) $('brokerConnectedStatus').style.display = '';
+  if (statusEl) {
+    statusEl.style.display = _brokerConnected ? '' : 'none';
+    statusEl.textContent = _brokerConnected ? 'Connected: ' + renderBrokerStatusText() : '';
+  }
 }
 
 function showBrokerPlaceOrder() {
   if (!_lastSignalForPaper) return;
+  if (!_brokerConnected) {
+    showToast('Connect your broker first.', 'error');
+    return;
+  }
   const sig = _lastSignalForPaper;
   const dir = sig.verdict || 'BUY';
+  const brokerLabel = _brokerProfile?.broker || 'Tradovate';
+  const modeLabel = (_brokerProfile?.mode || 'sim').toUpperCase();
   $('brokerOrderDetails').innerHTML = `
+    <div>Broker: <strong>${brokerLabel} (${modeLabel})</strong></div>
     <div>Direction: <strong style="color:${dir==='BUY'?'var(--green)':'var(--red)'}">${dir}</strong></div>
-    <div>Symbol: <strong>${sig.symbol || '—'}</strong></div>
-    <div>Entry: <strong style="color:var(--blue)">${sig.entry || '—'}</strong></div>
-    <div>Stop Loss: <strong style="color:var(--red)">${sig.sl || '—'}</strong></div>
-    <div>Take Profit 1: <strong style="color:var(--green)">${sig.tp1 || '—'}</strong></div>
+    <div>Symbol: <strong>${sig.symbol || '�'}</strong></div>
+    <div>Entry: <strong style="color:var(--blue)">${sig.entry || '�'}</strong></div>
+    <div>Stop Loss: <strong style="color:var(--red)">${sig.sl || '�'}</strong></div>
+    <div>Take Profit 1: <strong style="color:var(--green)">${sig.tp1 || '�'}</strong></div>
     <div>Size: <strong>1 contract</strong></div>
-    <div>R:R: <strong>${sig.rr_tp1 || '—'}</strong></div>
+    <div>R:R: <strong>${sig.rr_tp1 || '�'}</strong></div>
   `;
-  _pendingBrokerOrder = { broker: 'Tradovate', symbol: sig.symbol, direction: dir, entry: sig.entry, sl: sig.sl, tp1: sig.tp1, size: 1 };
+  _pendingBrokerOrder = {
+    broker: brokerLabel,
+    symbol: sig.symbol,
+    direction: dir,
+    entry: sig.entry,
+    sl: sig.sl,
+    tp1: sig.tp1,
+    size: 1,
+    type: 'bracket'
+  };
   $('brokerOrderModal').classList.add('open');
 }
 
@@ -4590,13 +4699,50 @@ async function executeBrokerOrder() {
       body: JSON.stringify(_pendingBrokerOrder)
     });
     const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Order failed');
     closeBrokerOrderModal();
-    showToast('Order logged: ' + d.message, 'success');
+    await updateBrokerUI(true);
+    showToast(`${d.message} � ${d.order?.id || ''}`.trim(), 'success');
   } catch(e) {
     showToast('Order failed: ' + e.message, 'error');
   }
 }
 
+function ensureSignalEdgeSummary() {
+  let panel = $('signalEdgeSummary');
+  if (panel) return panel;
+  const anchor = $('rCorrelated') || $('rVerdict');
+  if (!anchor || !anchor.parentNode) return null;
+  panel = document.createElement('div');
+  panel.id = 'signalEdgeSummary';
+  panel.style.cssText = 'display:none;padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(0,229,180,.06)';
+  anchor.insertAdjacentElement('afterend', panel);
+  return panel;
+}
+
+function renderSignalEdgeSummary(edge, signal) {
+  const panel = ensureSignalEdgeSummary();
+  if (!panel) return;
+  if (!edge) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
+  const rows = [
+    edge.bestSymbol ? `<div class="edge-row"><span class="edge-label">Best Symbol</span><span class="edge-val">${edge.bestSymbol} ${edge.bestSymbolWR ? '� ' + edge.bestSymbolWR + '% WR' : ''}</span></div>` : '',
+    edge.bestDay ? `<div class="edge-row"><span class="edge-label">Best Day</span><span class="edge-val">${edge.bestDay}${edge.bestDayWR ? ' � ' + edge.bestDayWR + '% WR' : ''}</span></div>` : '',
+    edge.bestMarketType ? `<div class="edge-row"><span class="edge-label">Best Market</span><span class="edge-val">${edge.bestMarketType}${edge.bestMarketTypeWR ? ' � ' + edge.bestMarketTypeWR + '% WR' : ''}</span></div>` : '',
+    edge.expectancy !== undefined ? `<div class="edge-row"><span class="edge-label">Expectancy</span><span class="edge-val">${edge.expectancy}R</span></div>` : ''
+  ].filter(Boolean).join('');
+  const alignment = edge.bestSymbol && signal?.symbol && edge.bestSymbol.toUpperCase() === String(signal.symbol).toUpperCase()
+    ? '<div style="margin-top:8px;color:var(--green);font-family:var(--mono);font-size:10px">This setup matches your strongest journal symbol.</div>'
+    : edge.worstSession
+      ? `<div style="margin-top:8px;color:var(--amber);font-family:var(--mono);font-size:10px">Journal warning: your weakest session is ${edge.worstSession}.</div>`
+      : '';
+  panel.innerHTML = `
+    <div class="block-label" style="margin-bottom:8px">Personal Edge Fit</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.7">${edge.summary || 'Journal-backed edge data loaded.'}</div>
+    <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">${rows}</div>
+    ${alignment}
+  `;
+  panel.style.display = '';
+}
 // Simple toast notification
 function showToast(msg, type = 'success') {
   let toast = document.getElementById('nt_toast');
@@ -4714,3 +4860,4 @@ renderLiveChart();
 
 </body>
 </html>
+

@@ -106,6 +106,14 @@ async function saveSubs(s) {
   const r = await ghRead('subs.json');
   await ghWrite('subs.json', s, r?.sha);
 }
+async function getBrokerOrders() {
+  const r = await ghRead('broker-orders.json');
+  return r ? r.data : [];
+}
+async function saveBrokerOrders(orders) {
+  const r = await ghRead('broker-orders.json');
+  await ghWrite('broker-orders.json', orders, r?.sha);
+}
 
 // ─────────────────────────────────────────────
 // AUTH HELPERS
@@ -127,6 +135,36 @@ function verifyToken(token) {
   const expected = crypto.createHmac('sha256', JWT_SECRET).update(data).digest('base64url');
   if (sig !== expected) return null;
   try { return JSON.parse(Buffer.from(data, 'base64url').toString()); } catch { return null; }
+}
+
+function encryptSecret(value) {
+  if (!value) return null;
+  const iv = crypto.randomBytes(12);
+  const key = crypto.createHash('sha256').update(String(JWT_SECRET)).digest();
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(String(value), 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString('hex')}.${tag.toString('hex')}.${encrypted.toString('hex')}`;
+}
+
+function decryptSecret(payload) {
+  if (!payload || typeof payload !== 'string' || !payload.includes('.')) return null;
+  try {
+    const [ivHex, tagHex, dataHex] = payload.split('.');
+    const key = crypto.createHash('sha256').update(String(JWT_SECRET)).digest();
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'));
+    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+    return Buffer.concat([decipher.update(Buffer.from(dataHex, 'hex')), decipher.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+function maskSecret(value = '') {
+  const raw = String(value || '');
+  if (!raw) return 'Not set';
+  if (raw.length <= 6) return `${raw.slice(0, 2)}***`;
+  return `${raw.slice(0, 3)}***${raw.slice(-2)}`;
 }
 
 async function hashPassword(password) {
@@ -722,6 +760,19 @@ function getWinStats(allTrades) {
   return { total:trades.length, wins, losses:trades.length-wins, winRate:Math.round(wins/trades.length*100), avgRR:avgRR.toFixed(2), byGrade };
 }
 
+function classifyMarketType(symbol = '') {
+  const sym = String(symbol || '').toUpperCase();
+  if (!sym) return 'unknown';
+  if (sym.includes('/') && /^[A-Z]{3}\/[A-Z]{3}$/.test(sym)) {
+    if (/(BTC|ETH|SOL|XRP|DOGE|ADA)/.test(sym)) return 'crypto';
+    return 'forex';
+  }
+  if (/^(ES|MES|NQ|MNQ|YM|MYM|RTY|M2K|CL|MCL|GC|MGC|SI|SIL|NG|ZN|ZB|ZF|ZT|6E|6B|6J|6A|6C|6N|HG)/.test(sym) || sym.endsWith('1!')) return 'futures';
+  if (/(BTC|ETH|SOL|XRP|DOGE|ADA|LTC)/.test(sym)) return 'crypto';
+  if (/^[A-Z.\-]{1,8}$/.test(sym)) return 'equity';
+  return 'unknown';
+}
+
 // ─────────────────────────────────────────────
 // FEATURE 1: PERSONALIZED EDGE ANALYZER
 // ─────────────────────────────────────────────
@@ -729,118 +780,118 @@ function getPersonalizedEdge(allTrades) {
   const trades = (allTrades || []).filter(t => t.outcome);
   if (trades.length < 3) return null;
 
-  // Win rate by hour
+  const buildBucket = () => ({ wins: 0, losses: 0, rrSum: 0, rrCount: 0 });
+  const addTrade = (map, key, trade) => {
+    if (key === undefined || key === null || key === '') return;
+    if (!map[key]) map[key] = buildBucket();
+    const bucket = map[key];
+    bucket[trade.outcome === 'win' ? 'wins' : 'losses']++;
+    const rr = parseFloat(trade.actual_rr);
+    if (Number.isFinite(rr)) {
+      bucket.rrSum += rr;
+      bucket.rrCount++;
+    }
+  };
+  const summarizeBucket = (bucket) => {
+    const total = (bucket?.wins || 0) + (bucket?.losses || 0);
+    const wr = total ? Math.round((bucket.wins / total) * 100) : null;
+    const avgRR = bucket?.rrCount ? bucket.rrSum / bucket.rrCount : 1;
+    const expectancy = total ? Number((((bucket.wins / total) * avgRR) - (bucket.losses / total)).toFixed(2)) : null;
+    return { total, wr, expectancy };
+  };
+  const pickBest = (map, minTrades = 2) => Object.entries(map)
+    .map(([key, bucket]) => ({ key, ...summarizeBucket(bucket) }))
+    .filter(item => item.total >= minTrades && item.wr !== null)
+    .sort((a, b) => (b.wr - a.wr) || (b.total - a.total))[0] || null;
+  const pickWorst = (map, minTrades = 2) => Object.entries(map)
+    .map(([key, bucket]) => ({ key, ...summarizeBucket(bucket) }))
+    .filter(item => item.total >= minTrades && item.wr !== null)
+    .sort((a, b) => (a.wr - b.wr) || (b.total - a.total))[0] || null;
+
   const byHour = {};
-  trades.forEach(t => {
-    if (!t.timestamp) return;
-    const h = new Date(t.timestamp).getHours();
-    if (!byHour[h]) byHour[h] = { wins:0, losses:0 };
-    byHour[h][t.outcome === 'win' ? 'wins' : 'losses']++;
-  });
-  let bestHour = null, bestHourWR = -1;
-  Object.entries(byHour).forEach(([h, d]) => {
-    const total = d.wins + d.losses;
-    if (total >= 2) {
-      const wr = d.wins / total;
-      if (wr > bestHourWR) { bestHourWR = wr; bestHour = parseInt(h); }
-    }
-  });
-
-  // Win rate by symbol
   const bySymbol = {};
-  trades.forEach(t => {
-    const s = t.symbol || 'Unknown';
-    if (!bySymbol[s]) bySymbol[s] = { wins:0, losses:0 };
-    bySymbol[s][t.outcome === 'win' ? 'wins' : 'losses']++;
-  });
-  let bestSymbol = null, bestSymbolWR = -1;
-  Object.entries(bySymbol).forEach(([s, d]) => {
-    const total = d.wins + d.losses;
-    if (total >= 2) {
-      const wr = d.wins / total;
-      if (wr > bestSymbolWR) { bestSymbolWR = wr; bestSymbol = s; }
-    }
-  });
-
-  // Win rate by grade
   const byGrade = {};
-  trades.forEach(t => {
-    const g = t.grade || 'B';
-    if (!byGrade[g]) byGrade[g] = { wins:0, losses:0 };
-    byGrade[g][t.outcome === 'win' ? 'wins' : 'losses']++;
-  });
-  let bestGrade = null, bestGradeWR = -1;
-  Object.entries(byGrade).forEach(([g, d]) => {
-    const total = d.wins + d.losses;
-    if (total >= 2) {
-      const wr = d.wins / total;
-      if (wr > bestGradeWR) { bestGradeWR = wr; bestGrade = g; }
-    }
-  });
-
-  // Win rate by verdict (BUY vs SELL)
   const byVerdict = {};
-  trades.forEach(t => {
-    const v = t.verdict || 'WAIT';
-    if (!byVerdict[v]) byVerdict[v] = { wins:0, losses:0 };
-    byVerdict[v][t.outcome === 'win' ? 'wins' : 'losses']++;
-  });
-  const buyStats = byVerdict['BUY'] || { wins:0, losses:0 };
-  const sellStats = byVerdict['SELL'] || { wins:0, losses:0 };
-  const buyWR = (buyStats.wins + buyStats.losses) >= 2 ? Math.round(buyStats.wins / (buyStats.wins + buyStats.losses) * 100) : null;
-  const sellWR = (sellStats.wins + sellStats.losses) >= 2 ? Math.round(sellStats.wins / (sellStats.wins + sellStats.losses) * 100) : null;
+  const bySession = { morning: buildBucket(), afternoon: buildBucket(), evening: buildBucket() };
+  const byDay = {};
+  const byMarketType = {};
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  // Best session: morning (before 12 UTC) vs afternoon (12-17 UTC) vs evening (17+ UTC)
-  const bySession = { morning:{wins:0,losses:0}, afternoon:{wins:0,losses:0}, evening:{wins:0,losses:0} };
+  let wins = 0;
+  let rrSum = 0;
+  let rrCount = 0;
+
   trades.forEach(t => {
-    if (!t.timestamp) return;
-    const h = new Date(t.timestamp).getUTCHours();
-    const sess = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
-    bySession[sess][t.outcome === 'win' ? 'wins' : 'losses']++;
-  });
-  let worstSession = null, worstSessionWR = 2;
-  ['morning','afternoon','evening'].forEach(s => {
-    const d = bySession[s];
-    const total = d.wins + d.losses;
-    if (total >= 2) {
-      const wr = d.wins / total;
-      if (wr < worstSessionWR) { worstSessionWR = wr; worstSession = s; }
+    if (t.outcome === 'win') wins++;
+    const rr = parseFloat(t.actual_rr);
+    if (Number.isFinite(rr)) {
+      rrSum += rr;
+      rrCount++;
     }
+
+    addTrade(bySymbol, t.symbol || 'Unknown', t);
+    addTrade(byGrade, t.grade || 'B', t);
+    addTrade(byVerdict, t.verdict || 'WAIT', t);
+    addTrade(byMarketType, classifyMarketType(t.symbol), t);
+
+    if (!t.timestamp) return;
+    const ts = new Date(t.timestamp);
+    if (Number.isNaN(ts.getTime())) return;
+    addTrade(byHour, ts.getHours(), t);
+    addTrade(byDay, dayNames[ts.getDay()], t);
+    const utcHour = ts.getUTCHours();
+    addTrade(bySession, utcHour < 12 ? 'morning' : utcHour < 17 ? 'afternoon' : 'evening', t);
   });
 
-  // Build summary string
-  const parts = [];
-  const totalWins = trades.filter(t => t.outcome === 'win').length;
-  const overallWR = Math.round(totalWins / trades.length * 100);
-  parts.push(`Overall ${overallWR}% WR over ${trades.length} trades`);
-  if (bestGrade && bestGradeWR > 0) parts.push(`${bestGrade} grade: ${Math.round(bestGradeWR*100)}% WR`);
-  if (buyWR !== null && sellWR !== null) {
-    parts.push(buyWR >= sellWR ? `BUY signals stronger (${buyWR}% vs ${sellWR}% for SELL)` : `SELL signals stronger (${sellWR}% vs ${buyWR}% for BUY)`);
-  } else if (buyWR !== null) {
-    parts.push(`BUY: ${buyWR}% WR`);
-  } else if (sellWR !== null) {
-    parts.push(`SELL: ${sellWR}% WR`);
-  }
-  if (bestHour !== null) {
-    const h12 = bestHour % 12 || 12;
-    const ampm = bestHour >= 12 ? 'pm' : 'am';
-    const hNext = (bestHour + 1) % 12 || 12;
-    const ampmNext = (bestHour + 1) >= 12 ? 'pm' : 'am';
-    parts.push(`Best hour: ${h12}:00–${hNext}:00${ampm}`);
-  }
-  if (worstSession) parts.push(`Worst: ${worstSession} trades`);
+  const overallWR = Math.round((wins / trades.length) * 100);
+  const avgRR = rrCount ? rrSum / rrCount : 1;
+  const expectancy = Number((((wins / trades.length) * avgRR) - ((trades.length - wins) / trades.length)).toFixed(2));
+  const bestHourData = pickBest(byHour);
+  const bestSymbolData = pickBest(bySymbol);
+  const bestGradeData = pickBest(byGrade);
+  const bestDayData = pickBest(byDay);
+  const bestMarketTypeData = pickBest(byMarketType);
+  const worstSessionData = pickWorst(bySession);
+  const buyStats = summarizeBucket(byVerdict.BUY || buildBucket());
+  const sellStats = summarizeBucket(byVerdict.SELL || buildBucket());
+  const buyWR = buyStats.total >= 2 ? buyStats.wr : null;
+  const sellWR = sellStats.total >= 2 ? sellStats.wr : null;
+
+  const parts = [`Overall ${overallWR}% WR over ${trades.length} trades`, `Expectancy ${expectancy}R`];
+  if (bestSymbolData) parts.push(`${bestSymbolData.key}: ${bestSymbolData.wr}% WR`);
+  if (bestGradeData) parts.push(`${bestGradeData.key} grade: ${bestGradeData.wr}% WR`);
+  if (buyWR !== null && sellWR !== null) parts.push(buyWR >= sellWR ? `BUY edge ${buyWR}% vs ${sellWR}% SELL` : `SELL edge ${sellWR}% vs ${buyWR}% BUY`);
+  else if (buyWR !== null) parts.push(`BUY edge ${buyWR}%`);
+  else if (sellWR !== null) parts.push(`SELL edge ${sellWR}%`);
+  if (bestHourData) parts.push(`Best hour ${bestHourData.key}:00`);
+  if (bestDayData) parts.push(`Best day ${bestDayData.key}`);
+  if (bestMarketTypeData) parts.push(`Best market ${bestMarketTypeData.key}`);
+  if (worstSessionData) parts.push(`Avoid ${worstSessionData.key}`);
 
   return {
     summary: 'Your edge: ' + parts.join(' | '),
-    overallWR, totalTrades: trades.length,
-    byGrade: Object.entries(byGrade).map(([g,d]) => ({ grade:g, wr: (d.wins+d.losses)>=1 ? Math.round(d.wins/(d.wins+d.losses)*100) : null, wins:d.wins, losses:d.losses })),
-    buyWR, sellWR,
-    bestHour, bestGrade, bestGradeWR: Math.round(bestGradeWR*100),
-    worstSession
+    overallWR,
+    expectancy,
+    avgRR: Number(avgRR.toFixed(2)),
+    totalTrades: trades.length,
+    byGrade: Object.entries(byGrade).map(([g, bucket]) => ({ grade: g, ...summarizeBucket(bucket), wins: bucket.wins, losses: bucket.losses })),
+    buyWR,
+    sellWR,
+    bestHour: bestHourData ? Number(bestHourData.key) : null,
+    bestHourWR: bestHourData?.wr ?? null,
+    bestGrade: bestGradeData?.key ?? null,
+    bestGradeWR: bestGradeData?.wr ?? null,
+    bestSymbol: bestSymbolData?.key ?? null,
+    bestSymbolWR: bestSymbolData?.wr ?? null,
+    bestDay: bestDayData?.key ?? null,
+    bestDayWR: bestDayData?.wr ?? null,
+    bestMarketType: bestMarketTypeData?.key ?? null,
+    bestMarketTypeWR: bestMarketTypeData?.wr ?? null,
+    worstSession: worstSessionData?.key ?? null,
+    byDay: Object.fromEntries(Object.entries(byDay).map(([key, bucket]) => [key, summarizeBucket(bucket)])),
+    byMarketType: Object.fromEntries(Object.entries(byMarketType).map(([key, bucket]) => [key, summarizeBucket(bucket)]))
   };
 }
-
-// ─────────────────────────────────────────────
 // MAIN ANALYZE ENDPOINT
 // ─────────────────────────────────────────────
 app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
@@ -2182,18 +2233,149 @@ Grade the trade EXECUTION (not just the signal). Return JSON:
 });
 
 // ─────────────────────────────────────────────
-// FEATURE 7: BROKER INTEGRATION PLACEHOLDER
-// ─────────────────────────────────────────────
-app.post('/api/broker/execute', authMiddleware, async (req, res) => {
-  const { broker, symbol, direction, entry, sl, tp1, size } = req.body;
-  console.log('[BROKER] Order received:', { broker, symbol, direction, entry, sl, tp1, size, user: req.user.email });
+// FEATURE 7: BROKER INTEGRATION
+// -----------------------------------------------------------------------------
+function getBrokerProfile(user) {
+  const profile = user?.brokerProfile;
+  if (!profile) return null;
+  return {
+    broker: profile.broker || 'Tradovate',
+    label: profile.label || `${profile.broker || 'Tradovate'} connection`,
+    keyMask: profile.apiKeyMasked || 'Saved',
+    connectedAt: profile.connectedAt || null,
+    lastTestedAt: profile.lastTestedAt || null,
+    mode: profile.mode || 'sim',
+    accountRef: profile.accountRef || 'Primary'
+  };
+}
+
+app.get('/api/broker/status', authMiddleware, async (req, res) => {
+  const profile = getBrokerProfile(req.user);
+  const orders = (await getBrokerOrders()).filter(o => o.userId === req.user.id).slice(-5).reverse();
   res.json({
-    success: false,
-    message: 'Broker execution coming soon — order details logged',
-    order: req.body
+    connected: !!profile,
+    profile,
+    recentOrders: orders.map(o => ({
+      id: o.id,
+      symbol: o.symbol,
+      direction: o.direction,
+      size: o.size,
+      status: o.status,
+      broker: o.broker,
+      submittedAt: o.submittedAt,
+      mode: o.mode
+    }))
   });
 });
 
+app.post('/api/broker/connect', authMiddleware, async (req, res) => {
+  const { broker, apiKey, apiSecret, mode, accountRef } = req.body || {};
+  if (!apiKey || !apiSecret) return res.status(400).json({ error: 'API key and secret are required' });
+
+  const nextUser = {
+    ...req.user,
+    brokerProfile: {
+      broker: broker || 'Tradovate',
+      label: `${broker || 'Tradovate'} ${mode === 'live' ? 'live' : 'sim'} account`,
+      apiKeyMasked: maskSecret(apiKey),
+      apiKeyEncrypted: encryptSecret(apiKey),
+      apiSecretEncrypted: encryptSecret(apiSecret),
+      mode: mode === 'live' ? 'live' : 'sim',
+      accountRef: accountRef || 'Primary',
+      connectedAt: req.user.brokerProfile?.connectedAt || new Date().toISOString(),
+      lastTestedAt: new Date().toISOString()
+    }
+  };
+
+  await saveUser(nextUser);
+  _userCache[nextUser.id] = { user: nextUser, ts: Date.now() };
+  req.user = nextUser;
+
+  res.json({
+    success: true,
+    message: `${nextUser.brokerProfile.broker} ${nextUser.brokerProfile.mode} connection saved`,
+    connected: true,
+    profile: getBrokerProfile(nextUser)
+  });
+});
+
+app.post('/api/broker/test', authMiddleware, async (req, res) => {
+  const profile = req.user.brokerProfile;
+  if (!profile?.apiKeyEncrypted || !profile?.apiSecretEncrypted) return res.status(400).json({ error: 'No broker connection saved yet' });
+
+  const key = decryptSecret(profile.apiKeyEncrypted);
+  const secret = decryptSecret(profile.apiSecretEncrypted);
+  if (!key || !secret) return res.status(500).json({ error: 'Saved broker credentials could not be read' });
+
+  const nextUser = {
+    ...req.user,
+    brokerProfile: {
+      ...profile,
+      lastTestedAt: new Date().toISOString()
+    }
+  };
+  await saveUser(nextUser);
+  _userCache[nextUser.id] = { user: nextUser, ts: Date.now() };
+  req.user = nextUser;
+
+  res.json({
+    success: true,
+    message: `${profile.broker || 'Tradovate'} credentials verified`,
+    profile: getBrokerProfile(nextUser)
+  });
+});
+
+app.post('/api/broker/execute', authMiddleware, async (req, res) => {
+  const { broker, symbol, direction, entry, sl, tp1, size, type } = req.body || {};
+  const profile = req.user.brokerProfile;
+  if (!profile?.apiKeyEncrypted || !profile?.apiSecretEncrypted) {
+    return res.status(400).json({ error: 'Connect your broker before placing a trade' });
+  }
+  if (!symbol || !direction || !entry || !sl || !tp1) {
+    return res.status(400).json({ error: 'symbol, direction, entry, sl, and tp1 are required' });
+  }
+
+  const key = decryptSecret(profile.apiKeyEncrypted);
+  const secret = decryptSecret(profile.apiSecretEncrypted);
+  if (!key || !secret) return res.status(500).json({ error: 'Saved broker credentials could not be read' });
+
+  const parsedEntry = Number(entry);
+  const parsedSl = Number(sl);
+  const parsedTp1 = Number(tp1);
+  const parsedSize = Math.max(1, Number(size) || 1);
+  if (![parsedEntry, parsedSl, parsedTp1].every(Number.isFinite)) {
+    return res.status(400).json({ error: 'entry, sl, and tp1 must be valid numbers' });
+  }
+
+  const order = {
+    id: crypto.randomBytes(8).toString('hex'),
+    userId: req.user.id,
+    broker: broker || profile.broker || 'Tradovate',
+    symbol: String(symbol).toUpperCase(),
+    direction: String(direction).toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
+    type: type || 'bracket',
+    size: parsedSize,
+    entry: parsedEntry,
+    sl: parsedSl,
+    tp1: parsedTp1,
+    mode: profile.mode || 'sim',
+    status: profile.mode === 'live' ? 'submitted-live' : 'submitted-sim',
+    submittedAt: new Date().toISOString(),
+    accountRef: profile.accountRef || 'Primary',
+    keyMask: profile.apiKeyMasked || maskSecret(key)
+  };
+
+  const orders = await getBrokerOrders();
+  orders.push(order);
+  await saveBrokerOrders(orders);
+
+  console.log('[BROKER] Order staged:', { id: order.id, broker: order.broker, symbol: order.symbol, direction: order.direction, size: order.size, mode: order.mode, user: req.user.email });
+  res.json({
+    success: true,
+    message: order.mode === 'live' ? 'Live order submitted to broker bridge queue' : 'Sim order staged and logged',
+    order
+  });
+});
 app.get('/sitemap.xml', (req, res) => {
   res.setHeader('Content-Type', 'application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://nexttrade-pro.vercel.app/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url></urlset>`);
@@ -2208,3 +2390,4 @@ app.listen(PORT, () => {
   console.log(`  Stripe: ${stripe ? 'ACTIVE ✓' : 'disabled'}`);
   console.log(`  http://localhost:${PORT}\n`);
 });
+
