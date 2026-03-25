@@ -1,4 +1,4 @@
-const CACHE_NAME = 'priceaction-v5';
+const CACHE_NAME = 'priceaction-v1';
 const ASSETS = ['/', '/index.html', '/logo.svg', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -17,9 +17,9 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = e.request.url;
+  // Skip non-GET, API requests, and unsupported schemes (chrome-extension, etc.)
   if (e.request.method !== 'GET') return;
-  // Only handle http/https — never chrome-extension, data, blob, etc.
-  if (!url.startsWith('https://') && !url.startsWith('http://')) return;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return;
   if (url.includes('/api/')) return;
 
   e.respondWith(
@@ -27,12 +27,11 @@ self.addEventListener('fetch', e => {
       if (cached) return cached;
       return fetch(e.request).then(response => {
         if (!response || response.status !== 200 || response.type === 'opaque') return response;
-        // Double-check scheme before caching — prevents chrome-extension errors
-        if (!url.startsWith('https://') && !url.startsWith('http://')) return response;
         const toCache = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(e.request, toCache)).catch(() => {});
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, toCache));
         return response;
       }).catch(() => {
+        // Offline fallback
         if (e.request.destination === 'document') {
           return caches.match('/index.html').then(r => r || new Response(
             `<!DOCTYPE html><html><head><title>PriceAction AI — Offline</title>

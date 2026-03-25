@@ -10,6 +10,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#00e5b4">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PriceAction AI">
 <meta name="description" content="PriceAction AI — Upload any trading chart and get institutional-grade signals in seconds. BUY/SELL/WAIT with exact entry, stop loss, and take profit levels. Powered by Claude AI.">
@@ -1238,6 +1239,22 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <div id="watchlistChips" style="display:flex;gap:5px;flex-wrap:wrap;flex:1"></div>
       <button class="wl-add-btn" onclick="addToWatchlist()" title="Add current symbol">+ Add</button>
     </div>
+    <div id="premiumQuickBar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:10px">
+      <span style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Quick Symbols</span>
+      <div id="quickSymbolChips" style="display:flex;gap:6px;flex-wrap:wrap;flex:1"></div>
+      <button class="wl-add-btn" onclick="window.ntPremium?.pinCurrentSymbol?.()" title="Pin current symbol">Pin Current</button>
+      <button class="wl-add-btn" onclick="window.ntPremium?.scanWatchlist?.()" title="Scan pinned and watchlist symbols">Scan Watchlist</button>
+    </div>
+    <div id="premiumWatchlistScanPanel" style="display:none;margin-bottom:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Watchlist Scan</div>
+          <div id="premiumWatchlistMeta" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px">Fast ranked read on your current symbols</div>
+        </div>
+        <div id="premiumWatchlistStatus" style="font-family:var(--mono);font-size:10px;color:var(--text3)">Idle</div>
+      </div>
+      <div id="premiumWatchlistResults" style="padding:12px 16px"></div>
+    </div>
     <div class="config-row">
       <input class="sym-input" id="sym" placeholder="Symbol (ES, NQ, BTC…)" oninput="updateAnalyzeBar()">
     </div>
@@ -1280,6 +1297,16 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         </div>
       </div>
     </div>
+    <div id="premiumPlaybookPanel" style="margin-bottom:12px;background:linear-gradient(135deg,rgba(61,158,255,.08),rgba(0,229,180,.06));border:1px solid rgba(61,158,255,.22);border-radius:12px;padding:14px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Session Playbook</div>
+          <div id="premiumPlaybookMeta" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px">Mode-aware execution guidance for the current trading window</div>
+        </div>
+        <div id="premiumPlaybookScore" style="font-family:var(--mono);font-size:11px;color:var(--blue)">Stand by</div>
+      </div>
+      <div id="premiumPlaybookBody" style="margin-top:10px;font-size:13px;color:var(--text2);line-height:1.7"></div>
+    </div>
 
     <!-- 📡 LIVE ANALYSIS BAR -->
     <div style="background:linear-gradient(135deg,rgba(0,229,180,.06),rgba(61,158,255,.06));border:1px solid rgba(0,229,180,.25);border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1296,6 +1323,20 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         Analyze Live
       </button>
     </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px;box-shadow:0 12px 40px rgba(0,0,0,.18)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Live Chart</div>
+          <div id="liveChartMeta" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px">ES1! · 5m · TradingView</div>
+        </div>
+        <button onclick="refreshLiveChart()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:11px;cursor:pointer">
+          Refresh Chart
+        </button>
+      </div>
+      <div id="liveChartFrameWrap" style="height:420px;background:var(--bg2)">
+        <iframe id="liveChartFrame" title="Live market chart" loading="lazy" referrerpolicy="origin" style="width:100%;height:100%;border:0;display:block;background:var(--bg2)"></iframe>
+      </div>
+    </div>
 
     <div class="analyze-bar">
       <div class="analyze-info">
@@ -1306,6 +1347,17 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M8 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Analyze Screenshots
       </button>
+    </div>
+    <div id="premiumChecklistPanel" style="margin-top:12px;margin-bottom:16px;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Execution Checklist</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px">Build discipline before firing the analysis or taking the trade</div>
+        </div>
+        <div id="checklistScore" style="font-family:var(--mono);font-size:11px;color:var(--accent)">0 / 4 ready</div>
+      </div>
+      <div id="premiumChecklistBody" style="padding:14px 16px"></div>
+      <div id="premiumRiskBanner" style="display:none;padding:12px 16px;border-top:1px solid var(--border);font-family:var(--mono);font-size:11px"></div>
     </div>
     <div class="paste-row"><span class="kbd">Ctrl+V</span><span>paste chart to slot 1 · or drag & drop onto any slot</span></div>
 
@@ -1443,6 +1495,26 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
             <span class="toggle-slider"></span>
           </label>
         </div>
+        <div class="alert-toggle-row">
+          <div class="alert-toggle-label">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Browser notifications</div>
+            <div style="font-size:11px;color:var(--text3)">Instant popup alerts for live signals and trade management changes on this device</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="alertBrowserToggle" onchange="saveAlertPrefsLocal()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="alert-toggle-row">
+          <div class="alert-toggle-label">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Trade monitor alerts</div>
+            <div style="font-size:11px;color:var(--text3)">Notify when the live trade manager changes action: caution, breakeven, partials, trail, or close</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="alertTradeMonitorToggle" onchange="saveAlertPrefsLocal()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
         <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
           <button style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 24px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer" onclick="saveAlertPrefs()">Save Preferences</button>
           <span id="alertSaveMsg" style="font-family:var(--mono);font-size:11px;color:var(--green);display:none">✓ Saved</span>
@@ -1558,11 +1630,20 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
           <div class="block-label">Trade Management</div>
           <div class="mgmt-grid" id="mgmtGrid"></div>
         </div>
+        <div id="rExecutionPlan" style="display:none;padding:14px 16px;border-top:1px solid var(--border)">
+          <div class="block-label" style="margin-bottom:10px">Execution Plan</div>
+          <div id="executionPlanBody"></div>
+        </div>
+        <div id="rMarkup" style="display:none;padding:14px 16px;border-top:1px solid var(--border)">
+          <div class="block-label" style="margin-bottom:10px">Chart Markup</div>
+          <div id="markupWrap" style="position:relative;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg2);min-height:220px"></div>
+        </div>
         <div class="r-analysis" id="rAnalysis"></div>
         <!-- Paper Trade + Broker buttons -->
         <div id="rActionBtns" style="display:none;padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-paper" onclick="paperTradeSignal()">📝 Paper Trade This Signal</button>
           <button id="brokerPlaceBtn" style="display:none" class="place-trade-btn" onclick="showBrokerPlaceOrder()">⚡ Place Trade</button>
+          <button class="btn-paper" onclick="window.ntPremium?.saveSignalPlan?.()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2)">Save Plan</button>
         </div>
       </div>
       <div>
@@ -1570,10 +1651,25 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
           <div class="rc-head"><span class="rc-title">Recent Analyses</span><span class="rc-badge" id="histCount">0 charts</span></div>
           <div id="histList"><div class="hist-empty">Analyzed charts appear here</div></div>
         </div>
+        <div class="history-card" style="margin-top:14px">
+          <div class="rc-head"><span class="rc-title">Saved Plans</span><span class="rc-badge" id="savedPlansCount">0 plans</span></div>
+          <div id="savedPlansList"><div class="hist-empty">Saved execution plans appear here</div></div>
+        </div>
       </div>
     </div>
   </div>
   </div><!-- /analyzerContent -->
+</div>
+
+<div id="commandPalette" style="display:none;position:fixed;inset:0;background:rgba(4,7,12,.72);backdrop-filter:blur(8px);z-index:10000;padding:10vh 20px">
+  <div style="max-width:720px;margin:0 auto;background:var(--card);border:1px solid var(--border2);border-radius:16px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.45)">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent)">⌘</div>
+      <input id="commandPaletteInput" type="text" placeholder="Search actions, pages, or symbols…" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:14px;font-family:var(--sans)">
+      <button onclick="window.ntPremium?.closePalette?.()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:6px 10px;font-family:var(--mono);font-size:10px;cursor:pointer">Esc</button>
+    </div>
+    <div id="commandPaletteList" style="max-height:56vh;overflow:auto;padding:10px"></div>
+  </div>
 </div>
 
 <!-- ════════ JOURNAL PAGE ════════ -->
@@ -1585,6 +1681,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <button class="paper-tab on" id="journalRealTab" onclick="switchJournalTab('real')">Real Trades</button>
         <button class="paper-tab" id="journalPaperTab" onclick="switchJournalTab('paper')">📝 Paper</button>
       </div>
+      <button class="btn btn-ghost" onclick="exportJournalCsv()" style="font-size:12px">Export CSV</button>
       <button class="btn btn-ghost" onclick="loadJournal()" style="font-size:12px">↻ Refresh</button>
     </div>
     <!-- Paper Journal Stats (hidden by default) -->
@@ -1603,6 +1700,24 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <div class="j-stat a"><div class="j-stat-lbl">Avg R:R Achieved</div><div class="j-stat-val a" id="jAvgRR">—</div><div class="j-stat-sub">actual vs expected</div></div>
       <div class="j-stat r"><div class="j-stat-lbl">Best Grade Win%</div><div class="j-stat-val" id="jBestGrade" style="font-size:18px">—</div><div class="j-stat-sub" id="jBestGradeSub">need 2+ trades per grade</div></div>
       <div class="j-stat" style="--streak-color:var(--accent)"><div class="j-stat-lbl">Current Streak</div><div class="j-stat-val" id="jStreak" style="font-size:22px;color:var(--accent)">—</div><div class="j-stat-sub" id="jStreakSub">no closed trades yet</div></div>
+    </div>
+    <div class="j-panel" id="coachPanel" style="margin-bottom:20px">
+      <div class="j-head" style="cursor:pointer" onclick="togglePanel('coachBody','coachToggle')">
+        <span class="j-title">🧭 Trading Coach</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="coachToggle">▼ expand</span>
+      </div>
+      <div id="coachBody" style="display:none;padding:18px 20px">
+        <div id="coachContent"><div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Log more trades to unlock coaching insights.</div></div>
+      </div>
+    </div>
+    <div class="j-panel" id="analyticsPanel" style="margin-bottom:20px">
+      <div class="j-head" style="cursor:pointer" onclick="togglePanel('analyticsBody','analyticsToggle')">
+        <span class="j-title">📊 Analytics Dashboard</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="analyticsToggle">▼ expand</span>
+      </div>
+      <div id="analyticsBody" style="display:none;padding:18px 20px">
+        <div id="analyticsContent"><div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Complete more trades to unlock deeper analytics.</div></div>
+      </div>
     </div>
     <div class="j-panel">
       <div class="j-head"><span class="j-title">Performance by Signal Grade</span></div>
@@ -2062,6 +2177,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 const charts=[null,null,null];
 let tf='1H',analysisHistory=[],stepTmr=null,allTrades=[],journalFilter='all';
 let currentUser=null,authToken=null,authMode='login';
+let _liveChartRefreshToken = 0;
 const $=id=>document.getElementById(id);
 const FCOLORS={Trend:'#00e676',Volume:'#3d9eff',Momentum:'#ffb300',Structure:'#a78bfa','Price Action':'#00e5b4',Confluence:'#00e5b4','Risk/Reward':'#f59e0b'};
 
@@ -2458,6 +2574,7 @@ function setMode(mode, btn){
   [0,1,2].forEach(i=>renderSlot(i));
   // Refresh session timer to reflect new mode windows
   updateSessionTimer();
+  renderLiveChart();
 }
 const slotTF=['1m','5m','15m'];
 const slotSuggest=[
@@ -2547,12 +2664,14 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAuth();});
 function resetResult(){
   $('stateLoading').classList.remove('on');$('stateEmpty').classList.remove('hidden');$('stateError').classList.remove('on');
   ['rVerdict','rLevels','rFactors','rPatterns','rMgmt','rAnalysis'].forEach(id=>$(id).classList.remove('on'));
+  if ($('rMarkup')) $('rMarkup').style.display = 'none';
   $('resultCard').classList.remove('glow');
 }
 
 function startLoading(count){
   $('stateEmpty').classList.add('hidden');$('stateError').classList.remove('on');
   ['rVerdict','rLevels','rFactors','rPatterns','rMgmt','rAnalysis'].forEach(id=>$(id).classList.remove('on'));
+  if ($('rMarkup')) $('rMarkup').style.display = 'none';
   $('resultCard').classList.remove('glow');$('stateLoading').classList.add('on');
   $('passCount').textContent=count>1?`${count}-CHART + 4-PASS`:'4-PASS ENGINE';
   ['s1','s2','s3','s4','s5','s6'].forEach(s=>{$(s).className='step';});
@@ -2567,7 +2686,71 @@ function stopLoading(){
 
 function showErr(msg){
   if(stepTmr)clearInterval(stepTmr);$('stateLoading').classList.remove('on');$('stateEmpty').classList.add('hidden');
+  if ($('rMarkup')) $('rMarkup').style.display = 'none';
   $('stateError').innerHTML='<strong>Analysis failed</strong><br>'+msg;$('stateError').classList.add('on');
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderChartMarkup(d) {
+  const wrap = $('markupWrap');
+  const panel = $('rMarkup');
+  if (!wrap || !panel) return;
+  const src = d.thumbSrc || d.chartSrc || charts.find(Boolean)?.src || null;
+  const entry = parseFloat(d.entry);
+  const sl = parseFloat(d.sl);
+  const tp1 = parseFloat(d.tp1);
+  const tp2 = parseFloat(d.tp2);
+  const tp3 = parseFloat(d.tp3);
+  const numeric = [entry, sl, tp1, tp2, tp3].filter(v => Number.isFinite(v));
+  if (!src || numeric.length < 2) {
+    panel.style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+
+  const low = Math.min(...numeric);
+  const high = Math.max(...numeric);
+  const spread = Math.max(high - low, Math.max(Math.abs(entry || 0) * 0.005, 1));
+  const min = low - spread * 0.35;
+  const max = high + spread * 0.35;
+  const levelToPct = (v) => {
+    const pct = ((max - v) / (max - min)) * 100;
+    return Math.max(6, Math.min(94, pct));
+  };
+  const levels = [
+    { label:'Entry', value:entry, color:'#3d9eff', dash:'0' },
+    { label:'SL', value:sl, color:'#ff3d5a', dash:'6 4' },
+    { label:'TP1', value:tp1, color:'#00e676', dash:'0' },
+    { label:'TP2', value:tp2, color:'#00e5b4', dash:'4 4' },
+    { label:'TP3', value:tp3, color:'#7ef7d5', dash:'2 6' }
+  ].filter(l => Number.isFinite(l.value));
+
+  wrap.innerHTML = `
+    <img src="${src}" alt="Annotated chart" style="display:block;width:100%;max-height:420px;object-fit:cover;opacity:.72">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,8,13,.04),rgba(6,8,13,.18))"></div>
+    ${levels.map(level => `
+      <div style="position:absolute;left:0;right:0;top:${levelToPct(level.value)}%;transform:translateY(-50%);pointer-events:none">
+        <div style="position:absolute;left:0;right:0;border-top:2px ${level.dash === '0' ? 'solid' : 'dashed'} ${level.color};box-shadow:0 0 12px ${level.color}55"></div>
+        <div style="position:absolute;right:12px;top:-12px;background:rgba(6,8,13,.88);border:1px solid ${level.color}66;color:${level.color};padding:4px 8px;border-radius:999px;font-family:var(--mono);font-size:10px;font-weight:700">
+          ${escapeHtml(level.label)} ${escapeHtml(level.value.toFixed(2))}
+        </div>
+      </div>
+    `).join('')}
+    <div style="position:absolute;left:12px;top:12px;background:rgba(6,8,13,.88);border:1px solid var(--border2);border-radius:10px;padding:8px 10px;font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.6">
+      <div><span style="color:var(--text3)">Signal</span> <span style="color:${d.verdict === 'SELL' ? 'var(--red)' : d.verdict === 'BUY' ? 'var(--green)' : 'var(--text)'};font-weight:700">${escapeHtml(d.verdict || 'WAIT')}</span></div>
+      <div><span style="color:var(--text3)">Confidence</span> ${escapeHtml((d.confidence || '—') + '%')}</div>
+      <div><span style="color:var(--text3)">Grade</span> ${escapeHtml(d.signal_grade || d.grade || '—')}</div>
+    </div>
+  `;
+  panel.style.display = '';
 }
 
 function showResult(d){
@@ -2597,6 +2780,7 @@ function showResult(d){
     const items=[{label:'Move to BE',val:tm.move_to_be||tm.move_sl_to_be},{label:'Partial at TP1',val:tm.partial_at_tp1||tm.partial_tp1},{label:'Trail method',val:tm.trail_method},{label:'Max hold',val:tm.max_hold||tm.max_hold_time}].filter(i=>i.val&&i.val!=='—');
     if(items.length){$('mgmtGrid').innerHTML=items.map(i=>`<div class="mgmt-item"><div class="mgmt-label">${i.label}</div><div class="mgmt-val">${i.val}</div></div>`).join('');$('rMgmt').classList.add('on');}
   }
+  renderChartMarkup(d);
   if(d.fullAnalysis){$('rAnalysis').innerHTML=d.fullAnalysis;$('rAnalysis').classList.add('on');}
   addHistory(d);
   // Store last analysis for calculator auto-fill
@@ -2609,41 +2793,38 @@ function showResult(d){
 async function analyzeLive(){
   if(!currentUser){showAuth('login');return;}
   const sym=($('liveSymInput').value||'ES1!').trim().toUpperCase();
+  renderLiveChart(sym);
   const btn=$('liveBtn');
   const resetBtn=()=>{btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Analyze Live';};
   btn.disabled=true; btn.textContent='Fetching live data...';
-  startLoading(1);
-  console.log('[Live] START', sym, tradeMode);
-
-  const controller = new AbortController();
-  const clientTimeout = setTimeout(() => { console.log('[Live] CLIENT TIMEOUT — aborting'); controller.abort(); }, 58000);
-
+  if(typeof startLoading==='function') startLoading(1);
   try{
     const tfs = tradeMode==='scalp'?['15m','5m','1m']:tradeMode==='swing'?['1D','4H','1H']:['4H','1H','15m'];
-    console.log('[Live] fetching TFs:', tfs);
     const res = await fetch('/api/analyze-live',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
-      body:JSON.stringify({symbol:sym,timeframes:tfs,tradeMode}),
-      signal: controller.signal
+      body:JSON.stringify({symbol:sym,timeframes:tfs,tradeMode})
     });
-    clearTimeout(clientTimeout);
-    console.log('[Live] response status:', res.status);
 
+    // Safely parse JSON — a 500 empty body throws without this guard
     let d;
     try { d = await res.json(); }
     catch(parseErr) {
-      console.error('[Live] JSON parse failed:', parseErr.message);
-      stopLoading(); showErr('Server error — please try again in a moment'); resetBtn(); return;
+      if(typeof stopLoading==='function') stopLoading();
+      showToast('⚠️ Server error (500) — try again in a moment','error');
+      resetBtn(); return;
     }
-    console.log('[Live] response data:', d);
 
     if(!res.ok || d.error){
-      stopLoading(); showErr(d.error||'Live analysis failed — check symbol and try again'); resetBtn(); return;
+      if(typeof stopLoading==='function') stopLoading();
+      showToast('⚠️ '+(d.error||'Live fetch failed'),'error');
+      resetBtn(); return;
     }
 
+    // Store for calc autofill
     try{ localStorage.setItem('nt_last_analysis',JSON.stringify({symbol:sym,verdict:d.verdict,entry:d.entry,sl:d.sl,tp1:d.tp1,grade:d.signal_grade})); }catch(e){}
 
+    // Add to history
     analysisHistory.unshift({...d,symbol:sym,tf:tfs[tfs.length-1],thumbSrc:null,source:'live'});
     if(analysisHistory.length>8) analysisHistory.pop();
     $('histCount').textContent=analysisHistory.length+' chart'+(analysisHistory.length!==1?'s':'');
@@ -2652,17 +2833,87 @@ async function analyzeLive(){
       return `<div class="hist-item" onclick="showResult(analysisHistory[${i}])"><div class="hist-thumb" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3)">${h.source==='live'?'📡':'📷'}</div><div class="hist-info"><div class="hist-sym">${h.symbol} · ${h.tf}${h.signal_grade?' · '+h.signal_grade:''}</div><div class="hist-time">${t} · ${h.confidence||'?'}% · ${h.source==='live'?'Live':'Screenshot'}</div></div><div class="hist-v ${h.verdict||'WAIT'}">${h.verdict||'?'}</div></div>`;
     }).join('');
 
-    console.log('[Live] calling showResult');
+    if(typeof stopLoading==='function') stopLoading();
     showResult(d);
     if($('sym')) $('sym').value=sym;
   } catch(e) {
-    clearTimeout(clientTimeout);
-    console.error('[Live] CATCH:', e.name, e.message);
-    stopLoading();
-    showErr(e.name==='AbortError' ? 'Request timed out — please try again' : (e.message||'Unknown error'));
+    if(typeof stopLoading==='function') stopLoading();
+    showToast('⚠️ '+(e.message||'Unknown error'),'error');
   } finally {
     resetBtn();
   }
+}
+
+function getLiveChartInterval() {
+  return tradeMode==='scalp' ? '5' : tradeMode==='swing' ? '60' : '15';
+}
+
+function getLiveChartExchangeSymbol(rawSymbol) {
+  const sym = (rawSymbol || 'ES1!').trim().toUpperCase();
+  const futuresMap = {
+    'ES':'CME_MINI:ES1!',
+    'ES1!':'CME_MINI:ES1!',
+    'NQ':'CME_MINI:NQ1!',
+    'NQ1!':'CME_MINI:NQ1!',
+    'YM':'CBOT_MINI:YM1!',
+    'YM1!':'CBOT_MINI:YM1!',
+    'RTY':'CME_MINI:RTY1!',
+    'RTY1!':'CME_MINI:RTY1!',
+    'CL':'NYMEX:CL1!',
+    'CL1!':'NYMEX:CL1!',
+    'GC':'COMEX:GC1!',
+    'GC1!':'COMEX:GC1!',
+    'SI':'COMEX:SI1!',
+    'SI1!':'COMEX:SI1!',
+    'NG':'NYMEX:NG1!',
+    'NG1!':'NYMEX:NG1!'
+  };
+  if (futuresMap[sym]) return futuresMap[sym];
+  if (sym.includes('/')) {
+    const compact = sym.replace('/', '');
+    if (compact.endsWith('USD')) {
+      const base = compact.slice(0, -3);
+      if (['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'ADA', 'AVAX', 'LTC'].includes(base)) {
+        return `BINANCE:${base}USDT`;
+      }
+      return `FX:${compact}`;
+    }
+    return `FX:${compact}`;
+  }
+  if (/^[A-Z]{6}$/.test(sym)) return `FX:${sym}`;
+  if (['SPY', 'QQQ', 'DIA', 'IWM'].includes(sym)) return `AMEX:${sym}`;
+  return `NASDAQ:${sym}`;
+}
+
+function buildLiveChartUrl(rawSymbol) {
+  const params = new URLSearchParams({
+    symbol: getLiveChartExchangeSymbol(rawSymbol),
+    interval: getLiveChartInterval(),
+    theme: 'dark',
+    style: '1',
+    timezone: 'America/New_York',
+    withdateranges: '1',
+    hide_side_toolbar: '0',
+    allow_symbol_change: '1',
+    saveimage: '0',
+    details: '1',
+    hotlist: '0',
+    calendar: '0'
+  });
+  return `https://s.tradingview.com/widgetembed/?${params.toString()}`;
+}
+
+function renderLiveChart(symbol) {
+  const rawSymbol = (symbol || $('liveSymInput')?.value || 'ES1!').trim().toUpperCase() || 'ES1!';
+  const iframe = $('liveChartFrame');
+  if (!iframe) return;
+  iframe.src = buildLiveChartUrl(rawSymbol) + `#${++_liveChartRefreshToken}`;
+  const meta = $('liveChartMeta');
+  if (meta) meta.textContent = `${rawSymbol} · ${getLiveChartInterval()}m · TradingView`;
+}
+
+function refreshLiveChart() {
+  renderLiveChart();
 }
 
 async function runAnalysis(){
@@ -3097,6 +3348,8 @@ function loadAlertPrefs() {
     if ($('alertEmailInput')) $('alertEmailInput').value = p.alertEmail || '';
     if ($('alertDailyBriefing')) $('alertDailyBriefing').checked = !!p.dailyBriefing;
     if ($('alertWeeklyRecap')) $('alertWeeklyRecap').checked = !!p.weeklyRecap;
+    if ($('alertBrowserToggle')) $('alertBrowserToggle').checked = !!p.browserAlerts;
+    if ($('alertTradeMonitorToggle')) $('alertTradeMonitorToggle').checked = !!p.tradeMonitorAlerts;
   } catch(e) {}
 }
 function saveAlertPrefsLocal() {
@@ -3104,7 +3357,9 @@ function saveAlertPrefsLocal() {
     emailAlerts:   $('alertEmailToggle')?.checked || false,
     alertEmail:    $('alertEmailInput')?.value || '',
     dailyBriefing: $('alertDailyBriefing')?.checked || false,
-    weeklyRecap:   $('alertWeeklyRecap')?.checked || false
+    weeklyRecap:   $('alertWeeklyRecap')?.checked || false,
+    browserAlerts: $('alertBrowserToggle')?.checked || false,
+    tradeMonitorAlerts: $('alertTradeMonitorToggle')?.checked || false
   };
   localStorage.setItem('nt_alert_prefs', JSON.stringify(prefs));
 }
@@ -3113,6 +3368,9 @@ async function saveAlertPrefs() {
   const prefs = JSON.parse(localStorage.getItem('nt_alert_prefs') || '{}');
   const msg = $('alertSaveMsg');
   try {
+    if (prefs.browserAlerts && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      await Notification.requestPermission();
+    }
     if (authToken) {
       await fetch('/api/alerts/preferences', {
         method: 'POST',
@@ -3126,6 +3384,29 @@ async function saveAlertPrefs() {
   }
 }
 loadAlertPrefs();
+
+function getAlertPrefs() {
+  try { return JSON.parse(localStorage.getItem('nt_alert_prefs') || '{}'); }
+  catch { return {}; }
+}
+
+async function maybeNotify(title, body, options = {}) {
+  const prefs = getAlertPrefs();
+  if (!prefs.browserAlerts || typeof Notification === 'undefined') return false;
+  let permission = Notification.permission;
+  if (permission === 'default') {
+    try { permission = await Notification.requestPermission(); }
+    catch { permission = Notification.permission; }
+  }
+  if (permission !== 'granted') return false;
+  try {
+    const note = new Notification(title, { body, icon: '/logo.svg', ...options });
+    setTimeout(() => note.close(), 7000);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // ════════════════════════════════════
 // SHARED PANEL TOGGLE UTILITY
@@ -3207,7 +3488,10 @@ function scannerCardClick(sym) {
   // Switch to analyzer and set symbol
   showPage('analyzer');
   const liveInput = $('liveSymInput');
-  if (liveInput) liveInput.value = sym;
+  if (liveInput) {
+    liveInput.value = sym;
+    renderLiveChart(sym);
+  }
   const symInput = $('sym');
   if (symInput) { symInput.value = sym; updateAnalyzeBar(); }
 }
@@ -3567,6 +3851,207 @@ function renderEdgePanel(trades) {
     </div>`;
 }
 
+function renderCoachPanel(trades) {
+  const content = $('coachContent');
+  if (!content) return;
+  const completed = trades.filter(t => t.outcome);
+  if (completed.length < 4) {
+    content.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Log at least 4 completed trades to unlock your weekly playbook, expectancy, and setup focus.</div>';
+    return;
+  }
+
+  const wins = completed.filter(t => t.outcome === 'win');
+  const winRate = wins.length / completed.length;
+  const rrTrades = completed.filter(t => Number.isFinite(parseFloat(t.actual_rr)));
+  const avgRR = rrTrades.length ? rrTrades.reduce((s,t) => s + parseFloat(t.actual_rr), 0) / rrTrades.length : null;
+  const expectancy = avgRR !== null ? (winRate * avgRR) - (1 - winRate) : null;
+
+  const bySymbol = {};
+  completed.forEach(t => {
+    const sym = t.symbol || 'Unknown';
+    if (!bySymbol[sym]) bySymbol[sym] = { wins:0, total:0 };
+    bySymbol[sym].total++;
+    if (t.outcome === 'win') bySymbol[sym].wins++;
+  });
+  const rankedSymbols = Object.entries(bySymbol)
+    .filter(([,v]) => v.total >= 2)
+    .map(([sym,v]) => ({ sym, wr: Math.round(v.wins / v.total * 100), total: v.total }))
+    .sort((a,b) => (b.wr - a.wr) || (b.total - a.total));
+  const topSymbol = rankedSymbols[0] || null;
+
+  const byDirection = { BUY:{ wins:0, total:0 }, SELL:{ wins:0, total:0 } };
+  completed.forEach(t => {
+    const side = t.verdict === 'SELL' ? 'SELL' : 'BUY';
+    byDirection[side].total++;
+    if (t.outcome === 'win') byDirection[side].wins++;
+  });
+  const buyWR = byDirection.BUY.total ? Math.round(byDirection.BUY.wins / byDirection.BUY.total * 100) : null;
+  const sellWR = byDirection.SELL.total ? Math.round(byDirection.SELL.wins / byDirection.SELL.total * 100) : null;
+
+  const last10 = completed.slice(-10);
+  const recentWR = last10.length ? Math.round(last10.filter(t => t.outcome === 'win').length / last10.length * 100) : null;
+  const momentum = recentWR === null ? 'insufficient' : recentWR >= Math.round(winRate * 100) ? 'improving' : 'cooling';
+  const momentumColor = momentum === 'improving' ? 'var(--green)' : momentum === 'cooling' ? 'var(--amber)' : 'var(--text3)';
+
+  let focus = 'Keep logging clean executions so the coach can isolate your strongest setup.';
+  if (expectancy !== null && expectancy < 0) {
+    focus = 'You are currently negative expectancy. Tighten to A/A+ setups only and reduce session frequency until performance stabilizes.';
+  } else if (topSymbol && topSymbol.wr >= 60) {
+    focus = `Your strongest market is ${topSymbol.sym}. Build your next 10-trade sample around it and avoid spreading focus too thin.`;
+  } else if (buyWR !== null && sellWR !== null && Math.abs(buyWR - sellWR) >= 15) {
+    focus = buyWR > sellWR ? `Longs are outperforming shorts by ${buyWR - sellWR} points. Prioritize BUY setups until that gap closes.` : `Shorts are outperforming longs by ${sellWR - buyWR} points. Prioritize SELL setups until that gap closes.`;
+  } else if (avgRR !== null && avgRR < 1.2) {
+    focus = 'Your execution is working, but realized R:R is too compressed. Let winners reach structure instead of cutting them early.';
+  }
+
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Expectancy</div>
+        <div style="font-size:22px;font-weight:800;color:${expectancy !== null ? (expectancy >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text)'}">${expectancy !== null ? expectancy.toFixed(2) + 'R' : '—'}</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Best Market</div>
+        <div style="font-size:20px;font-weight:800;color:var(--accent)">${topSymbol ? topSymbol.sym : '—'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${topSymbol ? `${topSymbol.wr}% WR · ${topSymbol.total} trades` : 'Need 2+ trades per symbol'}</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Directional Edge</div>
+        <div style="font-size:20px;font-weight:800;color:var(--blue)">${buyWR !== null || sellWR !== null ? `${buyWR ?? '—'} / ${sellWR ?? '—'}` : '—'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">BUY WR / SELL WR</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Recent Form</div>
+        <div style="font-size:20px;font-weight:800;color:${momentumColor}">${recentWR !== null ? recentWR + '%' : '—'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${last10.length ? `Last ${last10.length} trades · ${momentum}` : 'Need more data'}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="edge-row"><span class="edge-label">Overall Win Rate</span><span class="edge-val">${Math.round(winRate * 100)}%</span></div>
+      <div class="edge-row"><span class="edge-label">Avg Realized R:R</span><span class="edge-val">${avgRR !== null ? '1:' + avgRR.toFixed(2) : '—'}</span></div>
+    </div>
+    <div style="background:rgba(61,158,255,.08);border:1px solid rgba(61,158,255,.25);border-radius:10px;padding:14px;font-size:13px;color:var(--text);line-height:1.7">
+      <strong style="color:var(--blue)">Next Best Move:</strong> ${focus}
+    </div>`;
+}
+
+function renderAnalyticsPanel(trades) {
+  const content = $('analyticsContent');
+  if (!content) return;
+  const completed = trades.filter(t => t.outcome);
+  if (completed.length < 5) {
+    content.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Complete at least 5 trades to unlock expectancy curves, market leaderboard, and setup concentration data.</div>';
+    return;
+  }
+
+  const wins = completed.filter(t => t.outcome === 'win').length;
+  const rrTrades = completed.filter(t => Number.isFinite(parseFloat(t.actual_rr)));
+  const avgRR = rrTrades.length ? rrTrades.reduce((s,t) => s + parseFloat(t.actual_rr), 0) / rrTrades.length : 0;
+  const winRate = wins / completed.length;
+  const expectancy = (winRate * avgRR) - (1 - winRate);
+
+  const monthly = {};
+  completed.forEach(t => {
+    const key = new Date(t.timestamp).toISOString().slice(0,7);
+    if (!monthly[key]) monthly[key] = { wins:0, total:0 };
+    monthly[key].total++;
+    if (t.outcome === 'win') monthly[key].wins++;
+  });
+  const monthRows = Object.entries(monthly).sort(([a],[b]) => a.localeCompare(b)).slice(-6);
+
+  const bySymbol = {};
+  completed.forEach(t => {
+    const sym = t.symbol || 'Unknown';
+    if (!bySymbol[sym]) bySymbol[sym] = { wins:0, total:0 };
+    bySymbol[sym].total++;
+    if (t.outcome === 'win') bySymbol[sym].wins++;
+  });
+  const topSymbols = Object.entries(bySymbol)
+    .filter(([,v]) => v.total >= 2)
+    .map(([sym,v]) => ({ sym, total:v.total, wr:Math.round(v.wins / v.total * 100) }))
+    .sort((a,b) => (b.wr - a.wr) || (b.total - a.total))
+    .slice(0,5);
+
+  const byGrade = {};
+  completed.forEach(t => {
+    const g = t.grade || 'B';
+    if (!byGrade[g]) byGrade[g] = 0;
+    byGrade[g]++;
+  });
+  const totalCompleted = completed.length;
+  const gradeMix = ['A+','A','B','C','D'].map(g => ({ grade:g, count:byGrade[g] || 0, pct:Math.round(((byGrade[g] || 0) / totalCompleted) * 100) }));
+
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Expectancy</div>
+        <div style="font-size:24px;font-weight:800;color:${expectancy >= 0 ? 'var(--green)' : 'var(--red)'}">${expectancy.toFixed(2)}R</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Per completed trade</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Setup Quality Mix</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${gradeMix.filter(g => g.count).map(g => `<span class="j-badge ${g.grade.replace('+','p')}">${g.grade} ${g.pct}%</span>`).join('') || '<span style="color:var(--text3)">—</span>'}</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Average R:R</div>
+        <div style="font-size:24px;font-weight:800;color:var(--blue)">${avgRR ? '1:' + avgRR.toFixed(2) : '—'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Realized outcome data only</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:12px">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Recent Monthly Win Rate</div>
+        ${monthRows.length ? monthRows.map(([month,val]) => {
+          const wr = Math.round((val.wins / val.total) * 100);
+          return `<div style="display:grid;grid-template-columns:64px 1fr 48px;align-items:center;gap:10px;margin-bottom:8px">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text2)">${month}</div>
+            <div style="height:8px;background:var(--card);border-radius:999px;overflow:hidden"><div style="width:${wr}%;height:100%;background:${wr >= 60 ? 'var(--green)' : wr >= 45 ? 'var(--amber)' : 'var(--red)'}"></div></div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text)">${wr}%</div>
+          </div>`;
+        }).join('') : '<div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Need trade history across months.</div>'}
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Market Leaderboard</div>
+        ${topSymbols.length ? topSymbols.map((row, idx) => `<div class="edge-row"><span class="edge-label">#${idx+1} ${row.sym}</span><span class="edge-val">${row.wr}% <span style="color:var(--text3);font-size:10px">(${row.total})</span></span></div>`).join('') : '<div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Need 2+ trades per symbol.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function exportJournalCsv() {
+  const rows = [
+    ['symbol','verdict','grade','confidence','entry','sl','tp1','tp2','rr_tp1','timestamp','outcome','actual_rr','source']
+  ];
+  const sourceTrades = currentJournalTab === 'paper' ? paperTrades : allTrades;
+  sourceTrades.forEach(t => {
+    rows.push([
+      t.symbol || '',
+      t.verdict || '',
+      t.grade || '',
+      t.confidence || '',
+      t.entry || '',
+      t.sl || '',
+      t.tp1 || '',
+      t.tp2 || '',
+      t.rr_tp1 || '',
+      t.timestamp || '',
+      t.outcome || '',
+      t.actual_rr || '',
+      t.isPaper ? 'paper' : 'real'
+    ]);
+  });
+  const csv = rows.map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = currentJournalTab === 'paper' ? 'paper-trades.csv' : 'trade-journal.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 // ════════════════════════════════════
 // FEATURE 7: BACKTEST
 // ════════════════════════════════════
@@ -3749,6 +4234,14 @@ function updateTradeMonitorUI(d) {
   banner.className = 'tm-action-banner ' + (d.action || 'hold');
   const actionEmoji = { hold: '✅', caution: '⚠️', move_to_be: '🔒', take_partial: '💰', trail_stop: '📈', close: '🚨' };
   banner.textContent = (actionEmoji[d.action] || '') + ' ' + (d.actionNote || '');
+
+  const prefs = getAlertPrefs();
+  const key = `nt_last_tm_action_${_currentTradeId || 'unknown'}`;
+  const lastAction = localStorage.getItem(key);
+  if (prefs.tradeMonitorAlerts && d.action && d.action !== 'hold' && d.action !== lastAction) {
+    maybeNotify(`Trade Update: ${d.symbol || _currentTradeSymbol || 'Trade'}`, d.actionNote || d.action, { tag: key });
+    localStorage.setItem(key, d.action);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3970,9 +4463,12 @@ function switchJournalTab(tab) {
 
   if (tab === 'paper') {
     $('paperJournalStats').style.display = '';
+    const analytics = $('analyticsContent');
+    if (analytics) analytics.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3)">CSV export works for paper trades too. Deeper analytics stay focused on real trade data for now.</div>';
     renderPaperJournal();
   } else {
     $('paperJournalStats').style.display = 'none';
+    renderAnalyticsPanel(allTrades);
     renderJournalTable();
   }
 }
@@ -4152,6 +4648,13 @@ showResult = function(d) {
   // Store signal for paper/broker
   _lastSignalForPaper = d;
 
+  const isFreshSignal = d?.ts && Math.abs(Date.now() - d.ts) < 15000;
+  if (isFreshSignal && (d.verdict === 'BUY' || d.verdict === 'SELL') && d.symbol) {
+    maybeNotify(`${d.symbol} ${d.verdict} Signal`, `Confidence ${d.confidence || '?'}% · Entry ${d.entry || '—'} · TP1 ${d.tp1 || '—'}`, {
+      tag: `signal_${d.symbol}_${d.verdict}`
+    });
+  }
+
   // Show action buttons if BUY or SELL
   const btns = $('rActionBtns');
   if (btns) {
@@ -4178,6 +4681,8 @@ const _origLoadJournal2 = loadJournal;
 loadJournal = async function() {
   await _origLoadJournal2();
   autoFillProjectorFromJournal();
+  renderCoachPanel(allTrades);
+  renderAnalyticsPanel(allTrades);
 
   // Re-render journal table with review button
   _renderJournalWithReview();
@@ -4210,6 +4715,9 @@ function _renderJournalWithReview() {
 const _origShowPage2 = showPage;
 showPage = function(id) {
   _origShowPage2(id);
+  if (id === 'analyzer') {
+    setTimeout(() => renderLiveChart(), 0);
+  }
   if (id === 'calculator') {
     // Auto-fill projector from journal stats if available
     setTimeout(autoFillProjectorFromJournal, 100);
@@ -4218,7 +4726,14 @@ showPage = function(id) {
 
 // Init broker status
 updateBrokerUI();
+const liveSymInputEl = $('liveSymInput');
+if (liveSymInputEl) {
+  liveSymInputEl.addEventListener('input', () => renderLiveChart());
+  liveSymInputEl.addEventListener('change', () => renderLiveChart());
+}
+renderLiveChart();
 </script>
+<script src="/premium-upgrades.js"></script>
 
 </body>
 </html>

@@ -225,31 +225,6 @@ try {
 app.get('/api/ping', (req, res) => res.json({ ok: true }));
 app.get('/api/dbping', (req, res) => res.json({ ok: true, storage: 'Vercel KV — persistent storage' }));
 
-// ── LIVE DIAGNOSTIC — tests each step and returns timing ────────────────────
-app.get('/api/test-live', async (req, res) => {
-  const sym = (req.query.sym || 'SPY').toUpperCase();
-  const key = process.env.ANTHROPIC_API_KEY;
-  const out = { sym, steps: {} };
-  const t0 = Date.now();
-  try {
-    // Step 1: OHLCV
-    try {
-      const d = await withTimeout(fetchOHLCV(sym, '15m', 10), 8000);
-      out.steps.ohlcv = d ? `OK — ${d.candles.length} candles from ${d.source}` : 'FAIL — no data';
-    } catch(e) { out.steps.ohlcv = 'FAIL — ' + e.message; }
-    // Step 2: Claude
-    if (!key) { out.steps.claude = 'SKIP — ANTHROPIC_API_KEY not set'; }
-    else {
-      try {
-        const r = await withTimeout(claude(key, HAIKU, 'Reply with only valid JSON: {"ok":true}', [{ type:'text', text:'ping' }], 20), 15000);
-        out.steps.claude = r?.ok === true ? 'OK' : 'FAIL — unexpected response: ' + JSON.stringify(r);
-      } catch(e) { out.steps.claude = 'FAIL — ' + e.message; }
-    }
-    out.totalMs = Date.now() - t0;
-    res.json(out);
-  } catch(e) { res.status(500).json({ error: e.message, out }); }
-});
-
 // ─────────────────────────────────────────────
 // AUTH ENDPOINTS
 // ─────────────────────────────────────────────
@@ -1125,63 +1100,82 @@ function withTimeout(promise, ms) {
 app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
   const { symbol, timeframes, tradeMode } = req.body;
   const key = process.env.ANTHROPIC_API_KEY;
-  if (!key)    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set — add it in Vercel env vars' });
+  if (!key)    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
   if (!symbol) return res.status(400).json({ error: 'Symbol required' });
 
-  const sym  = symbol.toUpperCase().trim();
-  const mode = tradeMode || 'dayTrade';
-  const tfs  = timeframes || (mode==='scalp' ? ['15m','5m','1m'] : mode==='swing' ? ['1D','4H','1H'] : ['4H','1H','15m']);
+  const tfs = timeframes || (tradeMode==='scalp' ? ['15m','5m','1m'] : tradeMode==='swing' ? ['1D','4H','1H'] : ['4H','1H','15m']);
+  const sym = symbol.toUpperCase().trim();
 
-  // Guarantee a response within 55s no matter what
+  // Master timeout — guarantees a response before Vercel's 60s hard kill
   const masterTimer = setTimeout(() => {
-    if (!res.headersSent) res.status(500).json({ error: 'Analysis timed out after 55s — please try again' });
+    if (!res.headersSent) {
+      console.error('[LIVE] ⏰ Master timeout hit — sending fallback 500');
+      res.status(500).json({ error: 'Analysis timed out — server took too long. Please try again.' });
+    }
   }, 55000);
 
   try {
-    console.log(`[LIVE] ${sym} ${mode} ${tfs.join('+')}`);
+    console.log(`\n[LIVE] ═══ ${sym} ${tfs.join('+')} — ${tradeMode||'dayTrade'} — ${req.user.email} ═══`);
+    const t0 = Date.now();
 
-    // Fetch all timeframes in parallel, 7s cap each
+    // Fire background fetches — capped tightly so they never block the response
+    // NOTE: fetchNewsSentiment removed — it makes a concurrent Claude call that competes with main analysis
+    const correlatedPromise = withTimeout(fetchCorrelatedAssets(sym), 8000).catch(() => null);
+    const tradesPromise     = withTimeout(getTrades(), 5000).catch(() => []);
+
+    // ── STEP 1: Fetch OHLCV data in parallel ──────────────────────────────
+    console.log(`[LIVE] Step 1: fetching OHLCV for ${tfs.join('+')}`);
     const ohlcvResults = await Promise.all(
-      tfs.map(tf => withTimeout(fetchOHLCV(sym, tf, 50), 7000).catch(e => { console.warn(`[LIVE] OHLCV ${tf} failed:`, e.message); return null; }))
+      tfs.map(tf => withTimeout(fetchOHLCV(sym, tf, 60), 6000).catch(() => null))
     );
+    const allTrades = await tradesPromise;
+    console.log(`[LIVE] Step 1 done — ${ohlcvResults.filter(Boolean).length}/${tfs.length} TFs loaded in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     const available = ohlcvResults.filter(Boolean);
-    console.log(`[LIVE] OHLCV: ${available.length}/${tfs.length} TFs, sources: ${available.map(d=>d.source).join(',')}`);
-
     if (!available.length) {
       clearTimeout(masterTimer);
-      return res.status(400).json({ error: `No data for "${sym}". Try: ES1!, NQ1!, SPY, AAPL, BTC/USD, EUR/USD` });
+      return res.status(400).json({ error: `Could not fetch live data for ${sym}. Try: ES1!, NQ1!, BTC/USD, EUR/USD, SPY, AAPL` });
     }
 
-    const livePrice  = { price: available[0].candles.slice(-1)[0]?.close, source: available[0].source };
-    const mktCtx     = getMarketContext(sym);
+    const livePrice    = { price: available[0].candles.slice(-1)[0]?.close, source: available[0].source };
+    const winStats     = getWinStats(allTrades);
+    const personalEdge = getPersonalizedEdge(allTrades.filter(t => t.userId === req.user.id));
+    const mktCtx       = getMarketContext(sym);
+    const mode         = tradeMode || 'dayTrade';
+
+    // Build text-based chart data for each TF
     const chartTexts = available.map(d => ohlcvToText(d));
 
-    // Single Claude call — 35s hard cap
-    console.log(`[LIVE] Calling Claude (${mode})`);
+    // ── STEP 2: Single-pass AI analysis (all modes) ──────────────────────
+    console.log(`[LIVE] Step 2: single-pass analysis (${mode})`);
     const result = await withTimeout(
-      analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, null, null, key, mode),
-      35000
+      analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, winStats, personalEdge, key, mode),
+      40000
     );
-    console.log(`[LIVE] Signal: ${result?.verdict} ${result?.signal_grade||''} ${result?.confidence||'?'}%`);
+    console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
-    clearTimeout(masterTimer);
-    if (!res.headersSent) {
-      res.json({ ...result, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _newsSentiment: null, _correlatedAssets: null });
+    // ── STEP 3: Await correlated assets (already running since T+0) ───────
+    const correlatedAssets = await correlatedPromise;
+
+    // ── STEP 4: Fire-and-forget journal save — never blocks the response ───
+    if (result?.verdict && result.verdict !== 'WAIT') {
+      const tradeId = Date.now().toString();
+      result._trade_id = tradeId;
+      const trades = [...(allTrades || [])];
+      trades.push({ id:tradeId, symbol:sym, timeframe:tfs[tfs.length-1], verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null, userId:req.user.id, notes:'', source:'live', chartSrc:null });
+      saveTrades(trades).catch(e => console.warn('[LIVE] Journal save failed:', e.message));
     }
 
-    // Fire-and-forget journal save after response sent
-    if (result?.verdict && result.verdict !== 'WAIT') {
-      getTrades().then(trades => {
-        const tradeId = Date.now().toString();
-        trades.push({ id:tradeId, symbol:sym, timeframe:tfs[tfs.length-1], verdict:result.verdict, grade:result.signal_grade, confidence:result.confidence, entry:result.entry, sl:result.sl, tp1:result.tp1, tp2:result.tp2, rr_tp1:result.rr_tp1, timestamp:new Date().toISOString(), outcome:null, actual_rr:null, userId:req.user.id, notes:'', source:'live', chartSrc:null });
-        return saveTrades(trades);
-      }).catch(e => console.warn('[LIVE] Journal save failed:', e.message));
+    const elapsed = ((Date.now()-t0)/1000).toFixed(1);
+    console.log(`[LIVE] ✅ Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
+    clearTimeout(masterTimer);
+    if (!res.headersSent) {
+      res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: correlatedAssets, _newsSentiment: null });
     }
 
   } catch(e) {
     clearTimeout(masterTimer);
-    console.error('[LIVE] Error:', e.message);
+    console.error('[LIVE] ❌ Error:', e.stack || e.message);
     if (!res.headersSent) res.status(500).json({ error: e.message || 'Live analysis failed' });
   }
 });
