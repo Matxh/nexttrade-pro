@@ -1205,6 +1205,67 @@ function getModeThresholds(tradeMode, instrumentType) {
   return base;
 }
 
+function getSymbolTuning(symbol, instrumentType, marketContext = null) {
+  const sym = (symbol || '').toUpperCase();
+  const sessionText = `${marketContext?.session || ''} ${marketContext?.market_hours || ''}`;
+  const isLowLiquidity = /Lower liquidity|Low liquidity|Weekend|Pre-Asia|End of NY/i.test(sessionText);
+  const isPeakFx = /London Session Open|London\/NY Overlap/i.test(sessionText);
+  const isUsCash = /New York Session|London\/NY Overlap/i.test(sessionText);
+
+  const profile = {
+    label: instrumentType,
+    sessionScore: isLowLiquidity ? 42 : 70,
+    confidenceBias: 0,
+    rrBias: 0,
+    minConfidenceBoost: 0,
+    forceWaitInLowLiquidity: false,
+    note: 'Standard instrument profile'
+  };
+
+  if (instrumentType === 'futures') {
+    profile.label = sym.startsWith('CL') ? 'energy futures'
+      : sym.startsWith('GC') || sym.startsWith('SI') ? 'metals futures'
+      : 'index futures';
+    profile.sessionScore = isUsCash ? 82 : isLowLiquidity ? 35 : 58;
+    profile.confidenceBias = isUsCash ? 4 : -6;
+    profile.rrBias = sym.startsWith('CL') ? 0.15 : 0.05;
+    profile.minConfidenceBoost = 2;
+    profile.forceWaitInLowLiquidity = true;
+    profile.note = 'Futures perform best during active US cash and overlap windows';
+  } else if (instrumentType === 'forex') {
+    profile.label = 'forex major';
+    profile.sessionScore = isPeakFx ? 84 : isLowLiquidity ? 38 : 60;
+    profile.confidenceBias = isPeakFx ? 5 : -5;
+    profile.rrBias = 0.05;
+    profile.minConfidenceBoost = 1;
+    profile.forceWaitInLowLiquidity = true;
+    profile.note = 'Forex majors are strongest around London and overlap liquidity';
+    if (sym.includes('JPY')) {
+      profile.sessionScore += /Asia Session/i.test(sessionText) ? 8 : 0;
+      profile.confidenceBias += /Asia Session/i.test(sessionText) ? 2 : 0;
+      profile.note = 'JPY pairs can stay active in Asia, but best quality still clusters around London crossover';
+    }
+  } else if (instrumentType === 'crypto') {
+    profile.label = 'crypto';
+    profile.sessionScore = /London\/NY Overlap|New York Session/i.test(sessionText) ? 78 : isLowLiquidity ? 50 : 66;
+    profile.confidenceBias = /London\/NY Overlap|New York Session/i.test(sessionText) ? 3 : -2;
+    profile.rrBias = 0.15;
+    profile.minConfidenceBoost = 2;
+    profile.forceWaitInLowLiquidity = false;
+    profile.note = 'Crypto trades 24/7, but liquidity quality still improves during NY and overlap';
+  } else {
+    profile.label = 'equity';
+    profile.sessionScore = isUsCash ? 80 : isLowLiquidity ? 28 : 48;
+    profile.confidenceBias = isUsCash ? 4 : -8;
+    profile.rrBias = 0.08;
+    profile.minConfidenceBoost = 3;
+    profile.forceWaitInLowLiquidity = true;
+    profile.note = 'Equities are weakest outside the main US session';
+  }
+
+  return profile;
+}
+
 function confirmLiveSignal(result, quality) {
   if (!result || !quality?.primary) return { confirmed: false, reason: 'missing_quality_context' };
   const verdict = result.verdict === 'SELL' ? 'SELL' : result.verdict === 'BUY' ? 'BUY' : 'WAIT';
@@ -1266,7 +1327,9 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
   const tp1 = parseFloat(out.tp1);
   const tp2 = parseFloat(out.tp2);
   const atr = quality.primary.atr || Math.max(Math.abs(quality.primary.close) * 0.003, 0.01);
-  const thresholds = getModeThresholds(tradeMode, classifyInstrument(symbol));
+  const instrumentType = classifyInstrument(symbol);
+  const thresholds = getModeThresholds(tradeMode, instrumentType);
+  const symbolTuning = getSymbolTuning(symbol, instrumentType, marketContext);
   const confirmation = confirmLiveSignal(out, quality);
   const consensus = assessLiveConsensus(out, fallbackResult, quality);
   const notes = [];
@@ -1283,7 +1346,7 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
     const risk = Math.abs(entry - sl);
     const reward = Math.abs(tp1 - entry);
     const minRisk = atr * thresholds.minRiskAtr;
-    const minRR = thresholds.minRR;
+    const minRR = thresholds.minRR + symbolTuning.rrBias;
     const rr = risk > 0 ? reward / risk : 0;
     if (risk < minRisk) {
       out.verdict = 'WAIT';
@@ -1304,6 +1367,11 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
     notes.push(...consensus.notes);
   }
 
+  if (out.verdict !== 'WAIT' && tradeMode !== 'swing' && symbolTuning.forceWaitInLowLiquidity && symbolTuning.sessionScore < 45) {
+    out.verdict = 'WAIT';
+    notes.push(`Rejected: ${symbolTuning.label} setup is outside its best liquidity window.`);
+  }
+
   if (marketContext?.session && /Lower liquidity|Low liquidity|Weekend/i.test(marketContext.session + ' ' + (marketContext.market_hours || '')) && tradeMode !== 'swing') {
     out.confidence = Math.max(42, (parseInt(out.confidence) || 55) - 8);
     notes.push('Caution: current session is lower-liquidity for live entries.');
@@ -1312,6 +1380,9 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
   const baseConfidence = parseInt(out.confidence) || 55;
   let adjustedConfidence = Math.round((baseConfidence * 0.65) + (quality.qualityScore * 0.35));
   if (quality.warnings.length) adjustedConfidence -= Math.min(12, quality.warnings.length * 4);
+  adjustedConfidence += symbolTuning.confidenceBias;
+  if (symbolTuning.sessionScore < 45) adjustedConfidence -= 6;
+  else if (symbolTuning.sessionScore >= 78) adjustedConfidence += 3;
   if (personalEdge) {
     if (personalEdge.bestHour !== null) {
       const hour = new Date().getHours();
@@ -1326,6 +1397,14 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
   }
   adjustedConfidence += consensus.confidenceAdjustment;
   adjustedConfidence = Math.max(out.verdict === 'WAIT' ? 40 : 45, Math.min(95, adjustedConfidence));
+
+  const minAllowedConfidence = thresholds.minConfidence + symbolTuning.minConfidenceBoost;
+  if (out.verdict !== 'WAIT' && adjustedConfidence < minAllowedConfidence) {
+    out.verdict = 'WAIT';
+    notes.push(`Rejected: confidence is below the ${symbolTuning.label} threshold for ${tradeMode}.`);
+    adjustedConfidence = Math.max(40, adjustedConfidence - 3);
+  }
+
   out.confidence = adjustedConfidence;
 
   const gradeFromConfidence = adjustedConfidence >= 88 ? 'A+' : adjustedConfidence >= 78 ? 'A' : adjustedConfidence >= 66 ? 'B' : adjustedConfidence >= 54 ? 'C' : 'D';
@@ -1338,7 +1417,8 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
     { name: 'Volatility', score: Math.min(85, Math.round((atr / Math.max(Math.abs(quality.primary.close), 0.01)) * 3000)), note: `ATR ${roundPrice(atr)}` },
     { name: 'Regime', score: quality.warnings.length ? 48 : 72, note: quality.warnings[0] || 'Clean session structure' },
     { name: 'Confirmation', score: confirmation.confirmed ? 74 : 38, note: confirmation.reason },
-    { name: 'Consensus', score: consensus.score, note: consensus.notes[0] || 'No fallback consensus data' }
+    { name: 'Consensus', score: consensus.score, note: consensus.notes[0] || 'No fallback consensus data' },
+    { name: 'Session Fit', score: symbolTuning.sessionScore, note: symbolTuning.note }
   );
 
   const warnings = [...quality.warnings, ...notes];
