@@ -1097,6 +1097,160 @@ function withTimeout(promise, ms) {
   return Promise.race([promise, timer]);
 }
 
+function roundPrice(value) {
+  const num = parseFloat(value);
+  return Number.isFinite(num) ? num.toFixed(Math.abs(num) >= 100 ? 2 : Math.abs(num) >= 1 ? 4 : 6) : null;
+}
+
+function computeATR(candles, period = 14) {
+  if (!candles?.length) return null;
+  const trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const high = parseFloat(candles[i].high);
+    const low = parseFloat(candles[i].low);
+    const prevClose = parseFloat(candles[i - 1].close);
+    if (![high, low, prevClose].every(Number.isFinite)) continue;
+    trs.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
+  }
+  const slice = trs.slice(-period);
+  return slice.length ? slice.reduce((s, v) => s + v, 0) / slice.length : null;
+}
+
+function summarizeOhlcvFrame(data) {
+  const candles = data?.candles || [];
+  if (candles.length < 20) return null;
+  const closes = candles.map(c => parseFloat(c.close)).filter(Number.isFinite);
+  const highs = candles.map(c => parseFloat(c.high)).filter(Number.isFinite);
+  const lows = candles.map(c => parseFloat(c.low)).filter(Number.isFinite);
+  const volumes = candles.map(c => parseFloat(c.volume) || 0);
+  const close = closes[closes.length - 1];
+  const prevClose = closes[closes.length - 2] ?? close;
+  const atr = computeATR(candles, 14) || Math.max(Math.abs(close) * 0.003, 0.01);
+  const ema = (arr, period) => {
+    const k = 2 / (period + 1);
+    let v = arr[0];
+    for (let i = 1; i < arr.length; i++) v = arr[i] * k + v * (1 - k);
+    return v;
+  };
+  const ema20 = ema(closes.slice(-40), 20);
+  const ema50 = ema(closes.slice(-80), 50);
+  const swingHigh = Math.max(...highs.slice(-20));
+  const swingLow = Math.min(...lows.slice(-20));
+  const avgVol = volumes.slice(-20).reduce((s, v) => s + v, 0) / Math.max(1, Math.min(20, volumes.length));
+  const lastVol = volumes[volumes.length - 1] || 0;
+  const compression = (swingHigh - swingLow) / Math.max(Math.abs(close), 0.01) < 0.015;
+  const trend = close > ema20 && ema20 >= ema50 ? 'bullish' : close < ema20 && ema20 <= ema50 ? 'bearish' : 'neutral';
+  return {
+    tf: data.tf,
+    source: data.source,
+    close,
+    prevClose,
+    atr,
+    ema20,
+    ema50,
+    swingHigh,
+    swingLow,
+    avgVol,
+    lastVol,
+    compression,
+    trend,
+    momentumPct: prevClose ? ((close - prevClose) / prevClose) * 100 : 0
+  };
+}
+
+function buildLiveQualityContext(ohlcvResults, tradeMode) {
+  const frames = (ohlcvResults || []).filter(Boolean).map(summarizeOhlcvFrame).filter(Boolean);
+  const bullishCount = frames.filter(f => f.trend === 'bullish').length;
+  const bearishCount = frames.filter(f => f.trend === 'bearish').length;
+  const alignedTrend = bullishCount >= Math.max(2, frames.length - 1) ? 'bullish'
+    : bearishCount >= Math.max(2, frames.length - 1) ? 'bearish'
+    : 'mixed';
+  const primary = frames[frames.length - 1] || frames[0] || null;
+  const higher = frames[0] || primary;
+  const qualityScore = Math.max(35, Math.min(92,
+    50
+    + (alignedTrend !== 'mixed' ? 16 : -8)
+    + (frames.some(f => f.compression) ? -6 : 4)
+    + (primary && primary.lastVol > primary.avgVol * 1.2 ? 8 : 0)
+    + (tradeMode === 'swing' ? 4 : 0)
+  ));
+  const warnings = [];
+  if (alignedTrend === 'mixed') warnings.push('Timeframes are not aligned');
+  if (frames.some(f => f.compression)) warnings.push('Recent structure is compressed/choppy');
+  if (primary && primary.lastVol < primary.avgVol * 0.7) warnings.push('Current volume is below average');
+  return { frames, alignedTrend, primary, higher, qualityScore, warnings };
+}
+
+function validateLiveSignal(result, quality, tradeMode) {
+  if (!result || !quality?.primary) return result;
+  const out = JSON.parse(JSON.stringify(result));
+  const verdict = out.verdict === 'SELL' ? 'SELL' : out.verdict === 'BUY' ? 'BUY' : 'WAIT';
+  const entry = parseFloat(out.entry);
+  const sl = parseFloat(out.sl);
+  const tp1 = parseFloat(out.tp1);
+  const tp2 = parseFloat(out.tp2);
+  const atr = quality.primary.atr || Math.max(Math.abs(quality.primary.close) * 0.003, 0.01);
+  const notes = [];
+
+  if (verdict !== 'WAIT') {
+    const aligned = (verdict === 'BUY' && quality.alignedTrend === 'bullish') || (verdict === 'SELL' && quality.alignedTrend === 'bearish');
+    if (!aligned) {
+      out.verdict = 'WAIT';
+      notes.push('Rejected: multi-timeframe trend is not aligned with the trade direction.');
+    }
+  }
+
+  if (out.verdict !== 'WAIT' && [entry, sl, tp1].every(Number.isFinite)) {
+    const risk = Math.abs(entry - sl);
+    const reward = Math.abs(tp1 - entry);
+    const minRisk = atr * (tradeMode === 'scalp' ? 0.18 : tradeMode === 'swing' ? 0.45 : 0.28);
+    const minRR = tradeMode === 'scalp' ? 1.3 : tradeMode === 'swing' ? 2.0 : 1.7;
+    const rr = risk > 0 ? reward / risk : 0;
+    if (risk < minRisk) {
+      out.verdict = 'WAIT';
+      notes.push('Rejected: stop distance is too tight relative to current volatility.');
+    } else if (rr < minRR) {
+      out.verdict = 'WAIT';
+      notes.push(`Rejected: risk/reward is below the ${tradeMode} threshold.`);
+    }
+  }
+
+  const baseConfidence = parseInt(out.confidence) || 55;
+  let adjustedConfidence = Math.round((baseConfidence * 0.65) + (quality.qualityScore * 0.35));
+  if (quality.warnings.length) adjustedConfidence -= Math.min(12, quality.warnings.length * 4);
+  adjustedConfidence = Math.max(out.verdict === 'WAIT' ? 40 : 45, Math.min(95, adjustedConfidence));
+  out.confidence = adjustedConfidence;
+
+  const gradeFromConfidence = adjustedConfidence >= 88 ? 'A+' : adjustedConfidence >= 78 ? 'A' : adjustedConfidence >= 66 ? 'B' : adjustedConfidence >= 54 ? 'C' : 'D';
+  out.signal_grade = out.verdict === 'WAIT' ? (adjustedConfidence >= 60 ? 'C' : 'D') : gradeFromConfidence;
+
+  out.factors = Array.isArray(out.factors) ? out.factors : [];
+  out.factors = out.factors.filter(Boolean);
+  out.factors.push(
+    { name: 'Trend', score: quality.alignedTrend === 'mixed' ? 45 : 78, note: `Alignment: ${quality.alignedTrend}` },
+    { name: 'Volatility', score: Math.min(85, Math.round((atr / Math.max(Math.abs(quality.primary.close), 0.01)) * 3000)), note: `ATR ${roundPrice(atr)}` },
+    { name: 'Regime', score: quality.warnings.length ? 48 : 72, note: quality.warnings[0] || 'Clean session structure' }
+  );
+
+  const warnings = [...quality.warnings, ...notes];
+  out.gates_failed = [...new Set([...(out.gates_failed || []), ...warnings])];
+  out.gates_passed = [...new Set([...(out.gates_passed || []), ...(warnings.length ? [] : ['Multi-timeframe alignment ✓', 'ATR/risk validation ✓'])])];
+  out.summary = `${out.summary || ''}${warnings.length ? ` Validation: ${warnings.join(' ')}` : ' Validation: trend, volatility, and risk filters passed.'}`.trim();
+
+  if (out.verdict === 'WAIT') {
+    out.wait_reason = out.wait_reason || warnings.join(' ') || 'No clean validated live setup right now.';
+    out.position_size = 'Wait';
+  } else if ([entry, sl, tp1].every(Number.isFinite)) {
+    const risk = Math.abs(entry - sl);
+    const reward1 = Math.abs(tp1 - entry);
+    const reward2 = Number.isFinite(tp2) ? Math.abs(tp2 - entry) : reward1 * 1.7;
+    out.rr_tp1 = `1:${(reward1 / Math.max(risk, 0.0001)).toFixed(1)}`;
+    out.rr_tp2 = `1:${(reward2 / Math.max(risk, 0.0001)).toFixed(1)}`;
+  }
+
+  return out;
+}
+
 function heuristicLiveAnalysis(ohlcvResults, sym, tradeMode) {
   const available = (ohlcvResults || []).filter(Boolean);
   const primary = available[available.length - 1] || available[0];
@@ -1246,18 +1400,20 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     const personalEdge = getPersonalizedEdge(allTrades.filter(t => t.userId === req.user.id));
     const mktCtx       = getMarketContext(sym);
     const mode         = tradeMode || 'dayTrade';
+    const qualityCtx   = buildLiveQualityContext(available, mode);
 
     // Build text-based chart data for each TF
     const chartTexts = available.map(d => ohlcvToText(d));
 
     // ── STEP 2: Single-pass AI analysis (all modes) ──────────────────────
     console.log(`[LIVE] Step 2: single-pass analysis (${mode})`);
-    const result = key
+    const rawResult = key
       ? await withTimeout(
-          analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, winStats, personalEdge, key, mode),
+          analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, winStats, personalEdge, key, mode, qualityCtx),
           40000
         )
       : heuristicLiveAnalysis(available, sym, mode);
+    const result = validateLiveSignal(rawResult, qualityCtx, mode);
     console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     // ── STEP 3: Await correlated assets (already running since T+0) ───────
@@ -1276,7 +1432,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     console.log(`[LIVE] ✅ Done in ${elapsed}s — ${result?.verdict} ${result?.signal_grade||''}`);
     clearTimeout(masterTimer);
     if (!res.headersSent) {
-      res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: correlatedData, _newsSentiment: null });
+      res.json({ ...result, elapsed, dataSource: available.map(d=>d.source).join('+'), tfsUsed: available.map(d=>d.tf), _personalEdge: personalEdge, _correlatedAssets: correlatedData, _newsSentiment: null, _qualityContext: qualityCtx });
     }
 
   } catch(e) {
@@ -1289,11 +1445,14 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SINGLE-PASS LIVE ANALYSIS — one Claude call for all modes, always returns signal
 // ─────────────────────────────────────────────────────────────────────────────
-async function analyzeOneLive(chartTexts, sym, tf, livePrice, mktCtx, winStats, personalEdge, key, tradeMode) {
+async function analyzeOneLive(chartTexts, sym, tf, livePrice, mktCtx, winStats, personalEdge, key, tradeMode, qualityCtx = null) {
   const lp   = livePrice ? `Live price: $${livePrice.price}` : 'Live price: N/A';
   const ws   = winStats  ? `Win rate: ${winStats.winRate}% over ${winStats.total} trades` : '';
   const edge = personalEdge ? `User edge: ${personalEdge.summary}` : '';
   const session = mktCtx.session || 'Unknown session';
+  const qualityNote = qualityCtx
+    ? `Alignment: ${qualityCtx.alignedTrend}. Quality score: ${qualityCtx.qualityScore}. ${qualityCtx.warnings.length ? 'Warnings: ' + qualityCtx.warnings.join('; ') : 'No major regime warnings.'}`
+    : '';
 
   const modeInstructions = tradeMode === 'scalp'
     ? `SCALP TRADE — hold 2–15 min. Use tight SL. Min 1:1.5 R:R. Entry on 1m/5m momentum candle.`
@@ -1316,6 +1475,8 @@ IMPORTANT RULES:
 - BUY if: bullish structure (HH+HL), price at discount/OB/FVG, clear upside target above.
 - SELL if: bearish structure (LH+LL), price at premium/OB/FVG, clear downside target below.
 - WAIT if: price in middle of range with no clear OB/FVG, conflicting timeframes, no liquidity target.
+- If multi-timeframe trend is mixed, volatility is too compressed, or R:R is poor, prefer WAIT over forcing a trade.
+- Confidence must be reduced when structure is messy, volume is weak, or timeframes disagree.
 
 Return ONLY valid raw JSON (no markdown, no text outside JSON):
 {
@@ -1361,7 +1522,7 @@ Return ONLY valid raw JSON (no markdown, no text outside JSON):
     return header + '\n' + rows;
   };
   const dataBlock = chartTexts.map((t, i) => `=== TF ${i+1} ===\n${trimTF(t)}`).join('\n\n');
-  const userMsg = `${sym} ${tradeMode} | ${lp} | ${session}${ws ? ' | '+ws : ''}${edge ? ' | '+edge : ''}\n\n${dataBlock}`;
+  const userMsg = `${sym} ${tradeMode} | ${lp} | ${session}${ws ? ' | '+ws : ''}${edge ? ' | '+edge : ''}${qualityNote ? ' | ' + qualityNote : ''}\n\n${dataBlock}`;
 
   return claude(key, model, sys, [{ type:'text', text: userMsg }], tokens);
 }
