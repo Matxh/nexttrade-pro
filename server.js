@@ -1097,10 +1097,114 @@ function withTimeout(promise, ms) {
   return Promise.race([promise, timer]);
 }
 
+function heuristicLiveAnalysis(ohlcvResults, sym, tradeMode) {
+  const available = (ohlcvResults || []).filter(Boolean);
+  const primary = available[available.length - 1] || available[0];
+  if (!primary?.candles?.length) {
+    throw new Error(`Could not build fallback live analysis for ${sym}`);
+  }
+
+  const candles = primary.candles;
+  const last = candles[candles.length - 1];
+  const prev = candles[candles.length - 2] || last;
+  const closes = candles.map(c => parseFloat(c.close)).filter(Number.isFinite);
+  const highs = candles.map(c => parseFloat(c.high)).filter(Number.isFinite);
+  const lows = candles.map(c => parseFloat(c.low)).filter(Number.isFinite);
+  const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+  const ema = (arr, period) => {
+    if (!arr.length) return null;
+    const k = 2 / (period + 1);
+    let v = arr[0];
+    for (let i = 1; i < arr.length; i++) v = arr[i] * k + v * (1 - k);
+    return v;
+  };
+
+  const close = parseFloat(last.close);
+  const open = parseFloat(last.open);
+  const prevClose = parseFloat(prev.close);
+  const ema20 = ema(closes.slice(-40), 20);
+  const ema50 = ema(closes.slice(-80), 50);
+  const rangeHigh = Math.max(...highs.slice(-20));
+  const rangeLow = Math.min(...lows.slice(-20));
+  const recentRange = Math.max(rangeHigh - rangeLow, Math.abs(close) * 0.003, 0.5);
+  const bullish = close > (ema20 || close) && (ema20 || close) >= (ema50 || ema20 || close) && close >= prevClose;
+  const bearish = close < (ema20 || close) && (ema20 || close) <= (ema50 || ema20 || close) && close <= prevClose;
+
+  let verdict = 'WAIT';
+  let confidence = 52;
+  let signalGrade = 'B';
+  let summary = `Fallback live analysis for ${sym} using ${primary.tf} trend and momentum.`;
+  let entry = close;
+  let sl = bullish ? rangeLow : rangeHigh;
+  let tp1 = close;
+  let tp2 = close;
+
+  if (bullish && !bearish) {
+    verdict = 'BUY';
+    confidence = 64;
+    signalGrade = tradeMode === 'scalp' ? 'B+' : 'B';
+    entry = close;
+    sl = Math.min(rangeLow, close - recentRange * 0.45);
+    tp1 = close + recentRange * (tradeMode === 'swing' ? 1.6 : 1.1);
+    tp2 = close + recentRange * (tradeMode === 'swing' ? 2.5 : 1.8);
+    summary = `${sym} is trading above key short-term averages with bullish momentum. Use this as a fallback signal until the AI key is restored.`;
+  } else if (bearish && !bullish) {
+    verdict = 'SELL';
+    confidence = 64;
+    signalGrade = tradeMode === 'scalp' ? 'B+' : 'B';
+    entry = close;
+    sl = Math.max(rangeHigh, close + recentRange * 0.45);
+    tp1 = close - recentRange * (tradeMode === 'swing' ? 1.6 : 1.1);
+    tp2 = close - recentRange * (tradeMode === 'swing' ? 2.5 : 1.8);
+    summary = `${sym} is trading below key short-term averages with bearish momentum. Use this as a fallback signal until the AI key is restored.`;
+  } else {
+    sl = close - recentRange * 0.6;
+    tp1 = close + recentRange * 0.8;
+    tp2 = close + recentRange * 1.3;
+    summary = `${sym} is range-bound right now. Wait for a cleaner break of recent structure before taking size.`;
+  }
+
+  const risk = Math.max(Math.abs(entry - sl), 0.01);
+  const rr1 = Math.max(Math.abs(tp1 - entry) / risk, 0);
+  const rr2 = Math.max(Math.abs(tp2 - entry) / risk, 0);
+
+  return {
+    verdict,
+    confidence,
+    signal_grade: signalGrade,
+    summary,
+    entry: entry.toFixed(2),
+    sl: sl.toFixed(2),
+    tp1: tp1.toFixed(2),
+    tp2: tp2.toFixed(2),
+    tp3: verdict === 'WAIT' ? null : (verdict === 'BUY' ? (tp2 + recentRange * 0.7) : (tp2 - recentRange * 0.7)).toFixed(2),
+    rr_tp1: `1:${rr1.toFixed(1)}`,
+    rr_tp2: `1:${rr2.toFixed(1)}`,
+    rrLabel: 'fallback model',
+    position_size: verdict === 'WAIT' ? 'Wait' : 'Max 0.5%-1%',
+    trade_management: {
+      move_to_be: verdict === 'WAIT' ? 'Wait for breakout first' : 'after 1R or strong continuation close',
+      partial_at_tp1: verdict === 'WAIT' ? 'No trade' : 'take 50% at TP1',
+      trail_method: verdict === 'WAIT' ? 'none' : 'trail below/above last two candles',
+      max_hold: tradeMode === 'swing' ? '1-5 days' : tradeMode === 'scalp' ? '5-20 min' : '30-180 min'
+    },
+    factors: [
+      { name: 'Trend', score: bullish || bearish ? 68 : 50, note: `Primary TF: ${primary.tf}` },
+      { name: 'Momentum', score: Math.min(75, Math.round(Math.abs(close - prevClose) / Math.max(recentRange, 0.01) * 100)), note: `Source: ${primary.source}` },
+      { name: 'Structure', score: verdict === 'WAIT' ? 48 : 62, note: 'Fallback technical model' },
+      { name: 'Risk/Reward', score: Math.min(80, Math.round(rr1 * 30)), note: `TP1 ${`1:${rr1.toFixed(1)}`}` }
+    ],
+    patterns: [
+      { name: verdict === 'WAIT' ? 'Range compression' : `${verdict} momentum continuation`, reliability: 'Fallback', type: verdict === 'WAIT' ? 'neutral' : verdict === 'BUY' ? 'bull' : 'bear' }
+    ],
+    fullAnalysis: `<div><strong>Fallback Mode</strong><br>AI analysis is temporarily unavailable, so this signal was generated from live trend, EMA alignment, and recent range structure.</div>`,
+    _fallback: true
+  };
+}
+
 app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
   const { symbol, timeframes, tradeMode } = req.body;
   const key = process.env.ANTHROPIC_API_KEY;
-  if (!key)    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
   if (!symbol) return res.status(400).json({ error: 'Symbol required' });
 
   const tfs = timeframes || (tradeMode==='scalp' ? ['15m','5m','1m'] : tradeMode==='swing' ? ['1D','4H','1H'] : ['4H','1H','15m']);
@@ -1148,10 +1252,12 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 
     // ── STEP 2: Single-pass AI analysis (all modes) ──────────────────────
     console.log(`[LIVE] Step 2: single-pass analysis (${mode})`);
-    const result = await withTimeout(
-      analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, winStats, personalEdge, key, mode),
-      40000
-    );
+    const result = key
+      ? await withTimeout(
+          analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, winStats, personalEdge, key, mode),
+          40000
+        )
+      : heuristicLiveAnalysis(available, sym, mode);
     console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     // ── STEP 3: Await correlated assets (already running since T+0) ───────
