@@ -1,4 +1,4 @@
-const CACHE_NAME = 'priceaction-v2';
+const CACHE_NAME = 'priceaction-v3';
 const ASSETS = ['/', '/index.html', '/logo.svg', '/manifest.json'];
 
 self.addEventListener('install', e => {

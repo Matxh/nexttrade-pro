@@ -2612,27 +2612,34 @@ async function analyzeLive(){
   const btn=$('liveBtn');
   const resetBtn=()=>{btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg> Analyze Live';};
   btn.disabled=true; btn.textContent='Fetching live data...';
-  if(typeof startLoading==='function') startLoading(1);
+  startLoading(1);
+
+  // Client-side abort after 58s — ensures loading always clears even if server hangs
+  const controller = new AbortController();
+  const clientTimeout = setTimeout(() => controller.abort(), 58000);
+
   try{
     const tfs = tradeMode==='scalp'?['15m','5m','1m']:tradeMode==='swing'?['1D','4H','1H']:['4H','1H','15m'];
     const res = await fetch('/api/analyze-live',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
-      body:JSON.stringify({symbol:sym,timeframes:tfs,tradeMode})
+      body:JSON.stringify({symbol:sym,timeframes:tfs,tradeMode}),
+      signal: controller.signal
     });
+    clearTimeout(clientTimeout);
 
-    // Safely parse JSON — a 500 empty body throws without this guard
+    // Guard against empty 500 body
     let d;
     try { d = await res.json(); }
     catch(parseErr) {
-      if(typeof stopLoading==='function') stopLoading();
-      showToast('⚠️ Server error (500) — try again in a moment','error');
+      stopLoading();
+      showErr('Server error — please try again in a moment');
       resetBtn(); return;
     }
 
     if(!res.ok || d.error){
-      if(typeof stopLoading==='function') stopLoading();
-      showToast('⚠️ '+(d.error||'Live fetch failed'),'error');
+      stopLoading();
+      showErr(d.error||'Live analysis failed — check symbol and try again');
       resetBtn(); return;
     }
 
@@ -2648,12 +2655,13 @@ async function analyzeLive(){
       return `<div class="hist-item" onclick="showResult(analysisHistory[${i}])"><div class="hist-thumb" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3)">${h.source==='live'?'📡':'📷'}</div><div class="hist-info"><div class="hist-sym">${h.symbol} · ${h.tf}${h.signal_grade?' · '+h.signal_grade:''}</div><div class="hist-time">${t} · ${h.confidence||'?'}% · ${h.source==='live'?'Live':'Screenshot'}</div></div><div class="hist-v ${h.verdict||'WAIT'}">${h.verdict||'?'}</div></div>`;
     }).join('');
 
-    if(typeof stopLoading==='function') stopLoading();
     showResult(d);
     if($('sym')) $('sym').value=sym;
   } catch(e) {
-    if(typeof stopLoading==='function') stopLoading();
-    showToast('⚠️ '+(e.message||'Unknown error'),'error');
+    clearTimeout(clientTimeout);
+    stopLoading();
+    const msg = e.name==='AbortError' ? 'Request timed out — server took too long, please try again' : (e.message||'Unknown error');
+    showErr(msg);
   } finally {
     resetBtn();
   }
