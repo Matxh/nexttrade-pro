@@ -1323,6 +1323,16 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         Analyze Live
       </button>
     </div>
+    <div id="bestTimesPanel" style="margin-bottom:12px;background:linear-gradient(135deg,rgba(0,229,180,.06),rgba(245,158,11,.05));border:1px solid rgba(0,229,180,.18);border-radius:12px;padding:14px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Best Times To Trade</div>
+          <div id="bestTimesMeta" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px">Mode and symbol aware timing guidance</div>
+        </div>
+        <div id="bestTimesBadge" style="font-family:var(--mono);font-size:11px;color:var(--accent)">Prime window</div>
+      </div>
+      <div id="bestTimesBody" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px"></div>
+    </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px;box-shadow:0 12px 40px rgba(0,0,0,.18)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);flex-wrap:wrap">
         <div>
@@ -1340,6 +1350,9 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
       <div id="liveChartFrameWrap" style="height:420px;background:var(--bg2)">
         <iframe id="liveChartFrame" title="Live market chart" loading="lazy" referrerpolicy="origin" style="width:100%;height:100%;border:0;display:block;background:var(--bg2)"></iframe>
+      </div>
+      <div id="liveChartHint" style="padding:10px 14px;border-top:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--text3)">
+        If the embed says a symbol is only available on TradingView, use <strong style="color:var(--text2)">Open Full Chart</strong>. Some futures contracts are restricted in the lightweight embed but still open correctly in the full TradingView chart.
       </div>
     </div>
 
@@ -2579,6 +2592,7 @@ function setMode(mode, btn){
   [0,1,2].forEach(i=>renderSlot(i));
   // Refresh session timer to reflect new mode windows
   updateSessionTimer();
+  renderBestTradingTimes();
   renderLiveChart();
 }
 const slotTF=['1m','5m','15m'];
@@ -2853,6 +2867,90 @@ function getLiveChartInterval() {
   return tradeMode==='scalp' ? '5' : tradeMode==='swing' ? '60' : '15';
 }
 
+function classifyLiveSymbol(rawSymbol) {
+  const sym = (rawSymbol || '').trim().toUpperCase();
+  if (!sym) return 'futures';
+  if (sym.includes('BTC') || sym.includes('ETH') || sym.includes('SOL') || sym.includes('XRP')) return 'crypto';
+  if (sym.includes('/') || /^[A-Z]{6}$/.test(sym) || /^(6E|6B|6J|6C|6A|6S)/.test(sym)) return 'forex';
+  if (sym.includes('1!') || /^(ES|MES|NQ|MNQ|YM|MYM|RTY|M2K|CL|MCL|GC|MGC|SI|NG|HG|ZB|ZN|ZF|ZT|6E|6B|6J|6C|6A|6S)/.test(sym)) return 'futures';
+  return 'equity';
+}
+
+function getBestTimeCards(mode, rawSymbol) {
+  const symbolType = classifyLiveSymbol(rawSymbol);
+  if (symbolType === 'crypto') {
+    return {
+      badge: '24/7 market',
+      meta: `${rawSymbol || 'BTC/USD'} · crypto timing`,
+      cards: [
+        { title: 'Prime Window', text: '8:00am–12:00pm EST', sub: 'London/NY overlap gives the cleanest crypto liquidity and best continuation moves.' },
+        { title: 'Secondary Window', text: '1:30pm–4:00pm EST', sub: 'NY afternoon can still trend well, especially on BTC and ETH.' },
+        { title: 'Avoid', text: '2:00am–5:00am EST on weekends', sub: 'Thin books and erratic spikes make live entries much less reliable.' }
+      ]
+    };
+  }
+  if (symbolType === 'forex') {
+    return {
+      badge: 'London-led',
+      meta: `${rawSymbol || 'EUR/USD'} · forex timing`,
+      cards: [
+        { title: 'Prime Window', text: '3:00am–6:00am EST', sub: 'London open is the cleanest window for EUR, GBP, and JPY pairs.' },
+        { title: 'Best US Follow-Through', text: '8:00am–11:00am EST', sub: 'London/NY overlap gives the strongest continuation and reversal setups.' },
+        { title: 'Avoid', text: '12:00pm–6:00pm EST', sub: 'Volume fades hard after overlap unless major news is in play.' }
+      ]
+    };
+  }
+  if (mode === 'swing') {
+    return {
+      badge: 'Patient entries',
+      meta: `${rawSymbol || 'ES1!'} · swing timing`,
+      cards: [
+        { title: 'Best Entry Window', text: '9:30am–11:30am EST', sub: 'NY open sets direction and gives the cleanest 1H/4H confirmations.' },
+        { title: 'Daily Close Window', text: '3:30pm–4:00pm EST', sub: 'Great for entering after the daily candle confirms bias.' },
+        { title: 'Avoid', text: 'Friday 1:00pm onward', sub: 'Weekend gap risk makes new swing entries lower quality.' }
+      ]
+    };
+  }
+  if (mode === 'scalp') {
+    return {
+      badge: 'Fastest edge',
+      meta: `${rawSymbol || 'ES1!'} · scalp timing`,
+      cards: [
+        { title: 'Prime Window', text: '9:30am–10:30am EST', sub: 'Best for ES, NQ, CL, and index momentum right after NY open.' },
+        { title: 'Secondary Window', text: '2:00pm–3:30pm EST', sub: 'Power hour brings volume back and improves continuation quality.' },
+        { title: 'Avoid', text: '11:00am–2:00pm EST', sub: 'Midday chop kills scalp expectancy. Sit out unless it is exceptional.' }
+      ]
+    };
+  }
+  return {
+    badge: 'Core session',
+    meta: `${rawSymbol || 'ES1!'} · day trade timing`,
+    cards: [
+      { title: 'Prime Window', text: '9:30am–11:30am EST', sub: 'Best general session for futures and US equities.' },
+      { title: 'Secondary Window', text: '2:00pm–4:00pm EST', sub: 'Power hour works well for continuation or closing range expansion.' },
+      { title: 'Avoid', text: '11:30am–2:00pm EST', sub: 'False breaks and low conviction are much more common here.' }
+    ]
+  };
+}
+
+function renderBestTradingTimes(symbol) {
+  const body = $('bestTimesBody');
+  if (!body) return;
+  const rawSymbol = (symbol || $('liveSymInput')?.value || 'ES1!').trim().toUpperCase();
+  const data = getBestTimeCards(tradeMode || 'dayTrade', rawSymbol);
+  const meta = $('bestTimesMeta');
+  const badge = $('bestTimesBadge');
+  if (meta) meta.textContent = data.meta;
+  if (badge) badge.textContent = data.badge;
+  body.innerHTML = data.cards.map((card) => `
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">${card.title}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:5px">${card.text}</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.55">${card.sub}</div>
+    </div>
+  `).join('');
+}
+
 function getLiveChartExchangeSymbol(rawSymbol) {
   const sym = (rawSymbol || 'ES1!').trim().toUpperCase();
   if (!sym) return 'CME_MINI:ES1!';
@@ -2947,6 +3045,7 @@ function renderLiveChart(symbol) {
   if (meta) meta.textContent = `${rawSymbol} → ${resolved} · ${getLiveChartInterval()}m · TradingView`;
   const openLink = $('liveChartOpenLink');
   if (openLink) openLink.href = buildLiveChartOpenUrl(rawSymbol);
+  renderBestTradingTimes(rawSymbol);
 }
 
 function refreshLiveChart() {
