@@ -2990,12 +2990,12 @@ function getLiveChartExchangeSymbol(rawSymbol) {
     ZN: 'CBOT:ZN1!',
     ZF: 'CBOT:ZF1!',
     ZT: 'CBOT:ZT1!',
-    6E: 'CME:6E1!',
-    6B: 'CME:6B1!',
-    6J: 'CME:6J1!',
-    6C: 'CME:6C1!',
-    6A: 'CME:6A1!',
-    6S: 'CME:6S1!'
+    '6E': 'CME:6E1!',
+    '6B': 'CME:6B1!',
+    '6J': 'CME:6J1!',
+    '6C': 'CME:6C1!',
+    '6A': 'CME:6A1!',
+    '6S': 'CME:6S1!'
   };
   const compact = sym.replace(/\s+/g, '').replace(/=F$/,'').replace(/!$/,'');
   const explicitRoot = compact.endsWith('1') ? compact.slice(0, -1) : compact;
