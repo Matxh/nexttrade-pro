@@ -2309,23 +2309,39 @@ function getBrokerProfile(user) {
   };
 }
 
+function toBrokerOrderSummary(order) {
+  return {
+    id: order.id,
+    symbol: order.symbol,
+    direction: order.direction,
+    size: order.size,
+    status: order.status,
+    broker: order.broker,
+    submittedAt: order.submittedAt,
+    mode: order.mode,
+    entry: order.entry,
+    sl: order.sl,
+    tp1: order.tp1,
+    cancelable: ['submitted-sim', 'submitted-live', 'queued'].includes(order.status)
+  };
+}
+
 app.get('/api/broker/status', authMiddleware, async (req, res) => {
   const profile = getBrokerProfile(req.user);
   const orders = (await getBrokerOrders()).filter(o => o.userId === req.user.id).slice(-5).reverse();
   res.json({
     connected: !!profile,
     profile,
-    recentOrders: orders.map(o => ({
-      id: o.id,
-      symbol: o.symbol,
-      direction: o.direction,
-      size: o.size,
-      status: o.status,
-      broker: o.broker,
-      submittedAt: o.submittedAt,
-      mode: o.mode
-    }))
+    recentOrders: orders.map(toBrokerOrderSummary)
   });
+});
+
+app.get('/api/broker/orders', authMiddleware, async (req, res) => {
+  const orders = (await getBrokerOrders())
+    .filter(o => o.userId === req.user.id)
+    .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')))
+    .slice(0, 20);
+  res.json({ orders: orders.map(toBrokerOrderSummary) });
 });
 
 app.post('/api/broker/connect', authMiddleware, async (req, res) => {
@@ -2434,6 +2450,25 @@ app.post('/api/broker/execute', authMiddleware, async (req, res) => {
     success: true,
     message: order.mode === 'live' ? 'Live order submitted to broker bridge queue' : 'Sim order staged and logged',
     order
+  });
+});
+
+app.post('/api/broker/orders/:id/cancel', authMiddleware, async (req, res) => {
+  const orders = await getBrokerOrders();
+  const order = orders.find(o => o.id === req.params.id && o.userId === req.user.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  if (!['submitted-sim', 'submitted-live', 'queued'].includes(order.status)) {
+    return res.status(400).json({ error: `Order cannot be canceled from status ${order.status}` });
+  }
+
+  order.status = order.mode === 'live' ? 'cancel-requested' : 'canceled';
+  order.canceledAt = new Date().toISOString();
+  await saveBrokerOrders(orders);
+
+  res.json({
+    success: true,
+    message: order.mode === 'live' ? 'Live cancel request staged' : 'Sim order canceled',
+    order: toBrokerOrderSummary(order)
   });
 });
 app.get('/sitemap.xml', (req, res) => {

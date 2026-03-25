@@ -4647,6 +4647,59 @@ async function testBrokerConnection() {
   }
 }
 
+function renderBrokerOrders() {
+  const panel = $('brokerOrdersPanel');
+  const list = $('brokerOrdersList');
+  if (!panel || !list) return;
+  if (!_brokerConnected || !_brokerRecentOrders.length) {
+    panel.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  panel.style.display = '';
+  list.innerHTML = _brokerRecentOrders.map((order) => {
+    const tone = order.direction === 'SELL' ? 'var(--red)' : 'var(--green)';
+    const cancelBtn = order.cancelable
+      ? `<button type="button" data-cancel-order="${order.id}" style="background:transparent;border:1px solid rgba(255,61,90,.25);color:var(--red);border-radius:999px;padding:4px 10px;font-family:var(--mono);font-size:9px;cursor:pointer">Cancel</button>`
+      : '';
+    return `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:var(--text)">${order.symbol}</span>
+            <span style="font-family:var(--mono);font-size:9px;color:${tone}">${order.direction}</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">${order.status}</span>
+          </div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">${order.broker} • ${order.mode} • ${order.size} lot • entry ${order.entry ?? '—'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">${cancelBtn}</div>
+      </div>`;
+  }).join('');
+
+  Array.from(list.querySelectorAll('[data-cancel-order]')).forEach((btn) => {
+    btn.addEventListener('click', () => cancelBrokerOrder(btn.getAttribute('data-cancel-order')));
+  });
+}
+
+async function refreshBrokerOrders() {
+  await updateBrokerUI(true);
+}
+
+async function cancelBrokerOrder(orderId) {
+  if (!orderId || !authToken) return;
+  try {
+    const res = await fetch(`/api/broker/orders/${orderId}/cancel`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + authToken }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Cancel failed');
+    await updateBrokerUI(true);
+    showToast(data.message || 'Order canceled', 'success');
+  } catch (e) {
+    showToast('Cancel failed: ' + e.message, 'error');
+  }
+}
 function renderBrokerStatusText() {
   if (!_brokerConnected || !_brokerProfile) return 'Tradovate connected';
   const recent = _brokerRecentOrders[0];
@@ -4673,6 +4726,7 @@ async function updateBrokerUI(force = false) {
     statusEl.style.display = _brokerConnected ? '' : 'none';
     statusEl.textContent = _brokerConnected ? 'Connected: ' + renderBrokerStatusText() : '';
   }
+  renderBrokerOrders();
 }
 
 function showBrokerPlaceOrder() {
@@ -4959,6 +5013,8 @@ renderLiveChart();
 
 </body>
 </html>
+
+
 
 
 
