@@ -2191,7 +2191,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
   </div>
 </div>
 
-<script src="/live-workstation.js"></script>
+<script src="/trade-intelligence.js"></script>`r`n<script src="/live-workstation.js"></script>
 <script>
 // â”€â”€ STATE â”€â”€
 const charts=[null,null,null];
@@ -4865,6 +4865,87 @@ showPage = function(id) {
   }
 };
 
+const _legacyRenderCoachPanel = renderCoachPanel;
+renderCoachPanel = function(trades) {
+  const content = $('coachContent');
+  const engine = window.TradeIntelligence;
+  if (!content || !engine?.analyzeTradeJournal) return _legacyRenderCoachPanel(trades);
+  const intel = engine.analyzeTradeJournal(trades || []);
+  if (!intel || intel.totalCompleted < 4) {
+    content.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Log at least 4 completed trades to unlock your weekly playbook, expectancy, and setup focus.</div>';
+    return;
+  }
+  const top = intel.topSymbol;
+  const momentumColor = intel.momentum === 'improving' ? 'var(--green)' : intel.momentum === 'cooling' ? 'var(--amber)' : 'var(--text3)';
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Expectancy</div>
+        <div style="font-size:22px;font-weight:800;color:${intel.expectancy !== null ? (intel.expectancy >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text)'}">${intel.expectancy !== null ? intel.expectancy.toFixed(2) + 'R' : '—'}</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Best Market</div>
+        <div style="font-size:20px;font-weight:800;color:var(--accent)">${top ? top.key : '—'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${top ? `${top.wr}% WR · ${top.total} trades` : 'Need 2+ trades per symbol'}</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Directional Edge</div>
+        <div style="font-size:20px;font-weight:800;color:var(--blue)">${intel.buyWR !== null || intel.sellWR !== null ? `${intel.buyWR ?? '—'} / ${intel.sellWR ?? '—'}` : '—'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">BUY WR / SELL WR</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Recent Form</div>
+        <div style="font-size:20px;font-weight:800;color:${momentumColor}">${intel.recentWR !== null ? intel.recentWR + '%' : '—'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${intel.recentTrades ? `Last ${intel.recentTrades} trades · ${intel.momentum}` : 'Need more data'}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="edge-row"><span class="edge-label">Overall Win Rate</span><span class="edge-val">${intel.overallWR}%</span></div>
+      <div class="edge-row"><span class="edge-label">Avg Realized R:R</span><span class="edge-val">${intel.avgRR !== null ? '1:' + intel.avgRR.toFixed(2) : '—'}</span></div>
+    </div>
+    <div style="background:rgba(61,158,255,.08);border:1px solid rgba(61,158,255,.25);border-radius:10px;padding:14px;font-size:13px;color:var(--text);line-height:1.7">
+      <strong style="color:var(--blue)">Next Best Move:</strong> ${intel.focus}
+    </div>`;
+};
+
+const _legacyRenderAnalyticsPanel = renderAnalyticsPanel;
+renderAnalyticsPanel = function(trades) {
+  const content = $('analyticsContent');
+  const engine = window.TradeIntelligence;
+  if (!content || !engine?.analyzeTradeJournal) return _legacyRenderAnalyticsPanel(trades);
+  const intel = engine.analyzeTradeJournal(trades || []);
+  if (!intel || intel.totalCompleted < 5) {
+    content.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Complete at least 5 trades to unlock expectancy curves, market leaderboard, and setup concentration data.</div>';
+    return;
+  }
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Expectancy</div>
+        <div style="font-size:24px;font-weight:800;color:${intel.expectancy >= 0 ? 'var(--green)' : 'var(--red)'}">${intel.expectancy.toFixed(2)}R</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Per completed trade</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Setup Quality Mix</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${intel.gradeMix.filter(g => g.count).map(g => `<span class="j-badge ${g.grade.replace('+','p')}">${g.grade} ${g.pct}%</span>`).join('') || '<span style="color:var(--text3)">—</span>'}</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Average R:R</div>
+        <div style="font-size:24px;font-weight:800;color:var(--blue)">${intel.avgRR ? '1:' + intel.avgRR.toFixed(2) : '—'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Realized outcome data only</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:12px">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Recent Monthly Win Rate</div>
+        ${intel.monthly.length ? intel.monthly.map((row) => `<div style="display:grid;grid-template-columns:64px 1fr 48px;align-items:center;gap:10px;margin-bottom:8px"><div style="font-family:var(--mono);font-size:10px;color:var(--text2)">${row.month}</div><div style="height:8px;background:var(--card);border-radius:999px;overflow:hidden"><div style="width:${row.wr}%;height:100%;background:${row.wr >= 60 ? 'var(--green)' : row.wr >= 45 ? 'var(--amber)' : 'var(--red)'}"></div></div><div style="font-family:var(--mono);font-size:10px;color:var(--text)">${row.wr}%</div></div>`).join('') : '<div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Need trade history across months.</div>'}
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Market Leaderboard</div>
+        ${intel.topSymbols.length ? intel.topSymbols.map((row, idx) => `<div class="edge-row"><span class="edge-label">#${idx+1} ${row.key}</span><span class="edge-val">${row.wr}% <span style="color:var(--text3);font-size:10px">(${row.total})</span></span></div>`).join('') : '<div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Need 2+ trades per symbol.</div>'}
+      </div>
+    </div>`;
+};
 // Init broker status
 updateBrokerUI();
 const liveSymInputEl = $('liveSymInput');
@@ -4878,6 +4959,8 @@ renderLiveChart();
 
 </body>
 </html>
+
+
 
 
 
