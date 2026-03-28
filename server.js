@@ -26,10 +26,11 @@ app.get('/manifest.json', (req, res) => res.sendFile(path.join(__dirname, 'publi
 app.get('/sw.js',         (req, res) => res.sendFile(path.join(__dirname, 'public', 'sw.js')));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const API_URL = 'https://api.anthropic.com/v1/messages';
-const HAIKU   = 'claude-haiku-4-5-20251001';
-const SONNET  = 'claude-sonnet-4-6';
-const OPUS    = 'claude-opus-4-6';
+const API_URL      = 'https://api.groq.com/openai/v1/chat/completions';
+const HAIKU        = 'llama-3.1-8b-instant';       // fast, free
+const SONNET       = 'llama-3.3-70b-versatile';    // smart, free
+const OPUS         = 'llama-3.3-70b-versatile';    // same — no opus tier needed
+const VISION_MODEL = 'llama-3.2-90b-vision-preview'; // for chart screenshots
 
 // ─────────────────────────────────────────────
 // GITHUB STORAGE — persistent across deploys
@@ -483,15 +484,33 @@ function getMarketContext(symbol) {
 // CLAUDE HELPER
 // ─────────────────────────────────────────────
 async function claude(apiKey, model, system, content, tokens = 2000) {
+  // Convert Anthropic-style content array to OpenAI format
+  const toOAI = (items) => {
+    if (typeof items === 'string') return items;
+    return items.map(item => {
+      if (item.type === 'text') return { type:'text', text:item.text };
+      if (item.type === 'image') {
+        // Anthropic format → OpenAI image_url format
+        return { type:'image_url', image_url:{ url:`data:${item.source.media_type};base64,${item.source.data}` } };
+      }
+      return item;
+    });
+  };
+  // Auto-upgrade to vision model if any images are present
+  const hasImages = Array.isArray(content) && content.some(c => c.type === 'image');
+  const actualModel = hasImages ? VISION_MODEL : model;
   const r = await fetch(API_URL, {
     method: 'POST',
-    headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01' },
-    body: JSON.stringify({ model, max_tokens:tokens, system, messages:[{ role:'user', content }] }),
-    timeout: 30000   // 30s hard cap — prevents silent AI hangs
+    headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${apiKey}` },
+    body: JSON.stringify({ model:actualModel, max_tokens:tokens, messages:[
+      { role:'system', content:system },
+      { role:'user',   content:toOAI(content) }
+    ]}),
+    timeout: 30000
   });
   if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${r.status}`); }
   const d   = await r.json();
-  const raw = (d.content || []).map(c => c.text || '').join('').trim();
+  const raw = (d.choices?.[0]?.message?.content || '').trim();
   // Strip markdown fences
   let s = raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
   // Extract first JSON object if wrapped in text
@@ -896,8 +915,8 @@ function getPersonalizedEdge(allTrades) {
 // ─────────────────────────────────────────────
 app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
   const { charts, imageBase64, imageMime, symbol, timeframe, tradeMode } = req.body;
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
 
   let chartList = [];
   if (charts && charts.length) chartList = charts;
@@ -1635,7 +1654,7 @@ function heuristicLiveAnalysis(ohlcvResults, sym, tradeMode) {
 
 app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
   const { symbol, timeframes, tradeMode } = req.body;
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = process.env.GROQ_API_KEY;
   if (!symbol) return res.status(400).json({ error: 'Symbol required' });
 
   const tfs = timeframes || (tradeMode==='scalp' ? ['15m','5m','1m'] : tradeMode==='swing' ? ['1D','4H','1H'] : ['4H','1H','15m']);
@@ -1856,8 +1875,8 @@ Return ONLY valid raw JSON (no markdown, no text outside JSON):
 // ─────────────────────────────────────────────
 app.post('/api/scanner', authMiddleware, requirePlan, async (req, res) => {
   const { symbols, tradeMode } = req.body;
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
   const syms = (symbols || ['ES1!','NQ1!','CL1!','GC1!']).slice(0, 8);
   const mode = tradeMode || 'dayTrade';
 
@@ -1917,8 +1936,8 @@ Return ONLY valid raw JSON:
 // FEATURE 3: MORNING MARKET BRIEFING
 // ─────────────────────────────────────────────
 app.get('/api/briefing', authMiddleware, async (req, res) => {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
 
   try {
     // Fetch ES and NQ live data
@@ -2021,8 +2040,8 @@ async function fetchCorrelatedAssets(symbol) {
 // ─────────────────────────────────────────────
 app.post('/api/backtest', authMiddleware, requirePlan, async (req, res) => {
   const { symbol, tradeMode, days } = req.body;
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
   if (!symbol) return res.status(400).json({ error: 'Symbol required' });
 
   const sym = symbol.toUpperCase().trim();
@@ -2217,7 +2236,7 @@ async function fetchNewsSentiment(symbol) {
     if (!headlines.length) return { sentiment: 'Neutral', score: 50, headlines: [], note: 'No recent news found' };
 
     // Score sentiment with Claude Haiku
-    const key = process.env.ANTHROPIC_API_KEY;
+    const key = process.env.GROQ_API_KEY;
     if (!key) return { sentiment: 'Neutral', score: 50, headlines, note: 'API not configured' };
 
     const sentResult = await claude(key, HAIKU,
@@ -2242,8 +2261,8 @@ async function fetchNewsSentiment(symbol) {
 // ─────────────────────────────────────────────
 app.post('/api/trade-review/:tradeId', authMiddleware, async (req, res) => {
   const { tradeId } = req.params;
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
 
   try {
     const trades = await getTrades();
