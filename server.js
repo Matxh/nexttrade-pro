@@ -1166,28 +1166,73 @@ function ohlcvToText(data) {
   const c = data.candles;
   const last = c[c.length-1];
   const prev = c[c.length-2];
-  const avgVol = c.slice(-20).reduce((s,x)=>s+(+x.volume||0),0)/20;
-  const lastVol = +last?.volume||0;
-  const volNote = lastVol > avgVol*1.5 ? 'HIGH VOLUME' : lastVol < avgVol*0.5 ? 'LOW VOLUME' : 'AVERAGE VOLUME';
 
-  // Calculate basic EMAs
+  // EMAs
   const closes = c.map(x=>+x.close);
-  const ema = (arr,p) => arr.reduce((a,v,i)=>i===0?[v]:[...a,v*(2/(p+1))+a[i-1]*(1-2/(p+1))],[]);
-  const ema20 = ema(closes,20); const ema50 = ema(closes,50);
-  const e20 = ema20[ema20.length-1]?.toFixed(2); const e50 = ema50[ema50.length-1]?.toFixed(2);
+  const emaFn = (arr,p) => arr.reduce((a,v,i)=>i===0?[v]:[...a,v*(2/(p+1))+a[i-1]*(1-2/(p+1))],[]);
+  const ema20arr = emaFn(closes,20); const ema50arr = emaFn(closes,50);
+  const e20 = ema20arr[ema20arr.length-1]?.toFixed(2);
+  const e50 = ema50arr[ema50arr.length-1]?.toFixed(2);
 
-  // Swing highs/lows
+  // ATR(14)
+  const atr = computeATR(c, 14);
+  const atrStr = atr ? atr.toFixed(2) : 'N/A';
+
+  // RSI(14)
+  const rsi14 = (() => {
+    if (closes.length < 15) return null;
+    const slice = closes.slice(-15);
+    let gains = 0, losses = 0;
+    for (let i = 1; i < slice.length; i++) {
+      const d = slice[i] - slice[i-1];
+      if (d > 0) gains += d; else losses -= d;
+    }
+    const rs = gains / (losses || 0.0001);
+    return (100 - 100 / (1 + rs)).toFixed(1);
+  })();
+
+  // Volume
+  const volumes = c.map(x=>+x.volume||0);
+  const avgVol = volumes.slice(-20).reduce((s,v)=>s+v,0)/20;
+  const lastVol = volumes[volumes.length-1]||0;
+  const volNote = lastVol > avgVol*1.5 ? '🔥 HIGH' : lastVol < avgVol*0.5 ? '❄ LOW' : 'AVG';
+
+  // Swing highs/lows (last 30 bars)
   const highs = c.map(x=>+x.high); const lows = c.map(x=>+x.low);
-  const swingH = Math.max(...highs.slice(-20)).toFixed(2);
-  const swingL = Math.min(...lows.slice(-20)).toFixed(2);
+  const swingH = Math.max(...highs.slice(-30)).toFixed(2);
+  const swingL = Math.min(...lows.slice(-30)).toFixed(2);
+  const midpoint = ((+swingH + +swingL)/2).toFixed(2);
+  const priceZone = +last.close > +midpoint ? 'PREMIUM (sell zone)' : 'DISCOUNT (buy zone)';
 
-  const header = `LIVE ${data.tf} DATA — ${data.symbol} (${c.length} candles, source: ${data.source})
-Current Price: ${last?.close} | Prev Close: ${prev?.close}
-EMA20: ${e20} | EMA50: ${e50}
-20-bar Swing High: ${swingH} | Swing Low: ${swingL}
-Last Candle Volume: ${volNote} (${lastVol.toLocaleString()} vs avg ${Math.round(avgVol).toLocaleString()})
+  // FVG detection — 3-candle imbalance: candle[i-2].high < candle[i].low (bullish) or candle[i-2].low > candle[i].high (bearish)
+  const fvgs = [];
+  for (let i = 2; i < c.length; i++) {
+    const bullFVG = +c[i-2].high < +c[i].low;
+    const bearFVG = +c[i-2].low > +c[i].high;
+    if (bullFVG) fvgs.push({ type:'BULL FVG', low:c[i-2].high, high:c[i].low, idx:i, dt:c[i].datetime });
+    if (bearFVG) fvgs.push({ type:'BEAR FVG', low:c[i].high, high:c[i-2].low, idx:i, dt:c[i].datetime });
+  }
+  const recentFVGs = fvgs.slice(-4).map(f=>`${f.type} @ ${f.low}–${f.high} (${f.dt})`).join(' | ') || 'None detected';
 
-Recent candles (newest last):
+  // OB detection — last bullish OB = last bearish candle before a bullish displacement; last bearish OB = last bullish candle before bearish displacement
+  let lastBullOB = null, lastBearOB = null;
+  for (let i = 1; i < c.length-1; i++) {
+    const body = Math.abs(+c[i].close - +c[i].open);
+    const nextBody = Math.abs(+c[i+1].close - +c[i+1].open);
+    const displacement = nextBody > body * 1.5;
+    if (displacement && +c[i].close < +c[i].open && +c[i+1].close > +c[i+1].open) lastBullOB = `${c[i].low}–${c[i].high} (${c[i].datetime})`;
+    if (displacement && +c[i].close > +c[i].open && +c[i+1].close < +c[i+1].open) lastBearOB = `${c[i].low}–${c[i].high} (${c[i].datetime})`;
+  }
+
+  const header = `=== ${data.tf} | ${data.symbol} | ${c.length} candles | source: ${data.source} ===
+Price: ${last?.close} | Prev: ${prev?.close} | Zone: ${priceZone}
+EMA20: ${e20} | EMA50: ${e50} | ATR(14): ${atrStr} | RSI(14): ${rsi14??'N/A'}
+Swing High (30): ${swingH} | Swing Low (30): ${swingL} | Mid: ${midpoint}
+Volume: ${volNote} (${Math.round(lastVol).toLocaleString()} vs avg ${Math.round(avgVol).toLocaleString()})
+Bullish OB: ${lastBullOB||'None'} | Bearish OB: ${lastBearOB||'None'}
+Recent FVGs: ${recentFVGs}
+
+Candles (oldest→newest):
 Datetime            | Open    | High    | Low     | Close   | Volume
 `;
   const rows = c.slice(-40).map(x=>
