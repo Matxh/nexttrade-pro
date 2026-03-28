@@ -410,7 +410,126 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:48px 40p
   .demo-grid{grid-template-columns:1fr}.steps-grid{grid-template-columns:1fr 1fr}.features-grid{grid-template-columns:1fr 1fr}.pricing-grid{grid-template-columns:1fr}.testi-grid{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr 1fr}.analyzer-grid{grid-template-columns:1fr}.charts-grid{grid-template-columns:1fr 1fr}.j-stats-row{grid-template-columns:1fr 1fr}
 }
 @media(max-width:600px){
-  nav{padding:0 16px}.nav-center{display:none}.steps-grid{grid-template-columns:1fr}.features-grid{grid-template-columns:1fr}.email-form{flex-direction:column}.stat-item{padding:0 24px}.charts-grid{grid-template-columns:1fr}.j-stats-row{grid-template-columns:1fr 1fr}
+  nav{padding:0 16px}.nav-center{display:none}.steps-grid{grid-template-columns:1fr}.features-grid{grid-template-columns:1fr}.email-form{flex-direction:column}.stat-item{padding:0 24px}.charts-grid{grid-template-columns:1fr 1fr}.j-stats-row{grid-template-columns:1fr 1fr}
+}
+
+/* ── MOBILE NATIVE FEEL ─────────────────────────────── */
+@media(max-width:480px){
+  /* Safe area + bottom nav spacing */
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Hide desktop nav brand on mobile to save space */
+  .nav-brand { display: none; }
+  nav { padding: 0 12px; min-height: 52px; }
+
+  /* Bottom tab bar */
+  #mobileBottomNav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 9999;
+    background: rgba(10,14,23,0.97);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+    gap: 0;
+  }
+  .mob-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: color .15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-nav-btn.active { color: var(--accent); }
+  .mob-nav-btn:active { opacity: .7; }
+
+  /* App container full width */
+  .app-wrap { padding: 12px 12px 0; }
+
+  /* Bigger mode buttons */
+  .mode-btn { padding: 14px 6px !important; min-height: 80px; }
+
+  /* Full-width analyze button */
+  .btn-analyze-main {
+    width: 100%;
+    padding: 16px;
+    font-size: 15px;
+    border-radius: 12px;
+  }
+
+  /* Live analyzer input + button stacked */
+  #liveAnalyzerBar { flex-direction: column !important; gap: 8px !important; }
+  #liveAnalyzerBar input { width: 100% !important; font-size: 16px !important; padding: 14px 16px !important; }
+  #liveBtn { width: 100% !important; padding: 16px !important; font-size: 15px !important; justify-content: center; border-radius: 12px; }
+
+  /* Symbol input bigger */
+  .sym-input { font-size: 16px !important; padding: 14px 16px !important; width: 100%; box-sizing: border-box; }
+
+  /* Chart slots 1 column on small screens */
+  .charts-grid { grid-template-columns: 1fr !important; }
+  .chart-slot { min-height: 120px !important; }
+
+  /* Signal result cards — full width readable */
+  .result-card, #resultPanel, #signalResult {
+    border-radius: 12px !important;
+    padding: 16px !important;
+  }
+
+  /* Bigger verdict badge */
+  .verdict-badge, #verdictBadge {
+    font-size: 28px !important;
+    padding: 12px 28px !important;
+  }
+
+  /* Levels grid — 2 columns on mobile */
+  .levels-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+
+  /* Analysis text readable size */
+  .analysis-text, #fullAnalysis { font-size: 13px !important; line-height: 1.7 !important; }
+
+  /* Journal table horizontal scroll */
+  .j-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .j-table { min-width: 600px; }
+
+  /* Stat cards 2 col */
+  .j-stats-row { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+
+  /* Panel headers easier to tap */
+  .j-head { padding: 14px 16px !important; min-height: 48px; }
+
+  /* Prevent text overflow */
+  * { word-break: break-word; }
+
+  /* Bigger close/action buttons */
+  .slot-clear { width: 32px; height: 32px; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+
+  /* Section title smaller on mobile */
+  .section-title { font-size: 28px !important; }
+  .hero h1 { font-size: clamp(32px, 8vw, 60px) !important; letter-spacing: -1px !important; }
+  .hero-sub { font-size: 15px !important; margin: 16px 0 28px !important; }
+
+  /* Pricing cards full width */
+  .pricing-grid { grid-template-columns: 1fr !important; }
+  .price-card { padding: 24px !important; }
+
+  /* Analyze bar stacked */
+  .analyze-bar { flex-direction: column; gap: 10px; align-items: stretch; }
+  .analyze-bar .btn-analyze-main { width: 100%; }
+
+  /* Toast notifications */
+  #toast { bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important; }
+  #errBanner { bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important; top: auto !important; }
 }
 
 /* ════════════════════════════════════════
@@ -2125,6 +2244,26 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
   </div>
 </div>
 
+<!-- Mobile Bottom Nav Bar -->
+<nav id="mobileBottomNav" style="display:none">
+  <button class="mob-nav-btn active" id="mobNavAnalyze" onclick="mobileNavTo('analyze')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 3h18v18H3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M3 9h18M9 21V9" stroke="currentColor" stroke-width="1.5"/></svg>
+    <span>Analyze</span>
+  </button>
+  <button class="mob-nav-btn" id="mobNavLive" onclick="mobileNavTo('live')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <span>Live</span>
+  </button>
+  <button class="mob-nav-btn" id="mobNavJournal" onclick="mobileNavTo('journal')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <span>Journal</span>
+  </button>
+  <button class="mob-nav-btn" id="mobNavAccount" onclick="mobileNavTo('account')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <span>Account</span>
+  </button>
+</nav>
+
 <script src="/trade-intelligence.js"></script>`r`n<script src="/live-workstation.js"></script>
 <script>
 // ── STATE ──
@@ -2134,6 +2273,31 @@ let _liveTurboTimer=null,_liveTurboAttempts=0;
 let currentUser=null,authToken=null,authMode='login';
 let _liveChartRefreshToken = 0;
 const $=id=>document.getElementById(id);
+// ── MOBILE NAV ──
+function mobileNavTo(tab) {
+  // Update active state
+  ['analyze','live','journal','account'].forEach(t => {
+    const btn = $('mobNav' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  // Scroll to the relevant section
+  if (tab === 'analyze') {
+    const el = $('analyzerSection') || $('analyzerContent');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  } else if (tab === 'live') {
+    const el = $('liveSection') || document.querySelector('[id*="live"]');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+    // Focus the live symbol input
+    setTimeout(() => { const inp = $('liveSymInput'); if (inp) inp.focus(); }, 400);
+  } else if (tab === 'journal') {
+    const el = $('journalSection') || $('journalPanel') || document.querySelector('.j-panel');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  } else if (tab === 'account') {
+    const el = $('accountSection') || $('authSection');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+    else { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  }
+}
 const FCOLORS={Trend:'#00e676',Volume:'#3d9eff',Momentum:'#ffb300',Structure:'#a78bfa','Price Action':'#00e5b4',Confluence:'#00e5b4','Risk/Reward':'#f59e0b'};
 
 // ── AUTH STATE ──
