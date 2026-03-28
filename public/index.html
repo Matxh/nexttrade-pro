@@ -1344,17 +1344,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         Analyze Screenshots
       </button>
     </div>
-    <div id="premiumChecklistPanel" style="margin-top:12px;margin-bottom:16px;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
-        <div>
-          <div style="font-size:13px;font-weight:700;color:var(--text)">Execution Checklist</div>
-          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px">Build discipline before firing the analysis or taking the trade</div>
-        </div>
-        <div id="checklistScore" style="font-family:var(--mono);font-size:11px;color:var(--accent)">0 / 4 ready</div>
-      </div>
-      <div id="premiumChecklistBody" style="padding:14px 16px"></div>
-      <div id="premiumRiskBanner" style="display:none;padding:12px 16px;border-top:1px solid var(--border);font-family:var(--mono);font-size:11px"></div>
-    </div>
     <div class="paste-row"><span class="kbd">Ctrl+V</span><span>paste chart to slot 1 · or drag & drop onto any slot</span></div>
 
     <!-- Morning Briefing Panel -->
@@ -1410,49 +1399,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
     </div>
 
-    <!-- Broker Connect Panel -->
-    <div class="j-panel" style="margin-bottom:16px" id="brokerPanel">
-      <div class="j-head" style="cursor:pointer" onclick="togglePanel('brokerBody','brokerToggle')">
-        <span class="j-title">🔗 Broker Connect</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="brokerToggle">▼ expand</span>
-      </div>
-      <div id="brokerBody" style="display:none;padding:14px 16px">
-        <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.6">Connect your broker for one-click trade execution. <span style="color:var(--accent);font-family:var(--mono);font-size:10px">COMING SOON</span></div>
-        <div class="broker-list">
-          <div class="broker-item" id="brokerTradovate">
-            <div>
-              <div style="font-size:13px;font-weight:700">Tradovate</div>
-              <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Futures</div>
-            </div>
-            <button class="broker-connect-btn" onclick="openBrokerModal('Tradovate')">Connect</button>
-          </div>
-          <div class="broker-item">
-            <div>
-              <div style="font-size:13px;font-weight:700">Interactive Brokers</div>
-              <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Stocks · Options · Futures</div>
-            </div>
-            <button class="broker-connect-btn" style="opacity:.5;cursor:not-allowed" disabled>Soon</button>
-          </div>
-          <div class="broker-item">
-            <div>
-              <div style="font-size:13px;font-weight:700">TD Ameritrade</div>
-              <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Stocks · ETFs</div>
-            </div>
-            <button class="broker-connect-btn" style="opacity:.5;cursor:not-allowed" disabled>Soon</button>
-          </div>
-          <div class="broker-item">
-            <div>
-              <div style="font-size:13px;font-weight:700">TradeStation</div>
-              <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Futures · Stocks</div>
-            </div>
-            <button class="broker-connect-btn" style="opacity:.5;cursor:not-allowed" disabled>Soon</button>
-          </div>
-        </div>
-        <div id="brokerConnectedStatus" style="display:none;margin-top:10px;background:var(--green-dim);border:1px solid rgba(0,230,118,.25);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--green)">
-          ✓ Tradovate connected — One-click orders enabled
-        </div>
-      </div>
-    </div>
 
     <!-- Alert Preferences Panel -->
     <div class="j-panel" style="margin-bottom:16px" id="alertPrefsPanel">
