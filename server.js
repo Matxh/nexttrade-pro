@@ -1844,15 +1844,6 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
   const sym = symbol.toUpperCase().trim();
   const mode = tradeMode || 'dayTrade';
   const liveCacheKey = `${req.user.id}|${sym}|${mode}|${tfs.join(',')}`;
-  const cachedLive = _liveAnalysisCache[liveCacheKey];
-  if (cachedLive && Date.now() - cachedLive.ts < LIVE_ANALYSIS_CACHE_TTL) {
-    return res.json({
-      ...cachedLive.payload,
-      elapsed: '0.0',
-      _cached: true,
-      _cachedAgeMs: Date.now() - cachedLive.ts
-    });
-  }
 
   // Master timeout — guarantees a response before Vercel's 60s hard kill
   const masterTimer = setTimeout(() => {
