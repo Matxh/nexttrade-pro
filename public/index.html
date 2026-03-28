@@ -1308,21 +1308,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <div id="premiumPlaybookBody" style="margin-top:10px;font-size:13px;color:var(--text2);line-height:1.7"></div>
     </div>
 
-    <!-- ðŸ“¡ LIVE ANALYSIS BAR -->
-    <div style="background:linear-gradient(135deg,rgba(0,229,180,.06),rgba(61,158,255,.06));border:1px solid rgba(0,229,180,.25);border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:180px">
-        <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:2px">ðŸ“¡ Analyze Live â€” No Screenshot Needed</div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Pulls real-time candle data automatically Â· ES1!, NQ1!, BTC/USD, EUR/USD, SPY...</div>
-        <div id="liveModeTag" style="font-family:var(--mono);font-size:10px;margin-top:4px">Mode: <span style="color:var(--accent);font-weight:700" id="liveModeLabel">âš¡ Scalp (1m Â· 5m Â· 15m)</span></div>
-      </div>
-      <input id="liveSymInput" type="text" placeholder="ES1!" maxlength="12"
-        style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;font-family:var(--mono);outline:none;width:120px;text-transform:uppercase"
-        oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')analyzeLive()">
-      <button onclick="analyzeLive()" id="liveBtn" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Analyze Live
-      </button>
-    </div>
     <div id="bestTimesPanel" style="margin-bottom:12px;background:linear-gradient(135deg,rgba(0,229,180,.06),rgba(245,158,11,.05));border:1px solid rgba(0,229,180,.18);border-radius:12px;padding:14px 16px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
@@ -1360,7 +1345,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <div class="analyze-bar">
       <div class="analyze-info">
         <strong id="analyze-status">Upload at least 1 chart to begin</strong>
-        <span id="analyze-sub">Or use Analyze Live above â€” no screenshot needed</span>
+        <span id="analyze-sub">Add multiple timeframes for higher accuracy</span>
       </div>
       <button class="btn-analyze-main" id="analyzeBtn" onclick="runAnalysis()" disabled>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M8 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -2851,7 +2836,7 @@ async function analyzeLive(silent=false){
 
     if(d._cached){
       const age = Math.max(0, Math.round((d._cachedAgeMs || 0) / 1000));
-      showToast('Instant live read loaded' + (age ? ' • refreshed ' + age + 's ago' : ''),'success');
+      showToast('Instant live read loaded' + (age ? ' ï¿½ refreshed ' + age + 's ago' : ''),'success');
     }
     try{ localStorage.setItem('nt_last_analysis',JSON.stringify({symbol:sym,verdict:d.verdict,entry:d.entry,sl:d.sl,tp1:d.tp1,grade:d.signal_grade})); }catch(e){}
 
@@ -2869,7 +2854,7 @@ async function analyzeLive(silent=false){
     if(d._turboPending && _liveTurboAttempts < 3){
       _liveTurboAttempts++;
       _liveTurboTimer = setTimeout(() => analyzeLive(true), 1800);
-      if(!silent) showToast('Turbo mode active • upgrading with AI...','success');
+      if(!silent) showToast('Turbo mode active ï¿½ upgrading with AI...','success');
     } else if (!d._turboPending) {
       _liveTurboAttempts = 0;
       if(silent && (d._cachedFromTurbo || d._cached)) showToast('AI-upgraded live read ready','success');
@@ -4670,7 +4655,7 @@ function renderBrokerOrders() {
             <span style="font-family:var(--mono);font-size:9px;color:${tone}">${order.direction}</span>
             <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">${order.status}</span>
           </div>
-          <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">${order.broker} • ${order.mode} • ${order.size} lot • entry ${order.entry ?? '—'}</div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">${order.broker} ï¿½ ${order.mode} ï¿½ ${order.size} lot ï¿½ entry ${order.entry ?? 'ï¿½'}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">${cancelBtn}</div>
       </div>`;
@@ -4704,8 +4689,8 @@ function renderBrokerStatusText() {
   if (!_brokerConnected || !_brokerProfile) return 'Tradovate connected';
   const recent = _brokerRecentOrders[0];
   const base = `${_brokerProfile.broker} ${_brokerProfile.mode || 'sim'} connected`;
-  if (!recent) return `${base} • Key ${_brokerProfile.keyMask || 'saved'}`;
-  return `${base} • Last order ${recent.symbol} ${recent.direction} (${recent.status})`;
+  if (!recent) return `${base} ï¿½ Key ${_brokerProfile.keyMask || 'saved'}`;
+  return `${base} ï¿½ Last order ${recent.symbol} ${recent.direction} (${recent.status})`;
 }
 
 async function updateBrokerUI(force = false) {
@@ -4742,12 +4727,12 @@ function showBrokerPlaceOrder() {
   $('brokerOrderDetails').innerHTML = `
     <div>Broker: <strong>${brokerLabel} (${modeLabel})</strong></div>
     <div>Direction: <strong style="color:${dir==='BUY'?'var(--green)':'var(--red)'}">${dir}</strong></div>
-    <div>Symbol: <strong>${sig.symbol || '—'}</strong></div>
-    <div>Entry: <strong style="color:var(--blue)">${sig.entry || '—'}</strong></div>
-    <div>Stop Loss: <strong style="color:var(--red)">${sig.sl || '—'}</strong></div>
-    <div>Take Profit 1: <strong style="color:var(--green)">${sig.tp1 || '—'}</strong></div>
+    <div>Symbol: <strong>${sig.symbol || 'ï¿½'}</strong></div>
+    <div>Entry: <strong style="color:var(--blue)">${sig.entry || 'ï¿½'}</strong></div>
+    <div>Stop Loss: <strong style="color:var(--red)">${sig.sl || 'ï¿½'}</strong></div>
+    <div>Take Profit 1: <strong style="color:var(--green)">${sig.tp1 || 'ï¿½'}</strong></div>
     <div>Size: <strong>1 contract</strong></div>
-    <div>R:R: <strong>${sig.rr_tp1 || '—'}</strong></div>
+    <div>R:R: <strong>${sig.rr_tp1 || 'ï¿½'}</strong></div>
   `;
   _pendingBrokerOrder = {
     broker: brokerLabel,
@@ -4774,7 +4759,7 @@ async function executeBrokerOrder() {
     if (!res.ok) throw new Error(d.error || 'Order failed');
     closeBrokerOrderModal();
     await updateBrokerUI(true);
-    showToast(`${d.message} • ${d.order?.id || ''}`.trim(), 'success');
+    showToast(`${d.message} ï¿½ ${d.order?.id || ''}`.trim(), 'success');
   } catch(e) {
     showToast('Order failed: ' + e.message, 'error');
   }
@@ -4797,9 +4782,9 @@ function renderSignalEdgeSummary(edge, signal) {
   if (!panel) return;
   if (!edge) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
   const rows = [
-    edge.bestSymbol ? `<div class="edge-row"><span class="edge-label">Best Symbol</span><span class="edge-val">${edge.bestSymbol} ${edge.bestSymbolWR ? '• ' + edge.bestSymbolWR + '% WR' : ''}</span></div>` : '',
-    edge.bestDay ? `<div class="edge-row"><span class="edge-label">Best Day</span><span class="edge-val">${edge.bestDay}${edge.bestDayWR ? ' • ' + edge.bestDayWR + '% WR' : ''}</span></div>` : '',
-    edge.bestMarketType ? `<div class="edge-row"><span class="edge-label">Best Market</span><span class="edge-val">${edge.bestMarketType}${edge.bestMarketTypeWR ? ' • ' + edge.bestMarketTypeWR + '% WR' : ''}</span></div>` : '',
+    edge.bestSymbol ? `<div class="edge-row"><span class="edge-label">Best Symbol</span><span class="edge-val">${edge.bestSymbol} ${edge.bestSymbolWR ? 'ï¿½ ' + edge.bestSymbolWR + '% WR' : ''}</span></div>` : '',
+    edge.bestDay ? `<div class="edge-row"><span class="edge-label">Best Day</span><span class="edge-val">${edge.bestDay}${edge.bestDayWR ? ' ï¿½ ' + edge.bestDayWR + '% WR' : ''}</span></div>` : '',
+    edge.bestMarketType ? `<div class="edge-row"><span class="edge-label">Best Market</span><span class="edge-val">${edge.bestMarketType}${edge.bestMarketTypeWR ? ' ï¿½ ' + edge.bestMarketTypeWR + '% WR' : ''}</span></div>` : '',
     edge.expectancy !== undefined ? `<div class="edge-row"><span class="edge-label">Expectancy</span><span class="edge-val">${edge.expectancy}R</span></div>` : ''
   ].filter(Boolean).join('');
   const alignment = edge.bestSymbol && signal?.symbol && edge.bestSymbol.toUpperCase() === String(signal.symbol).toUpperCase()
@@ -4935,27 +4920,27 @@ renderCoachPanel = function(trades) {
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Expectancy</div>
-        <div style="font-size:22px;font-weight:800;color:${intel.expectancy !== null ? (intel.expectancy >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text)'}">${intel.expectancy !== null ? intel.expectancy.toFixed(2) + 'R' : '—'}</div>
+        <div style="font-size:22px;font-weight:800;color:${intel.expectancy !== null ? (intel.expectancy >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text)'}">${intel.expectancy !== null ? intel.expectancy.toFixed(2) + 'R' : 'ï¿½'}</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Best Market</div>
-        <div style="font-size:20px;font-weight:800;color:var(--accent)">${top ? top.key : '—'}</div>
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${top ? `${top.wr}% WR · ${top.total} trades` : 'Need 2+ trades per symbol'}</div>
+        <div style="font-size:20px;font-weight:800;color:var(--accent)">${top ? top.key : 'ï¿½'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${top ? `${top.wr}% WR ï¿½ ${top.total} trades` : 'Need 2+ trades per symbol'}</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Directional Edge</div>
-        <div style="font-size:20px;font-weight:800;color:var(--blue)">${intel.buyWR !== null || intel.sellWR !== null ? `${intel.buyWR ?? '—'} / ${intel.sellWR ?? '—'}` : '—'}</div>
+        <div style="font-size:20px;font-weight:800;color:var(--blue)">${intel.buyWR !== null || intel.sellWR !== null ? `${intel.buyWR ?? 'ï¿½'} / ${intel.sellWR ?? 'ï¿½'}` : 'ï¿½'}</div>
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">BUY WR / SELL WR</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Recent Form</div>
-        <div style="font-size:20px;font-weight:800;color:${momentumColor}">${intel.recentWR !== null ? intel.recentWR + '%' : '—'}</div>
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${intel.recentTrades ? `Last ${intel.recentTrades} trades · ${intel.momentum}` : 'Need more data'}</div>
+        <div style="font-size:20px;font-weight:800;color:${momentumColor}">${intel.recentWR !== null ? intel.recentWR + '%' : 'ï¿½'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${intel.recentTrades ? `Last ${intel.recentTrades} trades ï¿½ ${intel.momentum}` : 'Need more data'}</div>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       <div class="edge-row"><span class="edge-label">Overall Win Rate</span><span class="edge-val">${intel.overallWR}%</span></div>
-      <div class="edge-row"><span class="edge-label">Avg Realized R:R</span><span class="edge-val">${intel.avgRR !== null ? '1:' + intel.avgRR.toFixed(2) : '—'}</span></div>
+      <div class="edge-row"><span class="edge-label">Avg Realized R:R</span><span class="edge-val">${intel.avgRR !== null ? '1:' + intel.avgRR.toFixed(2) : 'ï¿½'}</span></div>
     </div>
     <div style="background:rgba(61,158,255,.08);border:1px solid rgba(61,158,255,.25);border-radius:10px;padding:14px;font-size:13px;color:var(--text);line-height:1.7">
       <strong style="color:var(--blue)">Next Best Move:</strong> ${intel.focus}
@@ -4981,11 +4966,11 @@ renderAnalyticsPanel = function(trades) {
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Setup Quality Mix</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${intel.gradeMix.filter(g => g.count).map(g => `<span class="j-badge ${g.grade.replace('+','p')}">${g.grade} ${g.pct}%</span>`).join('') || '<span style="color:var(--text3)">—</span>'}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${intel.gradeMix.filter(g => g.count).map(g => `<span class="j-badge ${g.grade.replace('+','p')}">${g.grade} ${g.pct}%</span>`).join('') || '<span style="color:var(--text3)">ï¿½</span>'}</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Average R:R</div>
-        <div style="font-size:24px;font-weight:800;color:var(--blue)">${intel.avgRR ? '1:' + intel.avgRR.toFixed(2) : '—'}</div>
+        <div style="font-size:24px;font-weight:800;color:var(--blue)">${intel.avgRR ? '1:' + intel.avgRR.toFixed(2) : 'ï¿½'}</div>
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">Realized outcome data only</div>
       </div>
     </div>
