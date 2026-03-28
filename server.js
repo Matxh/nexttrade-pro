@@ -1777,23 +1777,30 @@ async function analyzeOneLive(chartTexts, sym, tf, livePrice, mktCtx, winStats, 
     ? `SWING TRADE — hold 1–5 days. Wide SL beyond structure. Min 1:3 R:R. Daily/4H level entries.`
     : `DAY TRADE — hold 30 min–3 hrs. Min 1:2.5 R:R. Enter at key OB/FVG/S-R levels.`;
 
-  const model  = tradeMode === 'swing' ? SONNET : HAIKU;
-  const tokens = tradeMode === 'swing' ? 1600   : 1100;
+  const model  = SONNET; // always use DeepSeek R1 — best free reasoning model
+  const tokens = 2000;
 
-  const sys = `You are an elite ICT/SMC trading analyst. Analyze LIVE OHLCV price data and deliver a complete trading signal.
+  const sys = `You are a professional ICT/SMC trading analyst with 20 years experience. Analyze LIVE OHLCV data and produce a high-accuracy trading signal.
 
 ${modeInstructions}
 
-IMPORTANT RULES:
-- ALWAYS give a directional verdict (BUY, SELL, or WAIT). Never leave fields empty.
-- ALWAYS provide exact entry, sl, tp1, tp2 price levels — even on WAIT, show the next key setup.
-- Session timing affects confidence score, NOT the verdict. Analyze price action objectively.
-- ICT concepts: Order Blocks (last candle before displacement), FVG (3-candle gap), BOS/CHOCH, liquidity grabs, premium/discount zones.
-- BUY if: bullish structure (HH+HL), price at discount/OB/FVG, clear upside target above.
-- SELL if: bearish structure (LH+LL), price at premium/OB/FVG, clear downside target below.
-- WAIT if: price in middle of range with no clear OB/FVG, conflicting timeframes, no liquidity target.
-- If multi-timeframe trend is mixed, volatility is too compressed, or R:R is poor, prefer WAIT over forcing a trade.
-- Confidence must be reduced when structure is messy, volume is weak, or timeframes disagree.
+STEP-BY-STEP ANALYSIS (reason through each before deciding):
+1. HTF BIAS — What is the dominant trend on the highest timeframe? HH+HL = bullish, LH+LL = bearish, choppy = neutral.
+2. STRUCTURE — Identify last BOS/CHOCH. Where is the most recent swing high/low? Is price making a continuation or reversal?
+3. KEY LEVELS — Find the nearest OB (last candle before displacement), FVG (3-candle imbalance gap), and liquidity pools (equal highs/lows, previous session highs/lows).
+4. PREMIUM/DISCOUNT — Is price above (premium = sell zone) or below (discount = buy zone) the range midpoint (equilibrium)?
+5. ENTRY CONFLUENCE — Does the entry have 3+ confluences? (OB + FVG + session time + structure alignment + volume)
+6. R:R CHECK — Is the reward at least 2x the risk? If not, WAIT.
+7. INVALIDATION — What price level proves the setup wrong?
+
+SIGNAL RULES:
+- BUY only if: bullish HTF bias + price in discount at OB/FVG + bullish BOS confirmed + R:R ≥ 2:1
+- SELL only if: bearish HTF bias + price in premium at OB/FVG + bearish BOS confirmed + R:R ≥ 2:1
+- WAIT if: conflicting HTF/LTF structure, price in middle of range, no clear OB/FVG, poor R:R, or less than 3 confluences
+- Confidence 80-95: A+ setup — 3+ confluences, perfect structure, clear liquidity target
+- Confidence 65-79: A/B setup — 2 confluences, decent structure
+- Confidence 50-64: C setup — marginal, consider skipping
+- Confidence below 50: WAIT
 
 Return ONLY valid raw JSON (no markdown, no text outside JSON):
 {
@@ -1835,7 +1842,7 @@ Return ONLY valid raw JSON (no markdown, no text outside JSON):
     const lines = t.split('\n');
     const headerEnd = lines.findIndex(l => l.startsWith('---') || l.includes('| Open')) + 1;
     const header = lines.slice(0, Math.max(headerEnd, 8)).join('\n');
-    const rows   = lines.slice(headerEnd).slice(-20).join('\n');
+    const rows   = lines.slice(headerEnd).slice(-35).join('\n');
     return header + '\n' + rows;
   };
   const dataBlock = chartTexts.map((t, i) => `=== TF ${i+1} ===\n${trimTF(t)}`).join('\n\n');
