@@ -1712,48 +1712,20 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     // Build text-based chart data for each TF
     const chartTexts = available.map(d => ohlcvToText(d));
 
-    // ── STEP 2: Turbo live analysis — fast fallback first, AI upgrade second ──
-    console.log(`[LIVE] Step 2: turbo analysis (${mode})`);
-    const buildResponsePayload = (baseResult, extra = {}) => ({
-      ...baseResult,
-      dataSource: available.map(d=>d.source).join('+'),
-      tfsUsed: available.map(d=>d.tf),
-      _personalEdge: personalEdge,
-      _correlatedAssets: null,
-      _newsSentiment: null,
-      _qualityContext: qualityCtx,
-      ...extra
-    });
-
+    // ── STEP 2: Full AI analysis — always wait for real result ──
+    console.log(`[LIVE] Step 2: AI analysis (${mode})`);
     let result;
-    if (key) {
-      if (!_liveAnalysisInflight[liveCacheKey]) {
-        _liveAnalysisInflight[liveCacheKey] = (async () => {
-          try {
-            const aiRawResult = await withTimeout(
-              analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, winStats, personalEdge, key, mode, qualityCtx),
-              40000
-            );
-            const aiResult = validateLiveSignal(aiRawResult, qualityCtx, mode, personalEdge, mktCtx, sym, fallbackResult);
-            const cachedPayload = buildResponsePayload(aiResult, { elapsed: ((Date.now()-t0)/1000).toFixed(1), _turboPending: false, _cachedFromTurbo: true });
-            const { _trade_id, ...cacheablePayload } = cachedPayload;
-            _liveAnalysisCache[liveCacheKey] = { ts: Date.now(), payload: cacheablePayload };
-            correlatedPromise.then(() => null).catch(() => null);
-          } catch (bgErr) {
-            console.warn('[LIVE] Turbo background analysis failed:', bgErr.message);
-          } finally {
-            delete _liveAnalysisInflight[liveCacheKey];
-          }
-        })();
-      }
-
-      result = validateLiveSignal({ ...fallbackResult }, qualityCtx, mode, personalEdge, mktCtx, sym, fallbackResult);
-      result._turboPending = true;
-      console.log(`[LIVE] Step 2 turbo response — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
-    } else {
-      result = validateLiveSignal(fallbackResult, qualityCtx, mode, personalEdge, mktCtx, sym, fallbackResult);
-      console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
+    try {
+      const aiRawResult = await withTimeout(
+        analyzeOneLive(chartTexts, sym, tfs[tfs.length-1], livePrice, mktCtx, winStats, personalEdge, key, mode, qualityCtx),
+        40000
+      );
+      result = validateLiveSignal(aiRawResult, qualityCtx, mode, personalEdge, mktCtx, sym, null);
+    } catch (aiErr) {
+      console.warn('[LIVE] AI failed, using heuristic fallback:', aiErr.message);
+      result = validateLiveSignal(fallbackResult, qualityCtx, mode, personalEdge, mktCtx, sym, null);
     }
+    console.log(`[LIVE] Step 2 done — ${result?.verdict} ${result?.signal_grade||''} conf:${result?.confidence||'?'}% in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     const correlatedData = null;
     // ── STEP 4: Fire-and-forget journal save — never blocks the response ───
