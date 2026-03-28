@@ -1204,40 +1204,118 @@ function ohlcvToText(data) {
   const midpoint = ((+swingH + +swingL)/2).toFixed(2);
   const priceZone = +last.close > +midpoint ? 'PREMIUM (sell zone)' : 'DISCOUNT (buy zone)';
 
-  // FVG detection — 3-candle imbalance: candle[i-2].high < candle[i].low (bullish) or candle[i-2].low > candle[i].high (bearish)
+  // VWAP (intraday — reset each day)
+  const vwap = (() => {
+    let cumTP = 0, cumVol = 0;
+    const todayDate = last?.datetime?.slice(0,10);
+    for (const x of c) {
+      if (todayDate && x.datetime && !x.datetime.startsWith(todayDate)) continue;
+      const tp = ((+x.high + +x.low + +x.close) / 3);
+      const v  = +x.volume || 0;
+      cumTP += tp * v; cumVol += v;
+    }
+    return cumVol > 0 ? (cumTP / cumVol).toFixed(2) : null;
+  })();
+
+  // Previous day high/low (PDH/PDL) — key ICT liquidity levels
+  const pdh_pdl = (() => {
+    const byDay = {};
+    for (const x of c) {
+      const d = x.datetime?.slice(0,10);
+      if (!d) continue;
+      if (!byDay[d]) byDay[d] = { high: -Infinity, low: Infinity };
+      if (+x.high > byDay[d].high) byDay[d].high = +x.high;
+      if (+x.low  < byDay[d].low)  byDay[d].low  = +x.low;
+    }
+    const days = Object.keys(byDay).sort();
+    const today = days[days.length-1];
+    const yesterday = days[days.length-2];
+    if (!yesterday) return null;
+    return { pdh: byDay[yesterday].high.toFixed(2), pdl: byDay[yesterday].low.toFixed(2) };
+  })();
+
+  // FVG detection — 3-candle imbalance
   const fvgs = [];
   for (let i = 2; i < c.length; i++) {
     const bullFVG = +c[i-2].high < +c[i].low;
-    const bearFVG = +c[i-2].low > +c[i].high;
-    if (bullFVG) fvgs.push({ type:'BULL FVG', low:c[i-2].high, high:c[i].low, idx:i, dt:c[i].datetime });
-    if (bearFVG) fvgs.push({ type:'BEAR FVG', low:c[i].high, high:c[i-2].low, idx:i, dt:c[i].datetime });
+    const bearFVG = +c[i-2].low  > +c[i].high;
+    if (bullFVG) fvgs.push({ type:'BULL FVG', low:c[i-2].high, high:c[i].low, dt:c[i].datetime });
+    if (bearFVG) fvgs.push({ type:'BEAR FVG', low:c[i].high, high:c[i-2].low, dt:c[i].datetime });
   }
-  const recentFVGs = fvgs.slice(-4).map(f=>`${f.type} @ ${f.low}–${f.high} (${f.dt})`).join(' | ') || 'None detected';
+  // Keep only unfilled FVGs (price hasn't retraced into them)
+  const curPrice = +last.close;
+  const unfilledFVGs = fvgs.filter(f => {
+    if (f.type==='BULL FVG') return curPrice > +f.low; // price above it = unfilled
+    return curPrice < +f.high; // price below it = unfilled
+  }).slice(-4).map(f=>`${f.type} ${f.low}–${f.high} (${f.dt})`).join(' | ') || 'None';
 
-  // OB detection — last bullish OB = last bearish candle before a bullish displacement; last bearish OB = last bullish candle before bearish displacement
+  // OB detection — last candle before displacement
   let lastBullOB = null, lastBearOB = null;
   for (let i = 1; i < c.length-1; i++) {
-    const body = Math.abs(+c[i].close - +c[i].open);
+    const body     = Math.abs(+c[i].close   - +c[i].open);
     const nextBody = Math.abs(+c[i+1].close - +c[i+1].open);
-    const displacement = nextBody > body * 1.5;
-    if (displacement && +c[i].close < +c[i].open && +c[i+1].close > +c[i+1].open) lastBullOB = `${c[i].low}–${c[i].high} (${c[i].datetime})`;
-    if (displacement && +c[i].close > +c[i].open && +c[i+1].close < +c[i+1].open) lastBearOB = `${c[i].low}–${c[i].high} (${c[i].datetime})`;
+    if (nextBody < body * 1.5) continue;
+    if (+c[i].close < +c[i].open && +c[i+1].close > +c[i+1].open) lastBullOB = `${c[i].low}–${c[i].high} (${c[i].datetime})`;
+    if (+c[i].close > +c[i].open && +c[i+1].close < +c[i+1].open) lastBearOB = `${c[i].low}–${c[i].high} (${c[i].datetime})`;
   }
 
-  const header = `=== ${data.tf} | ${data.symbol} | ${c.length} candles | source: ${data.source} ===
+  // BOS/CHOCH detection — track swing structure
+  const bosChoch = (() => {
+    const results = [];
+    let lastSwingHigh = null, lastSwingLow = null;
+    for (let i = 2; i < c.length-1; i++) {
+      const isSwingHigh = +c[i].high > +c[i-1].high && +c[i].high > +c[i+1].high;
+      const isSwingLow  = +c[i].low  < +c[i-1].low  && +c[i].low  < +c[i+1].low;
+      if (isSwingHigh) {
+        if (lastSwingHigh && +c[i].high > +lastSwingHigh.price) results.push(`BOS Bullish @ ${c[i].high} (${c[i].datetime})`);
+        else if (lastSwingHigh && +c[i].high < +lastSwingHigh.price) results.push(`CHOCH Bearish @ ${c[i].high} (${c[i].datetime})`);
+        lastSwingHigh = { price: +c[i].high, idx: i };
+      }
+      if (isSwingLow) {
+        if (lastSwingLow && +c[i].low < +lastSwingLow.price) results.push(`BOS Bearish @ ${c[i].low} (${c[i].datetime})`);
+        else if (lastSwingLow && +c[i].low > +lastSwingLow.price) results.push(`CHOCH Bullish @ ${c[i].low} (${c[i].datetime})`);
+        lastSwingLow = { price: +c[i].low, idx: i };
+      }
+    }
+    return results.slice(-3).join(' | ') || 'None detected';
+  })();
+
+  // Equal highs/lows — liquidity pools (within 0.1% of each other)
+  const eqLevels = (() => {
+    const tolerance = curPrice * 0.001;
+    const result = [];
+    for (let i = 0; i < highs.length-1; i++) {
+      for (let j = i+1; j < highs.length; j++) {
+        if (Math.abs(highs[i] - highs[j]) < tolerance) { result.push(`EQH @ ~${highs[i].toFixed(2)}`); break; }
+      }
+    }
+    for (let i = 0; i < lows.length-1; i++) {
+      for (let j = i+1; j < lows.length; j++) {
+        if (Math.abs(lows[i] - lows[j]) < tolerance) { result.push(`EQL @ ~${lows[i].toFixed(2)}`); break; }
+      }
+    }
+    return [...new Set(result)].slice(-4).join(' | ') || 'None';
+  })();
+
+  const header = `=== ${data.tf} | ${data.symbol} | source: ${data.source} ===
 Price: ${last?.close} | Prev: ${prev?.close} | Zone: ${priceZone}
-EMA20: ${e20} | EMA50: ${e50} | ATR(14): ${atrStr} | RSI(14): ${rsi14??'N/A'}
-Swing High (30): ${swingH} | Swing Low (30): ${swingL} | Mid: ${midpoint}
+EMA20: ${e20} | EMA50: ${e50} | ATR(14): ${atrStr} | RSI(14): ${rsi14??'N/A'}${vwap ? ` | VWAP: ${vwap}` : ''}
+Range (30): High ${swingH} → Low ${swingL} | Mid: ${midpoint}
+${pdh_pdl ? `PDH: ${pdh_pdl.pdh} | PDL: ${pdh_pdl.pdl}` : ''}
 Volume: ${volNote} (${Math.round(lastVol).toLocaleString()} vs avg ${Math.round(avgVol).toLocaleString()})
 Bullish OB: ${lastBullOB||'None'} | Bearish OB: ${lastBearOB||'None'}
-Recent FVGs: ${recentFVGs}
+Unfilled FVGs: ${unfilledFVGs}
+BOS/CHOCH: ${bosChoch}
+Liquidity Pools (EQH/EQL): ${eqLevels}
 
-Candles (oldest→newest):
+Candles (oldest→newest, * = displacement candle):
 Datetime            | Open    | High    | Low     | Close   | Volume
 `;
-  const rows = c.slice(-40).map(x=>
-    `${x.datetime} | ${String(x.open).padStart(7)} | ${String(x.high).padStart(7)} | ${String(x.low).padStart(7)} | ${String(x.close).padStart(7)} | ${String(x.volume).padStart(8)}`
-  ).join('\n');
+  const avgBody = c.slice(-20).reduce((s,x)=>s+Math.abs(+x.close - +x.open),0)/20;
+  const rows = c.slice(-40).map(x=> {
+    const isDisp = Math.abs(+x.close - +x.open) > avgBody * 2;
+    return `${isDisp?'*':' '}${x.datetime} | ${String(x.open).padStart(7)} | ${String(x.high).padStart(7)} | ${String(x.low).padStart(7)} | ${String(x.close).padStart(7)} | ${String(x.volume).padStart(8)}`;
+  }).join('\n');
   return header + rows;
 }
 
@@ -1822,30 +1900,35 @@ async function analyzeOneLive(chartTexts, sym, tf, livePrice, mktCtx, winStats, 
     ? `SWING TRADE — hold 1–5 days. Wide SL beyond structure. Min 1:3 R:R. Daily/4H level entries.`
     : `DAY TRADE — hold 30 min–3 hrs. Min 1:2.5 R:R. Enter at key OB/FVG/S-R levels.`;
 
-  const model  = SONNET; // always use DeepSeek R1 — best free reasoning model
-  const tokens = 2000;
+  const model  = SONNET; // DeepSeek R1 — best free reasoning model
+  const tokens = 2400;
 
-  const sys = `You are a professional ICT/SMC trading analyst with 20 years experience. Analyze LIVE OHLCV data and produce a high-accuracy trading signal.
+  const sys = `You are an elite ICT/SMC prop trader. You have been given pre-computed market structure data — USE IT. Do not recalculate what is already provided. Focus entirely on trade decision quality.
 
 ${modeInstructions}
 
-STEP-BY-STEP ANALYSIS (reason through each before deciding):
-1. HTF BIAS — What is the dominant trend on the highest timeframe? HH+HL = bullish, LH+LL = bearish, choppy = neutral.
-2. STRUCTURE — Identify last BOS/CHOCH. Where is the most recent swing high/low? Is price making a continuation or reversal?
-3. KEY LEVELS — Find the nearest OB (last candle before displacement), FVG (3-candle imbalance gap), and liquidity pools (equal highs/lows, previous session highs/lows).
-4. PREMIUM/DISCOUNT — Is price above (premium = sell zone) or below (discount = buy zone) the range midpoint (equilibrium)?
-5. ENTRY CONFLUENCE — Does the entry have 3+ confluences? (OB + FVG + session time + structure alignment + volume)
-6. R:R CHECK — Is the reward at least 2x the risk? If not, WAIT.
-7. INVALIDATION — What price level proves the setup wrong?
+ANALYSIS CHECKLIST (work through every point):
+1. HTF STRUCTURE — Read the BOS/CHOCH labels provided. What is the last confirmed structure shift? Is price in a bullish or bearish leg?
+2. PREMIUM/DISCOUNT — Use the pre-labeled zone. BUY only from discount, SELL only from premium. Never fade the zone.
+3. PDH/PDL — Is price at or near Previous Day High/Low? These are the #1 ICT liquidity targets.
+4. VWAP — Is price above (bullish) or below (bearish) VWAP? Entering against VWAP requires extra confluence.
+5. ORDER BLOCKS — Use the pre-identified Bullish/Bearish OBs. Is price currently inside or approaching one?
+6. FVGs — Are there unfilled Fair Value Gaps above (bearish FVG = resistance) or below (bullish FVG = support) current price?
+7. LIQUIDITY — Are there equal highs (EQH) or equal lows (EQL) nearby? Price hunts liquidity before reversing.
+8. RSI — Above 70 = overbought (lean SELL), below 30 = oversold (lean BUY), 40-60 = neutral.
+9. VOLUME — Displacement candles (marked *) with high volume confirm moves. Low volume = fake moves.
+10. CONFLUENCE COUNT — Need 3+ of: structure alignment, OB, FVG, PDH/PDL, VWAP, RSI extreme, volume confirmation.
+11. R:R — SL beyond the OB/structure. TP at next liquidity pool (EQH/EQL or PDH/PDL). Min R:R per mode.
+12. ENTRY TRIGGER — Never enter at market. Specify the exact candle confirmation needed.
 
-SIGNAL RULES:
-- BUY only if: bullish HTF bias + price in discount at OB/FVG + bullish BOS confirmed + R:R ≥ 2:1
-- SELL only if: bearish HTF bias + price in premium at OB/FVG + bearish BOS confirmed + R:R ≥ 2:1
-- WAIT if: conflicting HTF/LTF structure, price in middle of range, no clear OB/FVG, poor R:R, or less than 3 confluences
-- Confidence 80-95: A+ setup — 3+ confluences, perfect structure, clear liquidity target
-- Confidence 65-79: A/B setup — 2 confluences, decent structure
-- Confidence 50-64: C setup — marginal, consider skipping
-- Confidence below 50: WAIT
+STRICT SIGNAL RULES:
+- BUY: bullish HTF BOS + price at discount OB/FVG + 3+ confluences + R:R met
+- SELL: bearish HTF BOS + price at premium OB/FVG + 3+ confluences + R:R met
+- WAIT: fewer than 3 confluences, price mid-range, no OB/FVG nearby, R:R fails, or conflicting structure
+- Grade A+: 5+ confluences, perfect structure, high-volume displacement, clear liquidity target (conf 85-95)
+- Grade A: 4 confluences, clean structure (conf 75-84)
+- Grade B: 3 confluences, decent setup (conf 65-74)
+- Grade C/D or WAIT: fewer than 3 confluences (conf below 65)
 
 Return ONLY valid raw JSON (no markdown, no text outside JSON):
 {
