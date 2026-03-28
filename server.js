@@ -461,22 +461,38 @@ async function fetchLivePrice(symbol) {
 }
 
 function getMarketContext(symbol) {
-  const ctx  = { session:'', risk_events:[], market_hours:'' };
-  const hour = new Date().getUTCHours();
-  const day  = new Date().getDay();
-  if (hour >= 22 || hour < 8)        ctx.session = 'Asia Session (22:00-08:00 UTC) — Lower liquidity';
-  else if (hour >= 8 && hour < 12)   ctx.session = 'London Session Open (08:00-12:00 UTC) — High liquidity';
-  else if (hour >= 12 && hour < 17)  ctx.session = 'London/NY Overlap (12:00-17:00 UTC) — HIGHEST liquidity';
-  else if (hour >= 17 && hour < 20)  ctx.session = 'New York Session (17:00-20:00 UTC) — Good liquidity';
-  else                                ctx.session = 'End of NY / Pre-Asia (20:00-22:00 UTC) — Low liquidity';
-  if (day === 1)       ctx.market_hours = 'Monday — Watch for gaps';
-  else if (day === 5)  ctx.market_hours = 'Friday — Close positions before weekend';
-  else if (day === 0 || day === 6) ctx.market_hours = 'Weekend — Low institutional volume';
-  else                 ctx.market_hours = 'Mid-week — Optimal trading conditions';
+  const ctx  = { session:'', risk_events:[], market_hours:'', killZone:'', killZoneActive:false };
+  const now  = new Date();
+  const hour = now.getUTCHours();
+  const min  = now.getUTCMinutes();
+  const hm   = hour + min/60;
+  const day  = now.getDay();
+
+  // Sessions
+  if (hm >= 22 || hm < 8)       ctx.session = 'Asia Session (22:00-08:00 UTC)';
+  else if (hm >= 8 && hm < 12)  ctx.session = 'London Open (08:00-12:00 UTC) — High liquidity';
+  else if (hm >= 12 && hm < 17) ctx.session = 'London/NY Overlap (12:00-17:00 UTC) — HIGHEST liquidity';
+  else if (hm >= 17 && hm < 20) ctx.session = 'New York PM (17:00-20:00 UTC)';
+  else                           ctx.session = 'End of NY / Pre-Asia (20:00-22:00 UTC) — Low liquidity';
+
+  // ICT Kill Zones (UTC) — highest institutional order flow windows
+  if      (hm >= 8   && hm < 9)   { ctx.killZone = '🔥 LONDON OPEN KILL ZONE (08:00-09:00 UTC) — HIGHEST PROBABILITY';  ctx.killZoneActive = true; }
+  else if (hm >= 9   && hm < 10)  { ctx.killZone = '🔥 LONDON SESSION KILL ZONE (09:00-10:00 UTC) — HIGH PROBABILITY';   ctx.killZoneActive = true; }
+  else if (hm >= 13  && hm < 14)  { ctx.killZone = '🔥 NY OPEN KILL ZONE (13:00-14:00 UTC) — HIGHEST PROBABILITY';       ctx.killZoneActive = true; }
+  else if (hm >= 14  && hm < 15)  { ctx.killZone = '🔥 NY AM SESSION KILL ZONE (14:00-15:00 UTC) — HIGH PROBABILITY';    ctx.killZoneActive = true; }
+  else if (hm >= 19  && hm < 20)  { ctx.killZone = '⚡ NY CLOSE KILL ZONE (19:00-20:00 UTC) — MODERATE';                 ctx.killZoneActive = true; }
+  else if (hm >= 2   && hm < 5)   { ctx.killZone = '⚡ ASIAN KILL ZONE (02:00-05:00 UTC) — Forex pairs only';             ctx.killZoneActive = true; }
+  else                             { ctx.killZone = 'No active kill zone — lower probability outside kill zones'; ctx.killZoneActive = false; }
+
+  if (day === 1)         ctx.market_hours = 'Monday — Watch for weekend gap fills';
+  else if (day === 5)    ctx.market_hours = 'Friday — ICT: avoid new entries after NY close';
+  else if (day === 0 || day === 6) ctx.market_hours = 'Weekend — markets closed or low volume';
+  else                   ctx.market_hours = 'Mid-week — optimal institutional activity';
+
   const sym = (symbol || '').toUpperCase();
   if (sym.includes('BTC') || sym.includes('ETH')) ctx.risk_events.push('Crypto: Best during NY/London overlap');
-  if (sym.includes('USD')) ctx.risk_events.push('USD: Watch for NFP, CPI, FOMC');
-  if (sym.includes('EUR') || sym.includes('GBP')) ctx.risk_events.push('EUR/GBP: Watch ECB/BOE meetings');
+  if (sym.includes('USD')) ctx.risk_events.push('USD pairs: Watch for NFP, CPI, FOMC');
+  if (sym.includes('EUR') || sym.includes('GBP')) ctx.risk_events.push('EUR/GBP: Watch ECB/BOE');
   return ctx;
 }
 
@@ -1297,24 +1313,66 @@ function ohlcvToText(data) {
     return [...new Set(result)].slice(-4).join(' | ') || 'None';
   })();
 
+  // Liquidity sweep detection — price swept a level then closed back inside (key ICT reversal setup)
+  const sweeps = [];
+  for (let i = 10; i < c.length; i++) {
+    const lookback = c.slice(Math.max(0, i-20), i);
+    const refHigh = Math.max(...lookback.map(x=>+x.high));
+    const refLow  = Math.min(...lookback.map(x=>+x.low));
+    if (+c[i].high > refHigh && +c[i].close < refHigh) sweeps.push(`🐻 Bear Sweep of ${refHigh.toFixed(2)} @ ${c[i].datetime}`);
+    if (+c[i].low  < refLow  && +c[i].close > refLow)  sweeps.push(`🐂 Bull Sweep of ${refLow.toFixed(2)} @ ${c[i].datetime}`);
+  }
+  const recentSweeps = sweeps.slice(-3).join(' | ') || 'None detected';
+
+  // Session high/low from current session candles
+  const todayStr = last?.datetime?.slice(0,10);
+  const sessionCandles = todayStr ? c.filter(x => x.datetime?.startsWith(todayStr)) : c.slice(-20);
+  const sessH = sessionCandles.length ? Math.max(...sessionCandles.map(x=>+x.high)).toFixed(2) : 'N/A';
+  const sessL = sessionCandles.length ? Math.min(...sessionCandles.map(x=>+x.low)).toFixed(2)  : 'N/A';
+
+  const avgBody = c.slice(-20).reduce((s,x)=>s+Math.abs(+x.close - +x.open),0)/20;
+
+  // Candle pattern detection
+  const tagCandle = (x, i, arr) => {
+    const body   = Math.abs(+x.close - +x.open);
+    const range  = +x.high - +x.low || 0.0001;
+    const isBullC = +x.close > +x.open;
+    const tags   = [];
+    if (body > avgBody * 2) tags.push('DISP');
+    if (body / range < 0.15) tags.push('DOJI');
+    if (i > 0) {
+      const p = arr[i-1];
+      const pBody = Math.abs(+p.close - +p.open);
+      if (isBullC  && +p.close < +p.open && body > pBody) tags.push('BULL-ENG');
+      if (!isBullC && +p.close > +p.open && body > pBody) tags.push('BEAR-ENG');
+    }
+    const upperWick = +x.high - Math.max(+x.open, +x.close);
+    const lowerWick = Math.min(+x.open, +x.close) - +x.low;
+    if (lowerWick > body * 2 && upperWick < body * 0.5) tags.push('HAMMER');
+    if (upperWick > body * 2 && lowerWick < body * 0.5) tags.push('SHOOT-STAR');
+    return tags.length ? `[${tags.join('+')}]` : '';
+  };
+
   const header = `=== ${data.tf} | ${data.symbol} | source: ${data.source} ===
 Price: ${last?.close} | Prev: ${prev?.close} | Zone: ${priceZone}
 EMA20: ${e20} | EMA50: ${e50} | ATR(14): ${atrStr} | RSI(14): ${rsi14??'N/A'}${vwap ? ` | VWAP: ${vwap}` : ''}
 Range (30): High ${swingH} → Low ${swingL} | Mid: ${midpoint}
+Session Range: High ${sessH} → Low ${sessL}
 ${pdh_pdl ? `PDH: ${pdh_pdl.pdh} | PDL: ${pdh_pdl.pdl}` : ''}
 Volume: ${volNote} (${Math.round(lastVol).toLocaleString()} vs avg ${Math.round(avgVol).toLocaleString()})
 Bullish OB: ${lastBullOB||'None'} | Bearish OB: ${lastBearOB||'None'}
 Unfilled FVGs: ${unfilledFVGs}
 BOS/CHOCH: ${bosChoch}
 Liquidity Pools (EQH/EQL): ${eqLevels}
+Liquidity Sweeps: ${recentSweeps}
 
-Candles (oldest→newest, * = displacement candle):
-Datetime            | Open    | High    | Low     | Close   | Volume
+Candles (tags: DISP=displacement, DOJI, HAMMER, SHOOT-STAR, BULL/BEAR-ENG=engulfing):
+Datetime            | Open    | High    | Low     | Close   | Volume    | Tags
 `;
-  const avgBody = c.slice(-20).reduce((s,x)=>s+Math.abs(+x.close - +x.open),0)/20;
-  const rows = c.slice(-40).map(x=> {
-    const isDisp = Math.abs(+x.close - +x.open) > avgBody * 2;
-    return `${isDisp?'*':' '}${x.datetime} | ${String(x.open).padStart(7)} | ${String(x.high).padStart(7)} | ${String(x.low).padStart(7)} | ${String(x.close).padStart(7)} | ${String(x.volume).padStart(8)}`;
+  const slicedCandles = c.slice(-40);
+  const rows = slicedCandles.map((x, i) => {
+    const tag = tagCandle(x, i, slicedCandles);
+    return `${x.datetime} | ${String(x.open).padStart(7)} | ${String(x.high).padStart(7)} | ${String(x.low).padStart(7)} | ${String(x.close).padStart(7)} | ${String(x.volume).padStart(9)} | ${tag}`;
   }).join('\n');
   return header + rows;
 }
@@ -1813,13 +1871,16 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     const correlatedPromise = withTimeout(fetchCorrelatedAssets(sym), 8000).catch(() => null);
     const tradesPromise     = withTimeout(getTrades(), 5000).catch(() => []);
 
-    // ── STEP 1: Fetch OHLCV data in parallel ──────────────────────────────
-    console.log(`[LIVE] Step 1: fetching OHLCV for ${tfs.join('+')}`);
+    // ── STEP 1: Fetch OHLCV + HTF bias context in parallel ────────────────
+    const htfMap = { scalp:'4H', dayTrade:'1D', swing:'1W' };
+    const htfTf  = htfMap[mode] || '1D';
+    const allTfs = tfs.includes(htfTf) ? tfs : [...tfs, htfTf];
+    console.log(`[LIVE] Step 1: fetching OHLCV for ${allTfs.join('+')} (${htfTf} = HTF bias)`);
     const ohlcvResults = await Promise.all(
-      tfs.map(tf => withTimeout(fetchOHLCV(sym, tf, 60), 6000).catch(() => null))
+      allTfs.map(tf => withTimeout(fetchOHLCV(sym, tf, 60), 6000).catch(() => null))
     );
     const allTrades = await tradesPromise;
-    console.log(`[LIVE] Step 1 done — ${ohlcvResults.filter(Boolean).length}/${tfs.length} TFs loaded in ${((Date.now()-t0)/1000).toFixed(1)}s`);
+    console.log(`[LIVE] Step 1 done — ${ohlcvResults.filter(Boolean).length}/${allTfs.length} TFs loaded in ${((Date.now()-t0)/1000).toFixed(1)}s`);
 
     const available = ohlcvResults.filter(Boolean);
     if (!available.length) {
@@ -1901,7 +1962,7 @@ async function analyzeOneLive(chartTexts, sym, tf, livePrice, mktCtx, winStats, 
     : `DAY TRADE — hold 30 min–3 hrs. Min 1:2.5 R:R. Enter at key OB/FVG/S-R levels.`;
 
   const model  = SONNET; // DeepSeek R1 — best free reasoning model
-  const tokens = 2400;
+  const tokens = 3000;
 
   const sys = `You are an elite ICT/SMC prop trader. You have been given pre-computed market structure data — USE IT. Do not recalculate what is already provided. Focus entirely on trade decision quality.
 
@@ -1924,7 +1985,9 @@ ANALYSIS CHECKLIST (work through every point):
 STRICT SIGNAL RULES:
 - BUY: bullish HTF BOS + price at discount OB/FVG + 3+ confluences + R:R met
 - SELL: bearish HTF BOS + price at premium OB/FVG + 3+ confluences + R:R met
-- WAIT: fewer than 3 confluences, price mid-range, no OB/FVG nearby, R:R fails, or conflicting structure
+- WAIT: fewer than 3 confluences, price mid-range, no OB/FVG nearby, R:R fails, conflicting structure, or NOT in a kill zone (outside kill zones, confidence cap = 65)
+- KILL ZONE BONUS: If currently inside a kill zone, add 1 extra confluence point and allow confidence up to 95
+- SWEEP SETUP: If a liquidity sweep was just detected (last 3-5 candles), this is the #1 ICT setup — treat as an extra confluence
 - Grade A+: 5+ confluences, perfect structure, high-volume displacement, clear liquidity target (conf 85-95)
 - Grade A: 4 confluences, clean structure (conf 75-84)
 - Grade B: 3 confluences, decent setup (conf 65-74)
@@ -1974,7 +2037,19 @@ Return ONLY valid raw JSON (no markdown, no text outside JSON):
     return header + '\n' + rows;
   };
   const dataBlock = chartTexts.map((t, i) => `=== TF ${i+1} ===\n${trimTF(t)}`).join('\n\n');
-  const userMsg = `${sym} ${tradeMode} | ${lp} | ${session}${ws ? ' | '+ws : ''}${edge ? ' | '+edge : ''}${qualityNote ? ' | ' + qualityNote : ''}\n\n${dataBlock}`;
+  const killZone = mktCtx.killZone || '';
+  const killZoneLine = killZone ? `Kill Zone: ${killZone}` : '';
+  const riskEvts = mktCtx.risk_events?.length ? `Risk Events: ${mktCtx.risk_events.join(', ')}` : '';
+  const userMsg = `━━━ SIGNAL REQUEST: ${sym} | ${tradeMode.toUpperCase()} ━━━
+${lp} | Session: ${session} | ${mktCtx.market_hours || ''}
+${killZoneLine}
+${riskEvts}
+${ws ? `Historical edge: ${ws}` : ''}
+${edge ? `Personal edge: ${edge}` : ''}
+${qualityNote ? `Quality: ${qualityNote}` : ''}
+
+━━━ MULTI-TIMEFRAME OHLCV DATA (HTF = bias only, do not trade on HTF directly) ━━━
+${dataBlock}`;
 
   return claude(key, model, sys, [{ type:'text', text: userMsg }], tokens);
 }
