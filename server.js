@@ -27,10 +27,10 @@ app.get('/sw.js',         (req, res) => res.sendFile(path.join(__dirname, 'publi
 app.use(express.static(path.join(__dirname, 'public')));
 
 const API_URL      = 'https://api.groq.com/openai/v1/chat/completions';
-const HAIKU        = 'llama-3.1-8b-instant';       // fast, free
-const SONNET       = 'llama-3.3-70b-versatile';    // smart, free
-const OPUS         = 'llama-3.3-70b-versatile';    // same — no opus tier needed
-const VISION_MODEL = 'llama-3.2-90b-vision-preview'; // for chart screenshots
+const HAIKU        = 'llama-3.3-70b-versatile';          // fast + smart, free
+const SONNET       = 'deepseek-r1-distill-llama-70b';    // best reasoning, free
+const OPUS         = 'deepseek-r1-distill-llama-70b';    // same
+const VISION_MODEL = 'llama-3.2-90b-vision-preview';     // for chart screenshots
 
 // ─────────────────────────────────────────────
 // GITHUB STORAGE — persistent across deploys
@@ -510,7 +510,9 @@ async function claude(apiKey, model, system, content, tokens = 2000) {
   });
   if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${r.status}`); }
   const d   = await r.json();
-  const raw = (d.choices?.[0]?.message?.content || '').trim();
+  let raw = (d.choices?.[0]?.message?.content || '').trim();
+  // Strip DeepSeek R1 <think>...</think> reasoning block before parsing
+  raw = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   // Strip markdown fences
   let s = raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
   // Extract first JSON object if wrapped in text
