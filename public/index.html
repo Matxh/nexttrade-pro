@@ -1050,7 +1050,8 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <div class="price-amount"><sup>$</sup>29.99</div>
         <div class="price-period">per month · billed monthly</div>
         <div class="price-features">
-          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>30 analyses per day</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Unlimited analyses per day</div>
+          <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Upload up to 6 chart timeframes</div>
           <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Everything in Basic</div>
           <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Multi-Symbol Scanner</div>
           <div class="price-feat yes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#00e676" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Morning Market Briefing</div>
@@ -1258,7 +1259,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <div class="config-row">
       <input class="sym-input" id="sym" placeholder="Symbol (ES, NQ, BTC…)" oninput="updateAnalyzeBar()">
     </div>
-    <div class="charts-label">Chart Screenshots (upload up to 3 timeframes)</div>
+    <div class="charts-label" id="chartsLabel">Chart Screenshots (upload up to 3 timeframes)</div>
     <div class="charts-grid">
       <div class="chart-slot" id="slot0" onclick="triggerSlot(0)" ondragover="onDragOver(event,0)" ondragleave="onDragLeave(0)" ondrop="onDrop(event,0)">
         <div class="slot-label" id="slotLabel0">Slot 1</div><div class="slot-icon" id="slotIcon0">📊</div><div class="slot-hint" id="slotHint0">Click or drag to upload</div>
@@ -1268,6 +1269,16 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
       <div class="chart-slot" id="slot2" onclick="triggerSlot(2)" ondragover="onDragOver(event,2)" ondragleave="onDragLeave(2)" ondrop="onDrop(event,2)">
         <div class="slot-label" id="slotLabel2">Slot 3</div><div class="slot-icon" id="slotIcon2">🎯</div><div class="slot-hint" id="slotHint2">Optional</div>
+      </div>
+      <!-- Pro-only slots 4-6 -->
+      <div class="chart-slot" id="slot3" style="display:none" onclick="triggerSlot(3)" ondragover="onDragOver(event,3)" ondragleave="onDragLeave(3)" ondrop="onDrop(event,3)">
+        <div class="slot-label" id="slotLabel3">Slot 4</div><div class="slot-icon" id="slotIcon3">📊</div><div class="slot-hint" id="slotHint3">Optional</div>
+      </div>
+      <div class="chart-slot" id="slot4" style="display:none" onclick="triggerSlot(4)" ondragover="onDragOver(event,4)" ondragleave="onDragLeave(4)" ondrop="onDrop(event,4)">
+        <div class="slot-label" id="slotLabel4">Slot 5</div><div class="slot-icon" id="slotIcon4">📈</div><div class="slot-hint" id="slotHint4">Optional</div>
+      </div>
+      <div class="chart-slot" id="slot5" style="display:none" onclick="triggerSlot(5)" ondragover="onDragOver(event,5)" ondragleave="onDragLeave(5)" ondrop="onDrop(event,5)">
+        <div class="slot-label" id="slotLabel5">Slot 6</div><div class="slot-icon" id="slotIcon5">🎯</div><div class="slot-hint" id="slotHint5">Optional</div>
       </div>
     </div>
     <input type="file" id="fileInput0" accept="image/*" style="display:none" onchange="onFileSelect(event,0)">
@@ -2117,7 +2128,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 <script src="/trade-intelligence.js"></script>`r`n<script src="/live-workstation.js"></script>
 <script>
 // ── STATE ──
-const charts=[null,null,null];
+const charts=[null,null,null,null,null,null]; // 6 slots total; slots 3-5 shown for Pro only
 let tf='1H',analysisHistory=[],stepTmr=null,allTrades=[],journalFilter='all';
 let _liveTurboTimer=null,_liveTurboAttempts=0;
 let currentUser=null,authToken=null,authMode='login';
@@ -2135,16 +2146,24 @@ function updateNavUI(){
     $('navUser').style.display='flex';
     $('navEmail').textContent=currentUser.email;
     const pill=$('navPlanPill');
+    const isPro = currentUser.plan==='pro' && currentUser.subscriptionStatus==='active';
     if(currentUser.plan&&currentUser.subscriptionStatus==='active'){
       pill.textContent=currentUser.plan.toUpperCase();
-      pill.className='nav-plan-pill '+(currentUser.plan==='pro'?'pro':'basic');
+      pill.className='nav-plan-pill '+(isPro?'pro':'basic');
       pill.style.display='';
     }else{
       pill.style.display='none';
     }
+    // Unlock 6 upload slots for Pro users
+    const proSlots = [$('slot3'),$('slot4'),$('slot5')];
+    proSlots.forEach(s=>{ if(s) s.style.display = isPro ? '' : 'none'; });
+    if($('chartsLabel')) $('chartsLabel').textContent = isPro
+      ? 'Chart Screenshots (Pro — upload up to 6 timeframes)'
+      : 'Chart Screenshots (upload up to 3 timeframes)';
   }else{
     $('navGuest').style.display='flex';
     $('navUser').style.display='none';
+    [$('slot3'),$('slot4'),$('slot5')].forEach(s=>{ if(s) s.style.display='none'; });
   }
 }
 
