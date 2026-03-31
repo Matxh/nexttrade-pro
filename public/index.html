@@ -903,7 +903,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     </div>
     <div class="stats-bar">
       <div class="stat-item"><div class="stat-num" id="statWinRate">74%</div><div class="stat-lbl">AI Win Rate</div></div>
-      <div class="stat-item"><div class="stat-num" id="statTotal">—</div><div class="stat-lbl">Total Analyses</div></div>
+      <div class="stat-item"><div class="stat-num">2,400+</div><div class="stat-lbl">Traders Worldwide</div></div>
       <div class="stat-item"><div class="stat-num">15</div><div class="stat-lbl">Quality Gates</div></div>
       <div class="stat-item"><div class="stat-num">3</div><div class="stat-lbl">Trade Modes</div></div>
     </div>
@@ -1702,10 +1702,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
           <div class="block-label">Trade Management</div>
           <div class="mgmt-grid" id="mgmtGrid"></div>
         </div>
-        <div id="rExecutionPlan" style="display:none;padding:14px 16px;border-top:1px solid var(--border)">
-          <div class="block-label" style="margin-bottom:10px">Execution Plan</div>
-          <div id="executionPlanBody"></div>
-        </div>
         <div id="rMarkup" style="display:none;padding:14px 16px;border-top:1px solid var(--border)">
           <div class="block-label" style="margin-bottom:10px">Chart Markup</div>
           <div id="markupWrap" style="position:relative;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg2);min-height:220px"></div>
@@ -1714,7 +1710,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <!-- Paper Trade + Broker buttons -->
         <div id="rActionBtns" style="display:none;padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-paper" onclick="paperTradeSignal()">📝 Paper Trade This Signal</button>
-          <button id="brokerPlaceBtn" style="display:none" class="place-trade-btn" onclick="showBrokerPlaceOrder()">⚡ Place Trade</button>
           <button class="btn-paper" onclick="window.ntPremium?.saveSignalPlan?.()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2)">Save Plan</button>
         </div>
       </div>
@@ -2160,44 +2155,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
   </div>
 </div>
 
-<!-- ════════ BROKER MODAL ════════ -->
-<div class="broker-modal" id="brokerModal" onclick="if(event.target===this)closeBrokerModal()">
-  <div class="broker-modal-inner">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-      <span style="font-size:16px;font-weight:800" id="brokerModalTitle">Connect Tradovate</span>
-      <button onclick="closeBrokerModal()" style="background:transparent;border:none;color:var(--text2);font-size:20px;cursor:pointer">✕</button>
-    </div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.65">Enter your Tradovate API credentials to enable one-click order placement. Your keys are stored encrypted in your browser only.</p>
-    <div style="margin-bottom:12px">
-      <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">API Key</div>
-      <input id="brokerApiKey" type="text" placeholder="trd_xxxxxxxxxxxxx" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:11px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none">
-    </div>
-    <div style="margin-bottom:16px">
-      <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">API Secret</div>
-      <input id="brokerApiSecret" type="password" placeholder="••••••••••••••••" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:11px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none">
-    </div>
-    <div style="display:flex;gap:10px">
-      <button onclick="testBrokerConnection()" style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:11px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer">Test Connection</button>
-      <button onclick="saveBrokerCredentials()" style="flex:1;background:var(--accent);color:#000;border:none;border-radius:8px;padding:11px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer">Save & Connect</button>
-    </div>
-    <div id="brokerTestResult" style="display:none;margin-top:12px;text-align:center;font-family:var(--mono);font-size:12px;padding:8px;border-radius:6px"></div>
-  </div>
-</div>
-
-<!-- ════════ BROKER PLACE ORDER MODAL ════════ -->
-<div class="broker-modal" id="brokerOrderModal" onclick="if(event.target===this)closeBrokerOrderModal()">
-  <div class="broker-modal-inner">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-      <span style="font-size:16px;font-weight:800">⚡ Place Trade</span>
-      <button onclick="closeBrokerOrderModal()" style="background:transparent;border:none;color:var(--text2);font-size:20px;cursor:pointer">✕</button>
-    </div>
-    <div id="brokerOrderDetails" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px;font-family:var(--mono);font-size:12px;line-height:2"></div>
-    <div style="background:var(--amber-dim);border:1px solid rgba(255,179,0,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:14px">
-      ⚠️ This is a simulated order — broker execution is coming soon.
-    </div>
-    <button onclick="executeBrokerOrder()" class="place-trade-btn" style="width:100%;justify-content:center;font-size:14px;padding:13px">Confirm Order →</button>
-  </div>
-</div>
 
 <!-- ════════ AI REVIEW MODAL ════════ -->
 <div class="broker-modal" id="reviewModal" onclick="if(event.target===this)closeReviewModal()">
