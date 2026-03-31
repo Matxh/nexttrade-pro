@@ -1192,6 +1192,44 @@ const _liveAnalysisInflight = {};
 const OHLCV_CACHE_TTL = 8000;
 const LIVE_ANALYSIS_CACHE_TTL = 12000;
 
+// Yahoo Finance crumb cache (required since 2024 or Yahoo blocks requests)
+let _yahooCrumb = null;
+let _yahooCookies = null;
+let _yahooCrumbTs = 0;
+const YAHOO_CRUMB_TTL = 30 * 60 * 1000; // 30 min
+
+async function getYahooCrumb() {
+  if (_yahooCrumb && Date.now() - _yahooCrumbTs < YAHOO_CRUMB_TTL) {
+    return { crumb: _yahooCrumb, cookies: _yahooCookies };
+  }
+  try {
+    const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+    // Step 1: get cookies
+    const homeRes = await fetch('https://finance.yahoo.com/', {
+      headers: { 'User-Agent': UA, 'Accept': 'text/html', 'Accept-Language': 'en-US,en;q=0.9' },
+      timeout: 6000
+    });
+    const rawCookies = homeRes.headers.get('set-cookie') || '';
+    // Collapse multi-value set-cookie into a single Cookie string
+    const cookieStr = rawCookies.split(/,\s*(?=[A-Za-z_]+=)/).map(c => c.split(';')[0]).join('; ');
+    // Step 2: get crumb
+    const crumbRes = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
+      headers: { 'User-Agent': UA, 'Cookie': cookieStr, 'Accept': '*/*', 'Referer': 'https://finance.yahoo.com/' },
+      timeout: 6000
+    });
+    const crumb = (await crumbRes.text()).trim();
+    if (!crumb || crumb.length < 3) throw new Error('Bad crumb: ' + crumb);
+    _yahooCrumb = crumb;
+    _yahooCookies = cookieStr;
+    _yahooCrumbTs = Date.now();
+    console.log('[Yahoo] ✅ Crumb refreshed');
+    return { crumb, cookies: cookieStr };
+  } catch (e) {
+    console.warn('[Yahoo] ⚠️ Crumb fetch failed:', e.message);
+    return null;
+  }
+}
+
 async function fetchOHLCV(symbol, timeframe, bars=100) {
   const sym = symbol.toUpperCase().trim();
   const yahooSym = FUTURES_MAP[sym];
@@ -1201,15 +1239,21 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     return cached.data;
   }
 
-  // Try Yahoo Finance first (futures + stocks)
+  // Try Yahoo Finance first (futures + stocks) — with crumb auth
   try {
     const yTF    = TF_MAP_YAHOO[timeframe] || '15m';
     const yRange = TF_RANGE[timeframe] || '5d';
-    const url    = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym||sym)}?interval=${yTF}&range=${yRange}`;
-    const r      = await fetch(url, { headers:{ 'User-Agent':'Mozilla/5.0' }, timeout:5000 });
+    const UA     = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+    const yc     = await getYahooCrumb();
+    const crumbParam = yc?.crumb ? `&crumb=${encodeURIComponent(yc.crumb)}` : '';
+    const urlBase = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym||sym)}?interval=${yTF}&range=${yRange}${crumbParam}`;
+    const headers = { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'en-US,en;q=0.9', 'Referer': 'https://finance.yahoo.com/' };
+    if (yc?.cookies) headers['Cookie'] = yc.cookies;
+    const r      = await fetch(urlBase, { headers, timeout: 6000 });
+    if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
     const d      = await r.json();
     const result = d?.chart?.result?.[0];
-    if (!result) throw new Error('No data');
+    if (!result) throw new Error('No Yahoo result — ' + JSON.stringify(d?.chart?.error));
     const ts   = result.timestamp || [];
     const q    = result.indicators?.quote?.[0] || {};
     const candles = ts.map((t,i) => ({
@@ -1218,11 +1262,16 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
       low:  q.low?.[i]?.toFixed(2),  close: q.close?.[i]?.toFixed(2),
       volume: q.volume?.[i] || 0
     })).filter(c => c.open && c.close);
-    if (candles.length < 10) throw new Error('Not enough candles');
+    if (candles.length < 5) throw new Error(`Only ${candles.length} candles — symbol may be wrong`);
     const data = { candles: candles.slice(-bars), source:'Yahoo', symbol: yahooSym||sym, tf: timeframe };
     _ohlcvCache[cacheKey] = { ts: Date.now(), data };
+    console.log(`[Yahoo] ✅ ${sym} ${timeframe} — ${candles.length} candles`);
     return data;
-  } catch {}
+  } catch (yErr) {
+    console.warn(`[Yahoo] ❌ ${sym} ${timeframe}:`, yErr.message);
+    // Invalidate crumb so next request gets a fresh one
+    _yahooCrumb = null;
+  }
 
   // Fallback: TwelveData (stocks/forex/crypto)
   try {
