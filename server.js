@@ -1342,7 +1342,26 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     }
   } catch (e) { console.warn(`[Binance] ❌ ${sym}:`, e.message); }
 
-  // ── SOURCE 2: Yahoo Finance with crumb (stocks/futures/forex) ─────────────
+  // ── SOURCE 2: TwelveData (stocks/futures/forex/crypto — 800 free/day) ──────
+  try {
+    const tdKey = process.env.TWELVE_DATA_KEY;
+    if (!tdKey) throw new Error('No TWELVE_DATA_KEY');
+    const tdTF = TF_MAP_12[timeframe] || '15min';
+    const url  = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}`;
+    const r    = await fetch(url, { timeout: 8000 });
+    const d    = await r.json();
+    if (d.status !== 'ok' || !d.values) throw new Error(d.message || 'No TwelveData');
+    const candles = d.values.reverse().map(v => ({
+      datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
+    }));
+    if (candles.length < 5) throw new Error(`TwelveData: only ${candles.length} candles`);
+    const data = { candles: candles.slice(-bars), source:'TwelveData', symbol:sym, tf: timeframe };
+    _ohlcvCache[cacheKey] = { ts: Date.now(), data };
+    console.log(`[TwelveData] ✅ ${sym} ${timeframe} — ${candles.length} candles`);
+    return data;
+  } catch (e) { console.warn(`[TwelveData] ❌ ${sym}:`, e.message); }
+
+  // ── SOURCE 3: Yahoo Finance with crumb (backup) ────────────────────────────
   try {
     const yTF    = TF_MAP_YAHOO[timeframe] || '15m';
     const yRange = TF_RANGE[timeframe] || '5d';
@@ -1385,23 +1404,6 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     }
   } catch (e) { console.warn(`[Stooq] ❌ ${sym}:`, e.message); }
 
-  // ── SOURCE 4: TwelveData (requires TWELVE_DATA_KEY env var — 800 free/day) ─
-  try {
-    const tdKey = process.env.TWELVE_DATA_KEY;
-    if (!tdKey) throw new Error('No TWELVE_DATA_KEY set');
-    const tdTF = TF_MAP_12[timeframe] || '15min';
-    const url  = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}`;
-    const r    = await fetch(url, { timeout: 6000 });
-    const d    = await r.json();
-    if (d.status !== 'ok' || !d.values) throw new Error(d.message || 'No TwelveData');
-    const candles = d.values.reverse().map(v => ({
-      datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
-    }));
-    const data = { candles, source:'TwelveData', symbol:sym, tf: timeframe };
-    _ohlcvCache[cacheKey] = { ts: Date.now(), data };
-    console.log(`[TwelveData] ✅ ${sym} ${timeframe} — ${candles.length} candles`);
-    return data;
-  } catch (e) { console.warn(`[TwelveData] ❌ ${sym}:`, e.message); }
 
   // ── SOURCE 5: ETF proxy (ES1!→SPY, NQ1!→QQQ etc.) ───────────────────────
   const proxySym = PROXY_MAP[sym];
