@@ -1342,28 +1342,38 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     }
   } catch (e) { console.warn(`[Binance] ❌ ${sym}:`, e.message); }
 
-  // ── SOURCE 2: TwelveData (stocks/ETFs/forex/crypto — 800 free/day) ──────────
+  // ── SOURCE 2: TwelveData (stocks/ETFs/forex/crypto/futures — 800 free/day) ──
   try {
     const tdKey = process.env.TWELVE_DATA_KEY;
     if (!tdKey) throw new Error('No TWELVE_DATA_KEY');
-    // Symbol map: futures → ETF proxy (TwelveData free doesn't include CME futures)
-    const TD_SYM_MAP = {
-      'ES1!':'SPY','ES':'SPY','NQ1!':'QQQ','NQ':'QQQ',
-      'YM1!':'DIA','RTY1!':'IWM','CL1!':'USO','GC1!':'GLD','SI1!':'SLV',
-      'BTC/USDT':'BTC/USD','BTCUSD':'BTC/USD','ETHUSD':'ETH/USD','ETH/USDT':'ETH/USD',
+    // Futures: strip TradingView suffix and add exchange param
+    const FUTURES_TD = {
+      'ES1!':['ES','CME'],'ES':['ES','CME'],
+      'NQ1!':['NQ','CME'],'NQ':['NQ','CME'],
+      'YM1!':['YM','CBOT'],'YM':['YM','CBOT'],
+      'RTY1!':['RTY','CME'],'RTY':['RTY','CME'],
+      'CL1!':['CL','NYMEX'],'CL':['CL','NYMEX'],
+      'GC1!':['GC','COMEX'],'GC':['GC','COMEX'],
+      'SI1!':['SI','COMEX'],'SI':['SI','COMEX'],
+      'NG1!':['NG','NYMEX'],'ZB1!':['ZB','CBOT'],
     };
-    const tdSym = TD_SYM_MAP[sym] || sym.replace('1!','');
-    const tdTF  = TF_MAP_12[timeframe] || '15min';
-    const url   = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}&order=ASC`;
-    const r     = await fetch(url, { timeout: 10000 });
-    const d     = await r.json();
+    const CRYPTO_TD = {
+      'BTC/USDT':'BTC/USD','BTCUSD':'BTC/USD','BTC':'BTC/USD',
+      'ETH/USDT':'ETH/USD','ETHUSD':'ETH/USD','ETH':'ETH/USD',
+    };
+    const futEntry  = FUTURES_TD[sym];
+    const tdSym     = futEntry ? futEntry[0] : (CRYPTO_TD[sym] || sym);
+    const tdExchange = futEntry ? futEntry[1] : '';
+    const tdTF      = TF_MAP_12[timeframe] || '15min';
+    const url       = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}${tdExchange?`&exchange=${tdExchange}`:''}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}&order=ASC`;
+    const r         = await fetch(url, { timeout: 10000 });
+    const d         = await r.json();
     if (d.status !== 'ok' || !d.values?.length) throw new Error(d.message || `TwelveData no data for ${tdSym}`);
     const candles = d.values.map(v => ({
       datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
     }));
     if (candles.length < 5) throw new Error(`TwelveData: only ${candles.length} candles`);
-    const usedProxy = tdSym !== sym;
-    const data = { candles: candles.slice(-bars), source: usedProxy ? `TwelveData(${tdSym})` : 'TwelveData', symbol: tdSym, tf: timeframe };
+    const data = { candles: candles.slice(-bars), source:'TwelveData', symbol:tdSym, tf:timeframe };
     _ohlcvCache[cacheKey] = { ts: Date.now(), data };
     console.log(`[TwelveData] ✅ ${sym}→${tdSym} ${timeframe} — ${candles.length} candles`);
     return data;
