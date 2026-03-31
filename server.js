@@ -1346,18 +1346,25 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
   try {
     const tdKey = process.env.TWELVE_DATA_KEY;
     if (!tdKey) throw new Error('No TWELVE_DATA_KEY');
+    // TwelveData symbol normalization — strips TradingView suffixes
+    const TD_SYM_MAP = {
+      'ES1!':'ES','NQ1!':'NQ','YM1!':'YM','RTY1!':'RTY',
+      'CL1!':'CL','GC1!':'GC','SI1!':'SI','NG1!':'NG','ZB1!':'ZB',
+      'BTC/USD':'BTC/USD','ETH/USD':'ETH/USD','BTC/USDT':'BTC/USD','ETH/USDT':'ETH/USD',
+    };
+    const tdSym = TD_SYM_MAP[sym] || sym.replace('1!','');
     const tdTF = TF_MAP_12[timeframe] || '15min';
-    const url  = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}`;
-    const r    = await fetch(url, { timeout: 8000 });
+    const url  = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}&order=ASC`;
+    const r    = await fetch(url, { timeout: 10000 });
     const d    = await r.json();
-    if (d.status !== 'ok' || !d.values) throw new Error(d.message || 'No TwelveData');
-    const candles = d.values.reverse().map(v => ({
+    if (d.status !== 'ok' || !d.values?.length) throw new Error(d.message || `TwelveData: no values for ${tdSym}`);
+    const candles = d.values.map(v => ({
       datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
     }));
     if (candles.length < 5) throw new Error(`TwelveData: only ${candles.length} candles`);
-    const data = { candles: candles.slice(-bars), source:'TwelveData', symbol:sym, tf: timeframe };
+    const data = { candles: candles.slice(-bars), source:'TwelveData', symbol:tdSym, tf: timeframe };
     _ohlcvCache[cacheKey] = { ts: Date.now(), data };
-    console.log(`[TwelveData] ✅ ${sym} ${timeframe} — ${candles.length} candles`);
+    console.log(`[TwelveData] ✅ ${sym}→${tdSym} ${timeframe} — ${candles.length} candles`);
     return data;
   } catch (e) { console.warn(`[TwelveData] ❌ ${sym}:`, e.message); }
 
@@ -2096,7 +2103,7 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
     const allTfs = tfs.includes(htfTf) ? tfs : [...tfs, htfTf];
     console.log(`[LIVE] Step 1: fetching OHLCV for ${allTfs.join('+')} (${htfTf} = HTF bias)`);
     const ohlcvResults = await Promise.all(
-      allTfs.map(tf => withTimeout(fetchOHLCV(sym, tf, 60), 6000).catch(() => null))
+      allTfs.map(tf => withTimeout(fetchOHLCV(sym, tf, 60), 15000).catch(() => null))
     );
     const allTrades = await tradesPromise;
     console.log(`[LIVE] Step 1 done — ${ohlcvResults.filter(Boolean).length}/${allTfs.length} TFs loaded in ${((Date.now()-t0)/1000).toFixed(1)}s`);
