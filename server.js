@@ -1886,84 +1886,41 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
   const entry = parseFloat(out.entry);
   const sl = parseFloat(out.sl);
   const tp1 = parseFloat(out.tp1);
-  const tp2 = parseFloat(out.tp2);
   const atr = quality.primary.atr || Math.max(Math.abs(quality.primary.close) * 0.003, 0.01);
   const instrumentType = classifyInstrument(symbol);
-  const thresholds = getModeThresholds(tradeMode, instrumentType);
   const symbolTuning = getSymbolTuning(symbol, instrumentType, marketContext);
-  const confirmation = confirmLiveSignal(out, quality);
-  const consensus = assessLiveConsensus(out, fallbackResult, quality);
   const notes = [];
 
-  if (verdict !== 'WAIT') {
-    const aligned = (verdict === 'BUY' && quality.alignedTrend === 'bullish') || (verdict === 'SELL' && quality.alignedTrend === 'bearish');
-    if (!aligned) {
-      out.verdict = 'WAIT';
-      notes.push('Rejected: multi-timeframe trend is not aligned with the trade direction.');
-    }
-  }
-
-  if (out.verdict !== 'WAIT' && [entry, sl, tp1].every(Number.isFinite)) {
+  // Only hard-reject if R:R is completely broken (very lenient check)
+  if (verdict !== 'WAIT' && [entry, sl, tp1].every(Number.isFinite)) {
     const risk = Math.abs(entry - sl);
     const reward = Math.abs(tp1 - entry);
-    const minRisk = atr * thresholds.minRiskAtr;
-    const minRR = thresholds.minRR + symbolTuning.rrBias;
     const rr = risk > 0 ? reward / risk : 0;
-    if (risk < minRisk) {
+    if (risk < atr * 0.05) {
       out.verdict = 'WAIT';
-      notes.push('Rejected: stop distance is too tight relative to current volatility.');
-    } else if (rr < minRR) {
+      notes.push('Rejected: stop distance is unrealistically tight.');
+    } else if (rr < 0.6) {
       out.verdict = 'WAIT';
-      notes.push(`Rejected: risk/reward is below the ${tradeMode} threshold.`);
+      notes.push('Rejected: risk/reward is below minimum 0.6:1.');
     }
   }
 
-  if (out.verdict !== 'WAIT' && !confirmation.confirmed) {
-    out.verdict = 'WAIT';
-    notes.push(`Rejected: confirmation failed (${confirmation.reason}).`);
-  }
-
-  if (out.verdict !== 'WAIT' && consensus.forceWait) {
-    out.verdict = 'WAIT';
-    notes.push(...consensus.notes);
-  }
-
-  if (out.verdict !== 'WAIT' && tradeMode !== 'swing' && symbolTuning.forceWaitInLowLiquidity && symbolTuning.sessionScore < 45) {
-    out.verdict = 'WAIT';
-    notes.push(`Rejected: ${symbolTuning.label} setup is outside its best liquidity window.`);
-  }
-
-  if (marketContext?.session && /Lower liquidity|Low liquidity|Weekend/i.test(marketContext.session + ' ' + (marketContext.market_hours || '')) && tradeMode !== 'swing') {
-    out.confidence = Math.max(42, (parseInt(out.confidence) || 55) - 8);
-    notes.push('Caution: current session is lower-liquidity for live entries.');
-  }
-
-  const baseConfidence = parseInt(out.confidence) || 55;
-  let adjustedConfidence = Math.round((baseConfidence * 0.65) + (quality.qualityScore * 0.35));
-  if (quality.warnings.length) adjustedConfidence -= Math.min(12, quality.warnings.length * 4);
+  // Confidence adjustment — light touch, don't stack heavy penalties
+  const baseConfidence = parseInt(out.confidence) || 60;
+  let adjustedConfidence = Math.round((baseConfidence * 0.80) + (quality.qualityScore * 0.20));
+  if (quality.alignedTrend === 'mixed') adjustedConfidence -= 5; // soft penalty, not a WAIT
+  if (quality.warnings.length) adjustedConfidence -= Math.min(6, quality.warnings.length * 2);
   adjustedConfidence += symbolTuning.confidenceBias;
-  if (symbolTuning.sessionScore < 45) adjustedConfidence -= 6;
-  else if (symbolTuning.sessionScore >= 78) adjustedConfidence += 3;
   if (personalEdge) {
-    if (personalEdge.bestHour !== null) {
-      const hour = new Date().getHours();
-      if (Math.abs(hour - personalEdge.bestHour) <= 1) adjustedConfidence += 4;
-    }
     if (out.verdict === 'BUY' && personalEdge.buyWR !== null && personalEdge.buyWR >= 60) adjustedConfidence += 3;
     if (out.verdict === 'SELL' && personalEdge.sellWR !== null && personalEdge.sellWR >= 60) adjustedConfidence += 3;
-    if (personalEdge.buyWR !== null && personalEdge.sellWR !== null) {
-      if (out.verdict === 'BUY' && personalEdge.buyWR + 12 < personalEdge.sellWR) adjustedConfidence -= 6;
-      if (out.verdict === 'SELL' && personalEdge.sellWR + 12 < personalEdge.buyWR) adjustedConfidence -= 6;
-    }
   }
-  adjustedConfidence += consensus.confidenceAdjustment;
-  adjustedConfidence = Math.max(out.verdict === 'WAIT' ? 40 : 45, Math.min(95, adjustedConfidence));
+  adjustedConfidence = Math.max(out.verdict === 'WAIT' ? 40 : 48, Math.min(95, adjustedConfidence));
 
-  const minAllowedConfidence = thresholds.minConfidence + symbolTuning.minConfidenceBoost;
-  if (out.verdict !== 'WAIT' && adjustedConfidence < minAllowedConfidence) {
+  // Only force WAIT if confidence is truly too low (< 48)
+  if (out.verdict !== 'WAIT' && adjustedConfidence < 48) {
     out.verdict = 'WAIT';
-    notes.push(`Rejected: confidence is below the ${symbolTuning.label} threshold for ${tradeMode}.`);
-    adjustedConfidence = Math.max(40, adjustedConfidence - 3);
+    notes.push('Rejected: confidence too low for a live entry.');
   }
 
   out.confidence = adjustedConfidence;
