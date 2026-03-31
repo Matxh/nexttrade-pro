@@ -1942,8 +1942,6 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
     { name: 'Trend', score: quality.alignedTrend === 'mixed' ? 45 : 78, note: `Alignment: ${quality.alignedTrend}` },
     { name: 'Volatility', score: Math.min(85, Math.round((atr / Math.max(Math.abs(quality.primary.close), 0.01)) * 3000)), note: `ATR ${roundPrice(atr)}` },
     { name: 'Regime', score: quality.warnings.length ? 48 : 72, note: quality.warnings[0] || 'Clean session structure' },
-    { name: 'Confirmation', score: confirmation.confirmed ? 74 : 38, note: confirmation.reason },
-    { name: 'Consensus', score: consensus.score, note: consensus.notes[0] || 'No fallback consensus data' },
     { name: 'Session Fit', score: symbolTuning.sessionScore, note: symbolTuning.note }
   );
 
