@@ -1389,7 +1389,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <div class="chart-slot" id="slot2" onclick="triggerSlot(2)" ondragover="onDragOver(event,2)" ondragleave="onDragLeave(2)" ondrop="onDrop(event,2)">
         <div class="slot-label" id="slotLabel2">Slot 3</div><div class="slot-icon" id="slotIcon2">🎯</div><div class="slot-hint" id="slotHint2">Optional</div>
       </div>
-      <!-- Pro-only slots 4-6 -->
+      <!-- Pro-only slots 4-6 (hidden by default) -->
       <div class="chart-slot" id="slot3" style="display:none" onclick="triggerSlot(3)" ondragover="onDragOver(event,3)" ondragleave="onDragLeave(3)" ondrop="onDrop(event,3)">
         <div class="slot-label" id="slotLabel3">Slot 4</div><div class="slot-icon" id="slotIcon3">📊</div><div class="slot-hint" id="slotHint3">Optional</div>
       </div>
@@ -1398,6 +1398,9 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
       <div class="chart-slot" id="slot5" style="display:none" onclick="triggerSlot(5)" ondragover="onDragOver(event,5)" ondragleave="onDragLeave(5)" ondrop="onDrop(event,5)">
         <div class="slot-label" id="slotLabel5">Slot 6</div><div class="slot-icon" id="slotIcon5">🎯</div><div class="slot-hint" id="slotHint5">Optional</div>
+      </div>
+      <div id="showMoreSlotsBtn" style="display:none;grid-column:1/-1;text-align:center;padding:8px">
+        <button onclick="document.getElementById('slot3').style.display='';document.getElementById('slot4').style.display='';document.getElementById('slot5').style.display='';this.parentElement.style.display='none';" style="background:transparent;border:1px dashed var(--border2);color:var(--text3);border-radius:8px;padding:8px 20px;font-size:12px;cursor:pointer;font-family:var(--mono)">+ Add more timeframes</button>
       </div>
     </div>
     <input type="file" id="fileInput0" accept="image/*" style="display:none" onchange="onFileSelect(event,0)">
@@ -1530,69 +1533,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     </div>
 
 
-    <!-- Alert Preferences Panel -->
-    <div class="j-panel" style="margin-bottom:16px" id="alertPrefsPanel">
-      <div class="j-head" style="cursor:pointer" onclick="toggleAlertPanel()">
-        <span class="j-title">🔔 Alert Preferences</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="alertPanelToggle">▼ expand</span>
-      </div>
-      <div id="alertPrefsBody" style="display:none;padding:16px 20px">
-        <div class="alert-toggle-row">
-          <div class="alert-toggle-label">
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">Email me when analysis grade is A or A+</div>
-            <input id="alertEmailInput" type="email" placeholder="your@email.com" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;font-family:var(--mono);outline:none;width:220px;margin-top:4px" oninput="saveAlertPrefsLocal()">
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="alertEmailToggle" onchange="saveAlertPrefsLocal()">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="alert-toggle-row">
-          <div class="alert-toggle-label">
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Daily market briefing at 9am EST</div>
-            <div style="font-size:11px;color:var(--text3)">Summary of session quality and key levels to watch</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="alertDailyBriefing" onchange="saveAlertPrefsLocal()">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="alert-toggle-row">
-          <div class="alert-toggle-label">
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Weekly performance recap (Sundays)</div>
-            <div style="font-size:11px;color:var(--text3)">Your win rate, best grades, and key stats from the week</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="alertWeeklyRecap" onchange="saveAlertPrefsLocal()">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="alert-toggle-row">
-          <div class="alert-toggle-label">
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Browser notifications</div>
-            <div style="font-size:11px;color:var(--text3)">Instant popup alerts for live signals and trade management changes on this device</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="alertBrowserToggle" onchange="saveAlertPrefsLocal()">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="alert-toggle-row">
-          <div class="alert-toggle-label">
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Trade monitor alerts</div>
-            <div style="font-size:11px;color:var(--text3)">Notify when the live trade manager changes action: caution, breakeven, partials, trail, or close</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="alertTradeMonitorToggle" onchange="saveAlertPrefsLocal()">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
-          <button style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 24px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer" onclick="saveAlertPrefs()">Save Preferences</button>
-          <span id="alertSaveMsg" style="font-family:var(--mono);font-size:11px;color:var(--green);display:none">✓ Saved</span>
-        </div>
-      </div>
-    </div>
     <!-- Live Trade Monitor Card (hidden until BUY/SELL signal fires) -->
     <div id="tradeMonitorWrap" style="display:none">
       <div class="trade-monitor-card">
@@ -1710,17 +1650,12 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <!-- Paper Trade + Broker buttons -->
         <div id="rActionBtns" style="display:none;padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-paper" onclick="paperTradeSignal()">📝 Paper Trade This Signal</button>
-          <button class="btn-paper" onclick="window.ntPremium?.saveSignalPlan?.()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2)">Save Plan</button>
         </div>
       </div>
       <div>
         <div class="history-card">
           <div class="rc-head"><span class="rc-title">Recent Analyses</span><span class="rc-badge" id="histCount">0 charts</span></div>
           <div id="histList"><div class="hist-empty">Analyzed charts appear here</div></div>
-        </div>
-        <div class="history-card" style="margin-top:14px">
-          <div class="rc-head"><span class="rc-title">Saved Plans</span><span class="rc-badge" id="savedPlansCount">0 plans</span></div>
-          <div id="savedPlansList"><div class="hist-empty">Saved execution plans appear here</div></div>
         </div>
       </div>
     </div>
@@ -2275,9 +2210,11 @@ function updateNavUI(){
     }else{
       pill.style.display='none';
     }
-    // Unlock 6 upload slots for Pro users
+    // Unlock 6 upload slots for Pro users — show "Add more" button instead of all 6 at once
     const proSlots = [$('slot3'),$('slot4'),$('slot5')];
-    proSlots.forEach(s=>{ if(s) s.style.display = isPro ? '' : 'none'; });
+    proSlots.forEach(s=>{ if(s) s.style.display = 'none'; });
+    const moreBtn = $('showMoreSlotsBtn');
+    if(moreBtn) moreBtn.style.display = isPro ? '' : 'none';
     if($('chartsLabel')) $('chartsLabel').textContent = isPro
       ? 'Chart Screenshots (Pro — upload up to 6 timeframes)'
       : 'Chart Screenshots (upload up to 3 timeframes)';
