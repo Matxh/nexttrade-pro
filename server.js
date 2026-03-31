@@ -88,10 +88,10 @@ app.get('/sw.js',         (req, res) => res.sendFile(path.join(__dirname, 'publi
 app.use(express.static(path.join(__dirname, 'public')));
 
 const API_URL      = 'https://api.groq.com/openai/v1/chat/completions';
-const HAIKU        = 'llama-3.3-70b-versatile';          // fast + smart, free
-const SONNET       = 'deepseek-r1-distill-llama-70b';    // best reasoning, free
-const OPUS         = 'deepseek-r1-distill-llama-70b';    // same
-const VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'; // for chart screenshots (vision)
+const HAIKU        = 'llama-3.3-70b-versatile';                    // fast + reliable
+const SONNET       = 'llama-3.3-70b-versatile';                    // primary reasoning model
+const OPUS         = 'meta-llama/llama-4-maverick-17b-128e-instruct'; // best available
+const VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';  // vision (chart screenshots)
 
 // ─────────────────────────────────────────────
 // GITHUB STORAGE — persistent across deploys
@@ -1183,9 +1183,70 @@ const FUTURES_MAP = {
   'YM1!':'YM=F','YM':'YM=F','RTY1!':'RTY=F','CL1!':'CL=F',
   'GC1!':'GC=F','SI1!':'SI=F','NG1!':'NG=F','ZB1!':'ZB=F'
 };
-const TF_MAP_YAHOO = { '1m':'1m','5m':'5m','15m':'15m','30m':'30m','1H':'1h','4H':'1h','1D':'1d','1W':'1wk' };
-const TF_MAP_12    = { '1m':'1min','5m':'5min','15m':'15min','30m':'30min','1H':'1h','4H':'4h','1D':'1day','1W':'1week' };
-const TF_RANGE     = { '1m':'1d','5m':'2d','15m':'5d','30m':'5d','1H':'1mo','4H':'3mo','1D':'1y','1W':'5y' };
+const TF_MAP_YAHOO  = { '1m':'1m','5m':'5m','15m':'15m','30m':'30m','1H':'1h','4H':'1h','1D':'1d','1W':'1wk' };
+const TF_MAP_12     = { '1m':'1min','5m':'5min','15m':'15min','30m':'30min','1H':'1h','4H':'4h','1D':'1day','1W':'1week' };
+const TF_RANGE      = { '1m':'1d','5m':'2d','15m':'5d','30m':'5d','1H':'1mo','4H':'3mo','1D':'1y','1W':'5y' };
+
+// ── Binance symbol mapping (crypto only) ──────────────────────────────────────
+const BINANCE_TF    = { '1m':'1m','5m':'5m','15m':'15m','30m':'30m','1H':'1h','4H':'4h','1D':'1d','1W':'1w' };
+const BINANCE_SYM   = {
+  'BTC/USD':'BTCUSDT','BTC/USDT':'BTCUSDT','BTCUSD':'BTCUSDT','BTC':'BTCUSDT',
+  'ETH/USD':'ETHUSDT','ETH/USDT':'ETHUSDT','ETHUSD':'ETHUSDT','ETH':'ETHUSDT',
+  'SOL/USD':'SOLUSDT','SOL/USDT':'SOLUSDT','SOLUSD':'SOLUSDT','SOL':'SOLUSDT',
+  'XRP/USD':'XRPUSDT','XRP':'XRPUSDT','DOGE/USD':'DOGEUSDT','DOGE':'DOGEUSDT',
+  'ADA/USD':'ADAUSDT','ADA':'ADAUSDT','AVAX/USD':'AVAXUSDT','AVAX':'AVAXUSDT',
+  'LINK/USD':'LINKUSDT','LINK':'LINKUSDT','DOT/USD':'DOTUSDT','DOT':'DOTUSDT',
+};
+
+// ── Stooq symbol mapping (stocks / futures / forex — free, no key needed) ────
+const STOOQ_SYM = {
+  'ES1!':'es.f','ES':'es.f','NQ1!':'nq.f','NQ':'nq.f',
+  'YM1!':'ym.f','RTY1!':'ty.f','CL1!':'cl.f','GC1!':'gc.f','SI1!':'si.f',
+  'GBP/USD':'gbpusd','EUR/USD':'eurusd','USD/JPY':'usdjpy','AUD/USD':'audusd',
+  'EUR/GBP':'eurgbp','USD/CAD':'usdcad',
+};
+const STOOQ_TF = { '1m':'1','5m':'5','15m':'15','30m':'30','1H':'60','4H':'60','1D':'d','1W':'w' };
+
+async function fetchBinance(symbol, timeframe, bars=100) {
+  const bSym = BINANCE_SYM[symbol];
+  if (!bSym) return null;
+  const interval = BINANCE_TF[timeframe] || '15m';
+  const url = `https://api.binance.com/api/v3/klines?symbol=${bSym}&interval=${interval}&limit=${Math.min(bars,1000)}`;
+  const r = await fetch(url, { timeout: 6000 });
+  if (!r.ok) throw new Error(`Binance HTTP ${r.status}`);
+  const rows = await r.json();
+  if (!Array.isArray(rows) || rows.length < 5) throw new Error('Not enough Binance candles');
+  const candles = rows.map(k => ({
+    datetime: new Date(k[0]).toISOString().replace('T',' ').substring(0,16),
+    open:  parseFloat(k[1]).toFixed(4),
+    high:  parseFloat(k[2]).toFixed(4),
+    low:   parseFloat(k[3]).toFixed(4),
+    close: parseFloat(k[4]).toFixed(4),
+    volume: parseFloat(k[5])
+  }));
+  return { candles, source:'Binance', symbol:bSym, tf:timeframe };
+}
+
+async function fetchStooq(symbol, timeframe, bars=100) {
+  const sSym = STOOQ_SYM[symbol] || symbol.toLowerCase().replace('/','')+'.us';
+  const interval = STOOQ_TF[timeframe] || 'd';
+  // Stooq only supports intraday (≤60min) for certain symbols; use daily as fallback
+  const useDaily = (interval === 'd' || interval === 'w' || !['1','5','15','30','60'].includes(interval));
+  const i = useDaily ? 'd' : interval;
+  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(sSym)}&i=${i}`;
+  const r = await fetch(url, { headers:{ 'User-Agent':'Mozilla/5.0' }, timeout:8000 });
+  if (!r.ok) throw new Error(`Stooq HTTP ${r.status}`);
+  const text = await r.text();
+  const lines = text.trim().split('\n');
+  if (lines.length < 3) throw new Error('Stooq: not enough data');
+  // CSV: Date,Open,High,Low,Close,Volume  (header on line 0)
+  const candles = lines.slice(1).map(line => {
+    const [date, open, high, low, close, volume] = line.split(',');
+    return { datetime: date, open, high, low, close, volume: parseFloat(volume)||0 };
+  }).filter(c => c.open && c.close && c.open !== 'N/D');
+  if (candles.length < 5) throw new Error(`Stooq: only ${candles.length} candles`);
+  return { candles: candles.slice(-bars), source:'Stooq', symbol:sSym, tf:timeframe };
+}
 const _ohlcvCache = {};
 const _liveAnalysisCache = {};
 const _liveAnalysisInflight = {};
@@ -1239,57 +1300,78 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     return cached.data;
   }
 
-  // Try Yahoo Finance first (futures + stocks) — with crumb auth
+  // ── SOURCE 1: Binance (crypto only — free, no key, very reliable) ──────────
+  try {
+    const bd = await fetchBinance(sym, timeframe, bars);
+    if (bd) {
+      _ohlcvCache[cacheKey] = { ts: Date.now(), data: bd };
+      console.log(`[Binance] ✅ ${sym} ${timeframe} — ${bd.candles.length} candles`);
+      return bd;
+    }
+  } catch (e) { console.warn(`[Binance] ❌ ${sym}:`, e.message); }
+
+  // ── SOURCE 2: Yahoo Finance with crumb (stocks/futures/forex) ─────────────
   try {
     const yTF    = TF_MAP_YAHOO[timeframe] || '15m';
     const yRange = TF_RANGE[timeframe] || '5d';
     const UA     = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
     const yc     = await getYahooCrumb();
     const crumbParam = yc?.crumb ? `&crumb=${encodeURIComponent(yc.crumb)}` : '';
-    const urlBase = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym||sym)}?interval=${yTF}&range=${yRange}${crumbParam}`;
+    const url    = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym||sym)}?interval=${yTF}&range=${yRange}${crumbParam}`;
     const headers = { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'en-US,en;q=0.9', 'Referer': 'https://finance.yahoo.com/' };
     if (yc?.cookies) headers['Cookie'] = yc.cookies;
-    const r      = await fetch(urlBase, { headers, timeout: 6000 });
+    const r   = await fetch(url, { headers, timeout: 6000 });
     if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
-    const d      = await r.json();
-    const result = d?.chart?.result?.[0];
-    if (!result) throw new Error('No Yahoo result — ' + JSON.stringify(d?.chart?.error));
-    const ts   = result.timestamp || [];
-    const q    = result.indicators?.quote?.[0] || {};
+    const d   = await r.json();
+    const res = d?.chart?.result?.[0];
+    if (!res) throw new Error('No Yahoo result — ' + JSON.stringify(d?.chart?.error));
+    const ts  = res.timestamp || [];
+    const q   = res.indicators?.quote?.[0] || {};
     const candles = ts.map((t,i) => ({
       datetime: new Date(t*1000).toISOString().replace('T',' ').substring(0,16),
       open: q.open?.[i]?.toFixed(2), high: q.high?.[i]?.toFixed(2),
       low:  q.low?.[i]?.toFixed(2),  close: q.close?.[i]?.toFixed(2),
       volume: q.volume?.[i] || 0
     })).filter(c => c.open && c.close);
-    if (candles.length < 5) throw new Error(`Only ${candles.length} candles — symbol may be wrong`);
+    if (candles.length < 5) throw new Error(`Yahoo: only ${candles.length} candles`);
     const data = { candles: candles.slice(-bars), source:'Yahoo', symbol: yahooSym||sym, tf: timeframe };
     _ohlcvCache[cacheKey] = { ts: Date.now(), data };
     console.log(`[Yahoo] ✅ ${sym} ${timeframe} — ${candles.length} candles`);
     return data;
   } catch (yErr) {
     console.warn(`[Yahoo] ❌ ${sym} ${timeframe}:`, yErr.message);
-    // Invalidate crumb so next request gets a fresh one
-    _yahooCrumb = null;
+    _yahooCrumb = null; // reset crumb on failure
   }
 
-  // Fallback: TwelveData (stocks/forex/crypto)
+  // ── SOURCE 3: Stooq (stocks/futures/forex — free, no key needed) ──────────
+  try {
+    const sd = await fetchStooq(sym, timeframe, bars);
+    if (sd) {
+      _ohlcvCache[cacheKey] = { ts: Date.now(), data: sd };
+      console.log(`[Stooq] ✅ ${sym} ${timeframe} — ${sd.candles.length} candles`);
+      return sd;
+    }
+  } catch (e) { console.warn(`[Stooq] ❌ ${sym}:`, e.message); }
+
+  // ── SOURCE 4: TwelveData (requires TWELVE_DATA_KEY env var — 800 free/day) ─
   try {
     const tdKey = process.env.TWELVE_DATA_KEY;
-    if (!tdKey) throw new Error('No key');
+    if (!tdKey) throw new Error('No TWELVE_DATA_KEY set');
     const tdTF = TF_MAP_12[timeframe] || '15min';
     const url  = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}`;
-    const r    = await fetch(url, { timeout:5000 });
+    const r    = await fetch(url, { timeout: 6000 });
     const d    = await r.json();
-    if (d.status !== 'ok' || !d.values) throw new Error(d.message || 'No data');
+    if (d.status !== 'ok' || !d.values) throw new Error(d.message || 'No TwelveData');
     const candles = d.values.reverse().map(v => ({
       datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
     }));
     const data = { candles, source:'TwelveData', symbol:sym, tf: timeframe };
     _ohlcvCache[cacheKey] = { ts: Date.now(), data };
+    console.log(`[TwelveData] ✅ ${sym} ${timeframe} — ${candles.length} candles`);
     return data;
-  } catch {}
+  } catch (e) { console.warn(`[TwelveData] ❌ ${sym}:`, e.message); }
 
+  console.error(`[OHLCV] ❌ All sources failed for ${sym} ${timeframe}`);
   return null;
 }
 
