@@ -1227,24 +1227,56 @@ async function fetchBinance(symbol, timeframe, bars=100) {
   return { candles, source:'Binance', symbol:bSym, tf:timeframe };
 }
 
+// ETF/index proxies for futures symbols when direct data is unavailable
+const PROXY_MAP = {
+  'ES1!':'SPY','ES':'SPY','NQ1!':'QQQ','NQ':'QQQ',
+  'YM1!':'DIA','RTY1!':'IWM','CL1!':'USO','GC1!':'GLD','SI1!':'SLV',
+};
+
 async function fetchStooq(symbol, timeframe, bars=100) {
-  const sSym = STOOQ_SYM[symbol] || symbol.toLowerCase().replace('/','')+'.us';
-  const interval = STOOQ_TF[timeframe] || 'd';
-  // Stooq only supports intraday (≤60min) for certain symbols; use daily as fallback
-  const useDaily = (interval === 'd' || interval === 'w' || !['1','5','15','30','60'].includes(interval));
-  const i = useDaily ? 'd' : interval;
-  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(sSym)}&i=${i}`;
-  const r = await fetch(url, { headers:{ 'User-Agent':'Mozilla/5.0' }, timeout:8000 });
-  if (!r.ok) throw new Error(`Stooq HTTP ${r.status}`);
-  const text = await r.text();
-  const lines = text.trim().split('\n');
-  if (lines.length < 3) throw new Error('Stooq: not enough data');
-  // CSV: Date,Open,High,Low,Close,Volume  (header on line 0)
-  const candles = lines.slice(1).map(line => {
-    const [date, open, high, low, close, volume] = line.split(',');
-    return { datetime: date, open, high, low, close, volume: parseFloat(volume)||0 };
-  }).filter(c => c.open && c.close && c.open !== 'N/D');
-  if (candles.length < 5) throw new Error(`Stooq: only ${candles.length} candles`);
+  const sSym = STOOQ_SYM[symbol] || (symbol.includes('/') ? symbol.replace('/','').toLowerCase() : symbol.toLowerCase()+'.us');
+  const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
+
+  const tryStooqInterval = async (i) => {
+    const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(sSym)}&i=${i}`;
+    const r = await fetch(url, { headers:{ 'User-Agent': UA }, timeout: 8000 });
+    if (!r.ok) throw new Error(`Stooq HTTP ${r.status}`);
+    const text = await r.text();
+    if (!text || text.includes('No data') || text.includes('<html')) throw new Error('Stooq: no data returned');
+    const lines = text.trim().split('\n');
+    if (lines.length < 3) throw new Error(`Stooq: only ${lines.length} lines`);
+    // CSV header may be: Date,Open,High,Low,Close,Volume OR Date,Time,Open,High,Low,Close,Volume
+    const header = lines[0].toLowerCase();
+    const hasTime = header.includes('time');
+    const candles = lines.slice(1).map(line => {
+      const parts = line.split(',');
+      const [date, maybeTime, o, h, l, c, v] = hasTime ? parts : [parts[0], null, ...parts.slice(1)];
+      const open = hasTime ? o : maybeTime;
+      const high = hasTime ? h : o;
+      const low  = hasTime ? l : h;
+      const close= hasTime ? c : l;
+      const vol  = hasTime ? v : parts[5];
+      const dt   = hasTime ? `${date} ${maybeTime}` : date;
+      return { datetime: dt?.trim(), open: open?.trim(), high: high?.trim(), low: low?.trim(), close: close?.trim(), volume: parseFloat(vol)||0 };
+    }).filter(c => c.open && c.close && c.open !== 'N/D' && !isNaN(parseFloat(c.close)));
+    if (candles.length < 3) throw new Error(`Stooq: only ${candles.length} valid candles`);
+    return candles;
+  };
+
+  // Try intraday first (for shorter timeframes), then always fall back to daily
+  const intradayInterval = STOOQ_TF[timeframe];
+  const useIntraday = intradayInterval && ['1','5','15','30','60'].includes(intradayInterval);
+
+  let candles = null;
+  if (useIntraday) {
+    try { candles = await tryStooqInterval(intradayInterval); } catch(e) {
+      console.warn(`[Stooq] intraday ${intradayInterval} failed for ${sSym}, trying daily:`, e.message);
+    }
+  }
+  if (!candles) {
+    candles = await tryStooqInterval('d'); // always works if symbol exists
+  }
+
   return { candles: candles.slice(-bars), source:'Stooq', symbol:sSym, tf:timeframe };
 }
 const _ohlcvCache = {};
@@ -1370,6 +1402,22 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     console.log(`[TwelveData] ✅ ${sym} ${timeframe} — ${candles.length} candles`);
     return data;
   } catch (e) { console.warn(`[TwelveData] ❌ ${sym}:`, e.message); }
+
+  // ── SOURCE 5: ETF proxy (ES1!→SPY, NQ1!→QQQ etc.) ───────────────────────
+  const proxySym = PROXY_MAP[sym];
+  if (proxySym && proxySym !== sym) {
+    console.warn(`[OHLCV] Trying ETF proxy: ${sym} → ${proxySym}`);
+    try {
+      const proxyKey = `${proxySym}|${timeframe}|${bars}`;
+      const proxyData = await fetchOHLCV(proxySym, timeframe, bars);
+      if (proxyData) {
+        const data = { ...proxyData, symbol: sym, proxySymbol: proxySym, source: proxyData.source + '(proxy)' };
+        _ohlcvCache[cacheKey] = { ts: Date.now(), data };
+        console.log(`[OHLCV] ✅ Proxy ${proxySym} worked for ${sym}`);
+        return data;
+      }
+    } catch(e) { console.warn(`[OHLCV] Proxy failed:`, e.message); }
+  }
 
   console.error(`[OHLCV] ❌ All sources failed for ${sym} ${timeframe}`);
   return null;
