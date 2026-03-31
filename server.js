@@ -5,6 +5,67 @@ const path         = require('path');
 const fs           = require('fs');
 const crypto       = require('crypto');
 const { jsonrepair } = require('jsonrepair'); // top-level so Vercel bundles it correctly
+const { Resend }   = require('resend');
+
+// ── RESEND EMAIL ──
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+
+// Pine Script source code — sent to customers on purchase
+const PINE_SCRIPT_PATH = path.join(__dirname, 'PriceActionAI.pine');
+const PINE_SCRIPT_CODE = fs.existsSync(PINE_SCRIPT_PATH) ? fs.readFileSync(PINE_SCRIPT_PATH, 'utf8') : '';
+
+async function sendPineScriptEmail(toEmail) {
+  if (!resend) { console.warn('[Email] Resend not configured'); return; }
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: toEmail,
+      subject: 'Your PriceAction AI Pine Script — Setup Inside',
+      html: `
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#0d1117;color:#ffffff;padding:32px;border-radius:12px;">
+          <h1 style="color:#00ffbb;margin-bottom:4px;">PriceAction AI</h1>
+          <p style="color:#888;margin-top:0;">FULL SUITE — Pine Script</p>
+          <hr style="border-color:#222;margin:24px 0;">
+          <h2 style="color:#ffffff;">Thank you for your purchase! 🎉</h2>
+          <p style="color:#ccc;">Your Pine Script source code is attached to this email as <strong>PriceActionAI_FullSuite.pine</strong></p>
+
+          <h3 style="color:#00ffbb;">How to install in TradingView:</h3>
+          <ol style="color:#ccc;line-height:2;">
+            <li>Open <a href="https://tradingview.com" style="color:#00ffbb;">TradingView</a> and open any chart</li>
+            <li>Click <strong>Pine Script Editor</strong> at the bottom of the screen</li>
+            <li>Click the file icon → <strong>New script</strong></li>
+            <li>Select all the existing code (<strong>Ctrl+A</strong> / <strong>Cmd+A</strong>) and delete it</li>
+            <li>Open the attached <strong>.pine</strong> file in any text editor, copy all the code</li>
+            <li>Paste it into the Pine Script editor</li>
+            <li>Click <strong>Save</strong> then <strong>Add to chart</strong></li>
+          </ol>
+
+          <h3 style="color:#00ffbb;">Recommended settings:</h3>
+          <ul style="color:#ccc;line-height:2;">
+            <li><strong>Higher Timeframe:</strong> 60 (1H) for NQ/ES, 240 (4H) for GC</li>
+            <li><strong>OB Sensitivity:</strong> 1.8 for NQ, 1.5 for GC</li>
+            <li><strong>Signal Threshold:</strong> 3 (only take ▲3 and ▲4 signals)</li>
+            <li><strong>Best sessions:</strong> NY Open 9:30–11:30 AM EST</li>
+          </ul>
+
+          <hr style="border-color:#222;margin:24px 0;">
+          <p style="color:#888;font-size:14px;">
+            Need help? Visit <a href="https://priceaction.it.com" style="color:#00ffbb;">priceaction.it.com</a><br>
+            Trade smart. Trade with confluence. Trade with PriceAction AI.
+          </p>
+        </div>
+      `,
+      attachments: [{
+        filename: 'PriceActionAI_FullSuite.pine',
+        content: Buffer.from(PINE_SCRIPT_CODE).toString('base64'),
+      }],
+    });
+    console.log(`[Email] Pine Script sent to ${toEmail}`);
+  } catch(err) {
+    console.error('[Email] Failed to send Pine Script email:', err.message);
+  }
+}
 
 const app = express();
 
@@ -331,22 +392,24 @@ function safeUser(u) {
 app.post('/api/checkout/create', authMiddleware, async (req, res) => {
   if (!stripe) return res.status(500).json({ error: 'Stripe is not configured on the server' });
   const { plan } = req.body;
-  const priceId  = plan === 'pro' ? process.env.STRIPE_PRO_PRICE_ID
+  const priceId  = plan === 'pro'       ? process.env.STRIPE_PRO_PRICE_ID
                  : plan === 'indicator' ? process.env.STRIPE_INDICATOR_PRICE_ID
+                 : plan === 'pine'      ? process.env.STRIPE_PINE_PRICE_ID
                  : process.env.STRIPE_BASIC_PRICE_ID;
   if (!priceId)  return res.status(500).json({ error: 'Price ID not configured for this plan' });
 
   const user = req.user;
   const BASE = process.env.BASE_URL || 'https://nexttrade-pro.vercel.app';
+  const isPine = plan === 'pine';
   const params = {
-    mode: 'subscription',
+    mode: isPine ? 'payment' : 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${BASE}/?checkout=success&plan=${plan}`,
     cancel_url:  `${BASE}/?checkout=cancel`,
-    metadata: { userId: user.id },
-    subscription_data: { metadata: { userId: user.id } },
+    metadata: { userId: user.id, plan },
     allow_promotion_codes: true,
   };
+  if (!isPine) params.subscription_data = { metadata: { userId: user.id } };
   if (user.stripeCustomerId) params.customer = user.stripeCustomerId;
   else params.customer_email = user.email;
 
@@ -392,8 +455,23 @@ app.post('/api/webhook', async (req, res) => {
   try {
     switch(event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object;
-        const userId  = session.metadata?.userId;
+        const session  = event.data.object;
+        const userId   = session.metadata?.userId;
+        const planMeta = session.metadata?.plan;
+
+        // ── One-time Pine Script purchase ──
+        if (planMeta === 'pine' && userId) {
+          const user = await getUserById(userId);
+          if (user) {
+            Object.assign(user, { pineAccess: true, pinePaymentId: session.payment_intent, stripeCustomerId: session.customer, pinePurchasedAt: new Date().toISOString() });
+            await saveUser(user);
+            await sendPineScriptEmail(user.email);
+            console.log(`[Webhook] Pine Script sold → ${user.email}`);
+          }
+          break;
+        }
+
+        // ── Subscription purchases ──
         if (userId && session.subscription) {
           const sub  = await stripe.subscriptions.retrieve(session.subscription);
           const pid  = sub.items.data[0]?.price?.id;

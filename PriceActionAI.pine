@@ -1,291 +1,404 @@
-//@version=5
-indicator("PriceAction AI — SMC Suite", shorttitle="PA AI", overlay=true, max_boxes_count=200, max_lines_count=200, max_labels_count=100)
+//@version=6
+indicator("PriceAction AI | FULL SUITE", overlay=true, max_labels_count=500, max_boxes_count=500)
 
-// ═══════════════════════════════════════════════════════════
-//  PriceAction AI — SMC Companion Indicator
-//  priceaction.it.com
-//  Order Blocks · FVGs · BOS/CHOCH · Killzones · Signal Plotter
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+// FULL INPUT MENU - Everything Toggleable
+// ═════════════════════════════════════════════════════════════════════════════
 
-// ── SETTINGS ────────────────────────────────────────────────
-grpOB   = "Order Blocks"
-grpFVG  = "Fair Value Gaps"
-grpBOS  = "Structure (BOS / CHOCH)"
-grpKZ   = "Killzones"
-grpSIG  = "Signal Plotter"
-grpUI   = "Display"
+// Main Features
+grpMain = "🔥 Main Features"
+showSessions = input.bool(true, "📊 Session Highs/Lows", group=grpMain)
+showSR       = input.bool(true, "🎯 Support/Resistance", group=grpMain)
+showOB       = input.bool(true, "🏦 Order Blocks", group=grpMain)
+showFVG      = input.bool(true, "⚡ Fair Value Gaps", group=grpMain)
+showSignals  = input.bool(true, "🚀 OMEGA Signals", group=grpMain)
+showPanel    = input.bool(true, "📈 Info Panel", group=grpMain)
 
-// Order Blocks
-showOB      = input.bool(true,  "Show Order Blocks",        group=grpOB)
-obLookback  = input.int(10,     "Lookback (bars)",          group=grpOB, minval=3, maxval=50)
-obMaxShow   = input.int(3,      "Max OBs to display",       group=grpOB, minval=1, maxval=10)
-bullOBColor = input.color(color.new(#00e676, 85), "Bullish OB",  group=grpOB)
-bearOBColor = input.color(color.new(#ff3d5a, 85), "Bearish OB",  group=grpOB)
+// Strategy Settings
+grpStrat = "⚙️ Strategy Settings"
+string htfTf    = input.timeframe("60", "Higher Timeframe", group=grpStrat)
+float sens      = input.float(1.8, "OB Sensitivity (ATR Multiplier)", minval=1.0, step=0.1, group=grpStrat)
+bool needTrend  = input.bool(true, "Require HTF Trend Align", group=grpStrat)
+bool needVWAP   = input.bool(true, "Require VWAP Filter", group=grpStrat)
+bool needVol    = input.bool(true, "Require Volume Climax", group=grpStrat)
+int signalScore = input.int(3, "Signal Threshold (1-4)", minval=1, maxval=4, group=grpStrat)
 
-// FVGs
-showFVG     = input.bool(true,  "Show Fair Value Gaps",     group=grpFVG)
-fvgMaxShow  = input.int(3,      "Max FVGs to display",      group=grpFVG, minval=1, maxval=10)
-bullFVGColor= input.color(color.new(#00e676, 88), "Bullish FVG", group=grpFVG)
-bearFVGColor= input.color(color.new(#ff3d5a, 88), "Bearish FVG", group=grpFVG)
-fvgMitColor = input.color(color.new(#888888, 92), "Mitigated FVG", group=grpFVG)
+// Session Toggles
+grpSess = "🌍 Trading Sessions"
+bool showAsia   = input.bool(true, "Asia (7PM-3AM EST)", group=grpSess)
+bool showLondon = input.bool(true, "London (3AM-11AM EST)", group=grpSess)
+bool showNY     = input.bool(true, "NY (9:30AM-4PM EST)", group=grpSess)
 
-// Structure
-showBOS     = input.bool(true,  "Show BOS / CHOCH",         group=grpBOS)
-bosLen      = input.int(10,     "Swing lookback",           group=grpBOS, minval=3, maxval=30)
-bosColor    = input.color(#00bcd4, "BOS color",             group=grpBOS)
-chochColor  = input.color(#ff9800, "CHOCH color",           group=grpBOS)
+// Colors
+grpColor = "🎨 Colors"
+color colBull   = input.color(#00ffbb, "Bullish/Demand", group=grpColor)
+color colBear   = input.color(#ff3355, "Bearish/Supply", group=grpColor)
+color colAsia   = input.color(#5b9cf6, "Asia Session", group=grpColor)
+color colLondon = input.color(#089981, "London Session", group=grpColor)
+color colNY     = input.color(#f23645, "NY Session", group=grpColor)
 
-// Killzones
-showKZ      = input.bool(true,  "Show Killzones",           group=grpKZ)
-kzAsiaColor = input.color(color.new(#9c27b0, 92), "Asia (8pm–midnight NY)", group=grpKZ)
-kzLonColor  = input.color(color.new(#2196f3, 92), "London (3am–5am NY)",    group=grpKZ)
-kzNYColor   = input.color(color.new(#00e676, 92), "New York (9:30am–11am NY)", group=grpKZ)
-kzNYPMColor = input.color(color.new(#ff9800, 92), "NY PM (1:30pm–3pm NY)",  group=grpKZ)
+// ═════════════════════════════════════════════════════════════════════════════
+// CORE DATA - Global Scope (V6 Compliant)
+// ═════════════════════════════════════════════════════════════════════════════
 
-// Signal Plotter
-showSig     = input.bool(false, "Plot Signal from PriceAction AI", group=grpSIG)
-sigDir      = input.string("BUY", "Direction", options=["BUY","SELL"], group=grpSIG)
-sigEntry    = input.float(0.0,  "Entry Price",   group=grpSIG)
-sigSL       = input.float(0.0,  "Stop Loss",     group=grpSIG)
-sigTP1      = input.float(0.0,  "TP1",           group=grpSIG)
-sigTP2      = input.float(0.0,  "TP2 (optional)",group=grpSIG)
+// Technicals
+float atrVal      = ta.atr(14)
+float vwapVal     = ta.vwap(close)
+float ema20       = ta.ema(close, 20)
+float ema50       = ta.ema(close, 50)
 
-// Display
-showWatermark = input.bool(true, "Show PriceAction AI watermark", group=grpUI)
+// HTF Data - MUST be global
+float htfClose    = request.security(syminfo.tickerid, htfTf, close)
+float htfEma      = request.security(syminfo.tickerid, htfTf, ta.ema(close, 20))
+bool htfUp        = htfClose > htfEma
 
-// ── COLORS ──────────────────────────────────────────────────
-GREEN       = #00e676
-RED         = #ff3d5a
-CYAN        = #00bcd4
-ORANGE      = #ff9800
-WHITE       = #ffffff
-GRAY        = color.new(#888888, 0)
+// Bools
+bool aboveVwap    = close > vwapVal
+bool volClimax    = volume > ta.ema(volume, 20) * 1.5
+float bodySize    = math.abs(close - open)
+bool isDispl      = bodySize > atrVal * sens and volClimax
+bool isBullTrend  = htfUp and aboveVwap
 
-// ── UTILITY ─────────────────────────────────────────────────
-isNewBar = ta.change(time) != 0
+// ═════════════════════════════════════════════════════════════════════════════
+// SUPPORT & RESISTANCE (3 Lines)
+// ═════════════════════════════════════════════════════════════════════════════
 
-// ── KILLZONES ───────────────────────────────────────────────
-// Uses exchange time (UTC). Adjust offset for your broker.
-if showKZ and timeframe.in_seconds() <= 3600
-    h = hour(time, "America/New_York")
-    m = minute(time, "America/New_York")
-    totalMin = h * 60 + m
+float pivotHigh = ta.pivothigh(high, 10, 10)
+float pivotLow  = ta.pivotlow(low, 10, 10)
 
-    isAsia  = totalMin >= 1200 or totalMin < 0    // 8pm–midnight NY (20:00–24:00)
-    isLon   = totalMin >= 180  and totalMin < 300  // 3am–5am NY
-    isNY    = totalMin >= 570  and totalMin < 660  // 9:30am–11am NY
-    isNYPM  = totalMin >= 810  and totalMin < 900  // 1:30pm–3pm NY
+var line srLine1 = na
+var line srLine2 = na
+var line srLine3 = na
+var int srAge1 = 0
+var int srAge2 = 0
+var int srAge3 = 0
 
-    // Asia: 8pm = 1200 min, midnight = 1440 min
-    isAsia2 = totalMin >= 1200 and totalMin <= 1439
+srAge1 := srAge1 + 1
+srAge2 := srAge2 + 1
+srAge3 := srAge3 + 1
 
-    bgColor = isNY ? kzNYColor : isLon ? kzLonColor : isNYPM ? kzNYPMColor : isAsia2 ? kzAsiaColor : na
-    bgcolor(bgColor)
+// Delete old S/R
+if srAge1 > 100
+    line.delete(srLine1)
+    srLine1 := na
+    srAge1 := 0
 
-// ── ORDER BLOCKS ─────────────────────────────────────────────
-// A bullish OB = last bearish candle before a strong bullish move
-// A bearish OB = last bullish candle before a strong bearish move
+if srAge2 > 100
+    line.delete(srLine2)
+    srLine2 := na
+    srAge2 := 0
 
-var box[] bullOBBoxes = array.new_box()
-var box[] bearOBBoxes = array.new_box()
+if srAge3 > 100
+    line.delete(srLine3)
+    srLine3 := na
+    srAge3 := 0
 
-getBullOB() =>
-    // Last red candle before a bullish impulse (3-bar confirmation)
-    isBearCandle = close[1] < open[1]
-    isBullMove   = close > close[1] and close > open[1] and (close - open) > (high[1] - low[1]) * 0.5
-    isBullOB     = isBearCandle and isBullMove
-    [isBullOB, low[1], high[1]]
+// Create new S/R from pivots
+if showSR and not na(pivotHigh)
+    if na(srLine1)
+        srLine1 := line.new(bar_index - 10, pivotHigh, bar_index, pivotHigh, color=colBear, style=line.style_solid, width=2, extend=extend.right)
+        srAge1 := 0
+    else if na(srLine2)
+        srLine2 := line.new(bar_index - 10, pivotHigh, bar_index, pivotHigh, color=colBear, style=line.style_solid, width=2, extend=extend.right)
+        srAge2 := 0
+    else if na(srLine3)
+        srLine3 := line.new(bar_index - 10, pivotHigh, bar_index, pivotHigh, color=colBear, style=line.style_solid, width=2, extend=extend.right)
+        srAge3 := 0
+    else
+        int oldest = srAge1 > srAge2 and srAge1 > srAge3 ? 1 : srAge2 > srAge3 ? 2 : 3
+        if oldest == 1
+            line.delete(srLine1)
+            srLine1 := line.new(bar_index - 10, pivotHigh, bar_index, pivotHigh, color=colBear, style=line.style_solid, width=2, extend=extend.right)
+            srAge1 := 0
+        else if oldest == 2
+            line.delete(srLine2)
+            srLine2 := line.new(bar_index - 10, pivotHigh, bar_index, pivotHigh, color=colBear, style=line.style_solid, width=2, extend=extend.right)
+            srAge2 := 0
+        else
+            line.delete(srLine3)
+            srLine3 := line.new(bar_index - 10, pivotHigh, bar_index, pivotHigh, color=colBear, style=line.style_solid, width=2, extend=extend.right)
+            srAge3 := 0
 
-getBearOB() =>
-    // Last green candle before a bearish impulse
-    isBullCandle = close[1] > open[1]
-    isBearMove   = close < close[1] and close < open[1] and (open - close) > (high[1] - low[1]) * 0.5
-    isBearOB     = isBullCandle and isBearMove
-    [isBearOB, low[1], high[1]]
+if showSR and not na(pivotLow)
+    if na(srLine1)
+        srLine1 := line.new(bar_index - 10, pivotLow, bar_index, pivotLow, color=colBull, style=line.style_solid, width=2, extend=extend.right)
+        srAge1 := 0
+    else if na(srLine2)
+        srLine2 := line.new(bar_index - 10, pivotLow, bar_index, pivotLow, color=colBull, style=line.style_solid, width=2, extend=extend.right)
+        srAge2 := 0
+    else if na(srLine3)
+        srLine3 := line.new(bar_index - 10, pivotLow, bar_index, pivotLow, color=colBull, style=line.style_solid, width=2, extend=extend.right)
+        srAge3 := 0
 
-if showOB
-    [isBull, bLow, bHigh] = getBullOB()
-    [isBear, rLow, rHigh] = getBearOB()
+// ═════════════════════════════════════════════════════════════════════════════
+// SESSION HIGHS & LOWS (All 3 Sessions)
+// ═════════════════════════════════════════════════════════════════════════════
 
-    // Add bullish OB
-    if isBull
-        b = box.new(bar_index - 1, bHigh, bar_index + 50, bLow,
-             border_color=color.new(GREEN, 60), border_width=1,
-             bgcolor=bullOBColor)
-        array.push(bullOBBoxes, b)
-        // Remove oldest if over limit
-        while array.size(bullOBBoxes) > obMaxShow
-            box.delete(array.shift(bullOBBoxes))
+bool inAsia   = not na(time(timeframe.period, "1900-0300", "America/New_York"))
+bool inLondon = not na(time(timeframe.period, "0300-1100", "America/New_York"))
+bool inNY     = not na(time(timeframe.period, "0930-1600", "America/New_York"))
 
-    // Add bearish OB
-    if isBear
-        b = box.new(bar_index - 1, rHigh, bar_index + 50, rLow,
-             border_color=color.new(RED, 60), border_width=1,
-             bgcolor=bearOBColor)
-        array.push(bearOBBoxes, b)
-        while array.size(bearOBBoxes) > obMaxShow
-            box.delete(array.shift(bearOBBoxes))
+// Asia Session
+var float asiaHigh = na
+var float asiaLow  = na
+var box asiaBox    = na
 
-    // Extend boxes to current bar and check mitigation
-    for i = 0 to array.size(bullOBBoxes) - 1
-        b = array.get(bullOBBoxes, i)
-        box.set_right(b, bar_index + 50)
-        // Mitigated if price closes below OB low
-        if close < box.get_bottom(b)
-            box.set_bgcolor(b, color.new(#888888, 92))
-            box.set_border_color(b, color.new(#888888, 70))
+if showSessions and showAsia and inAsia
+    if na(asiaHigh)
+        asiaHigh := high
+        asiaLow  := low
+        asiaBox  := box.new(bar_index, asiaHigh, bar_index, asiaLow, bgcolor=color.new(colAsia, 95), border_color=color.new(colAsia, 80), border_width=1)
+    else
+        asiaHigh := math.max(asiaHigh, high)
+        asiaLow  := math.min(asiaLow, low)
+        box.set_top(asiaBox, asiaHigh)
+        box.set_bottom(asiaBox, asiaLow)
+        box.set_right(asiaBox, bar_index)
 
-    for i = 0 to array.size(bearOBBoxes) - 1
-        b = array.get(bearOBBoxes, i)
-        box.set_right(b, bar_index + 50)
-        // Mitigated if price closes above OB high
-        if close > box.get_top(b)
-            box.set_bgcolor(b, color.new(#888888, 92))
-            box.set_border_color(b, color.new(#888888, 70))
+if not inAsia and not na(asiaHigh)
+    box.delete(asiaBox)
+    asiaHigh := na
+    asiaLow  := na
+    asiaBox  := na
 
-// ── FAIR VALUE GAPS ──────────────────────────────────────────
-var box[] bullFVGBoxes = array.new_box()
-var box[] bearFVGBoxes = array.new_box()
-var bool[] fvgFilled   = array.new_bool()
+// London Session
+var float ldnHigh = na
+var float ldnLow  = na
+var box ldnBox    = na
 
-if showFVG
-    // Bullish FVG: gap between candle[2] high and candle[0] low
-    bullFVG = low > high[2] and close[1] > high[2]
-    // Bearish FVG: gap between candle[2] low and candle[0] high
-    bearFVG = high < low[2] and close[1] < low[2]
+if showSessions and showLondon and inLondon
+    if na(ldnHigh)
+        ldnHigh := high
+        ldnLow  := low
+        ldnBox  := box.new(bar_index, ldnHigh, bar_index, ldnLow, bgcolor=color.new(colLondon, 95), border_color=color.new(colLondon, 80), border_width=1)
+    else
+        ldnHigh := math.max(ldnHigh, high)
+        ldnLow  := math.min(ldnLow, low)
+        box.set_top(ldnBox, ldnHigh)
+        box.set_bottom(ldnBox, ldnLow)
+        box.set_right(ldnBox, bar_index)
 
-    if bullFVG and (low - high[2]) > syminfo.mintick * 2
-        b = box.new(bar_index - 2, low, bar_index + 30, high[2],
-             border_color=color.new(GREEN, 50), border_width=1,
-             bgcolor=bullFVGColor)
-        array.push(bullFVGBoxes, b)
-        while array.size(bullFVGBoxes) > fvgMaxShow
-            box.delete(array.shift(bullFVGBoxes))
+if not inLondon and not na(ldnHigh)
+    box.delete(ldnBox)
+    ldnHigh := na
+    ldnLow  := na
+    ldnBox  := na
 
-    if bearFVG and (low[2] - high) > syminfo.mintick * 2
-        b = box.new(bar_index - 2, low[2], bar_index + 30, high,
-             border_color=color.new(RED, 50), border_width=1,
-             bgcolor=bearFVGColor)
-        array.push(bearFVGBoxes, b)
-        while array.size(bearFVGBoxes) > fvgMaxShow
-            box.delete(array.shift(bearFVGBoxes))
+// NY Session
+var float nyHigh = na
+var float nyLow  = na
+var box nyBox    = na
 
-    // Extend and check if filled
-    for i = 0 to array.size(bullFVGBoxes) - 1
-        b = array.get(bullFVGBoxes, i)
-        box.set_right(b, bar_index + 30)
-        if low <= box.get_bottom(b)
-            box.set_bgcolor(b, fvgMitColor)
-            box.set_border_color(b, color.new(#888888, 60))
+if showSessions and showNY and inNY
+    if na(nyHigh)
+        nyHigh := high
+        nyLow  := low
+        nyBox  := box.new(bar_index, nyHigh, bar_index, nyLow, bgcolor=color.new(colNY, 95), border_color=color.new(colNY, 80), border_width=1)
+    else
+        nyHigh := math.max(nyHigh, high)
+        nyLow  := math.min(nyLow, low)
+        box.set_top(nyBox, nyHigh)
+        box.set_bottom(nyBox, nyLow)
+        box.set_right(nyBox, bar_index)
 
-    for i = 0 to array.size(bearFVGBoxes) - 1
-        b = array.get(bearFVGBoxes, i)
-        box.set_right(b, bar_index + 30)
-        if high >= box.get_top(b)
-            box.set_bgcolor(b, fvgMitColor)
-            box.set_border_color(b, color.new(#888888, 60))
+if not inNY and not na(nyHigh)
+    box.delete(nyBox)
+    nyHigh := na
+    nyLow  := na
+    nyBox  := na
 
-// ── BOS / CHOCH ──────────────────────────────────────────────
-var float lastSwingHigh = na
-var float lastSwingLow  = na
-var bool  inUptrend     = na
+// ═════════════════════════════════════════════════════════════════════════════
+// FAIR VALUE GAPS (4-Box System)
+// ═════════════════════════════════════════════════════════════════════════════
 
-swingHigh = ta.pivothigh(high, bosLen, bosLen)
-swingLow  = ta.pivotlow(low,  bosLen, bosLen)
+bool fvgBull = low > high[2] and close[1] > high[2]
+bool fvgBear = high < low[2] and close[1] < low[2]
 
-if showBOS
-    // Track swing highs and lows
-    if not na(swingHigh)
-        if na(inUptrend)
-            inUptrend := true
-        // BOS up: break above prev swing high in uptrend
-        if inUptrend and close > swingHigh
-            line.new(bar_index[bosLen], swingHigh, bar_index, swingHigh,
-                 color=bosColor, width=1, style=line.style_dashed)
-            label.new(bar_index, swingHigh, "BOS",
-                 color=color.new(bosColor, 80), textcolor=bosColor,
-                 style=label.style_label_down, size=size.tiny)
-        // CHOCH: break above prev swing high in downtrend
-        else if not inUptrend and close > swingHigh
-            line.new(bar_index[bosLen], swingHigh, bar_index, swingHigh,
-                 color=chochColor, width=1, style=line.style_dashed)
-            label.new(bar_index, swingHigh, "CHOCH",
-                 color=color.new(chochColor, 80), textcolor=chochColor,
-                 style=label.style_label_down, size=size.tiny)
-            inUptrend := true
-        lastSwingHigh := swingHigh
+var box fvg1 = na
+var box fvg2 = na
+var box fvg3 = na
+var box fvg4 = na
 
-    if not na(swingLow)
-        if na(inUptrend)
-            inUptrend := false
-        // BOS down: break below prev swing low in downtrend
-        if not inUptrend and close < swingLow
-            line.new(bar_index[bosLen], swingLow, bar_index, swingLow,
-                 color=bosColor, width=1, style=line.style_dashed)
-            label.new(bar_index, swingLow, "BOS",
-                 color=color.new(bosColor, 80), textcolor=bosColor,
-                 style=label.style_label_up, size=size.tiny)
-        // CHOCH: break below prev swing low in uptrend
-        else if inUptrend and close < swingLow
-            line.new(bar_index[bosLen], swingLow, bar_index, swingLow,
-                 color=chochColor, width=1, style=line.style_dashed)
-            label.new(bar_index, swingLow, "CHOCH",
-                 color=color.new(chochColor, 80), textcolor=chochColor,
-                 style=label.style_label_up, size=size.tiny)
-            inUptrend := false
-        lastSwingLow := swingLow
+var int fvg1Age = 0
+var int fvg2Age = 0
+var int fvg3Age = 0
+var int fvg4Age = 0
 
-// ── SIGNAL PLOTTER ───────────────────────────────────────────
-var line entryLine = na
-var line slLine    = na
-var line tp1Line   = na
-var line tp2Line   = na
-var box  riskBox   = na
+fvg1Age := fvg1Age + 1
+fvg2Age := fvg2Age + 1
+fvg3Age := fvg3Age + 1
+fvg4Age := fvg4Age + 1
 
-if showSig and sigEntry > 0 and sigSL > 0 and sigTP1 > 0 and barstate.islast
-    isBuy = sigDir == "BUY"
-    entC  = color.new(WHITE, 20)
-    slC   = color.new(RED, 20)
-    tp1C  = color.new(GREEN, 20)
+bool fvg1Mit = not na(fvg1) and ((low < box.get_bottom(fvg1)) or fvg1Age > 35)
+bool fvg2Mit = not na(fvg2) and ((low < box.get_bottom(fvg2)) or fvg2Age > 35)
+bool fvg3Mit = not na(fvg3) and ((high > box.get_top(fvg3)) or fvg3Age > 35)
+bool fvg4Mit = not na(fvg4) and ((high > box.get_top(fvg4)) or fvg4Age > 35)
 
-    startBar = bar_index - 5
+if fvg1Mit
+    box.delete(fvg1)
+    fvg1 := na
+    fvg1Age := 0
 
-    // Entry line
-    entryLine := line.new(startBar, sigEntry, bar_index + 40, sigEntry,
-         color=entC, width=2, style=line.style_solid)
-    label.new(bar_index + 41, sigEntry, "ENTRY  " + str.tostring(sigEntry, "#.##"),
-         color=color.new(WHITE, 80), textcolor=WHITE, style=label.style_label_left, size=size.small)
+if fvg2Mit
+    box.delete(fvg2)
+    fvg2 := na
+    fvg2Age := 0
 
-    // SL line
-    slLine := line.new(startBar, sigSL, bar_index + 40, sigSL,
-         color=slC, width=1, style=line.style_dashed)
-    label.new(bar_index + 41, sigSL, "SL  " + str.tostring(sigSL, "#.##"),
-         color=color.new(RED, 80), textcolor=RED, style=label.style_label_left, size=size.small)
+if fvg3Mit
+    box.delete(fvg3)
+    fvg3 := na
+    fvg3Age := 0
 
-    // TP1 line
-    tp1Line := line.new(startBar, sigTP1, bar_index + 40, sigTP1,
-         color=tp1C, width=1, style=line.style_dashed)
-    label.new(bar_index + 41, sigTP1, "TP1  " + str.tostring(sigTP1, "#.##"),
-         color=color.new(GREEN, 80), textcolor=GREEN, style=label.style_label_left, size=size.small)
+if fvg4Mit
+    box.delete(fvg4)
+    fvg4 := na
+    fvg4Age := 0
 
-    // TP2 line (optional)
-    if sigTP2 > 0
-        tp2Line := line.new(startBar, sigTP2, bar_index + 40, sigTP2,
-             color=color.new(GREEN, 40), width=1, style=line.style_dotted)
-        label.new(bar_index + 41, sigTP2, "TP2  " + str.tostring(sigTP2, "#.##"),
-             color=color.new(GREEN, 85), textcolor=color.new(GREEN, 20), style=label.style_label_left, size=size.small)
+if showFVG and (fvgBull or fvgBear)
+    color c = fvgBull ? colBull : colBear
+    float top = fvgBull ? low : high[2]
+    float bot = fvgBull ? high[2] : low
 
-    // Risk box (entry to SL shaded)
-    riskTop = isBuy ? sigEntry : sigSL
-    riskBot = isBuy ? sigSL    : sigEntry
-    riskBox := box.new(startBar, riskTop, bar_index + 40, riskBot,
-         border_color=color.new(RED, 70), bgcolor=color.new(RED, 92))
+    if na(fvg1)
+        fvg1 := box.new(bar_index-2, top, bar_index, bot, bgcolor=color.new(c, 90), border_color=color.new(c, 70), border_style=line.style_dotted)
+        fvg1Age := 0
+    else if na(fvg2)
+        fvg2 := box.new(bar_index-2, top, bar_index, bot, bgcolor=color.new(c, 90), border_color=color.new(c, 70), border_style=line.style_dotted)
+        fvg2Age := 0
+    else if na(fvg3)
+        fvg3 := box.new(bar_index-2, top, bar_index, bot, bgcolor=color.new(c, 90), border_color=color.new(c, 70), border_style=line.style_dotted)
+        fvg3Age := 0
+    else if na(fvg4)
+        fvg4 := box.new(bar_index-2, top, bar_index, bot, bgcolor=color.new(c, 90), border_color=color.new(c, 70), border_style=line.style_dotted)
+        fvg4Age := 0
 
-// ── WATERMARK ────────────────────────────────────────────────
-if showWatermark and barstate.islast
-    table wm = table.new(position.bottom_right, 1, 1, bgcolor=na, border_width=0)
-    table.cell(wm, 0, 0,
-         "PriceAction AI  ·  priceaction.it.com",
-         text_color=color.new(#ffffff, 70),
-         text_size=size.small,
-         bgcolor=na)
+if not na(fvg1)
+    box.set_right(fvg1, bar_index)
+
+if not na(fvg2)
+    box.set_right(fvg2, bar_index)
+
+if not na(fvg3)
+    box.set_right(fvg3, bar_index)
+
+if not na(fvg4)
+    box.set_right(fvg4, bar_index)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ORDER BLOCKS (3-Box System)
+// ═════════════════════════════════════════════════════════════════════════════
+
+var box ob1 = na
+var box ob2 = na
+var box ob3 = na
+
+var int ob1Age = 0
+var int ob2Age = 0
+var int ob3Age = 0
+
+ob1Age := ob1Age + 1
+ob2Age := ob2Age + 1
+ob3Age := ob3Age + 1
+
+if ob1Age > 25
+    box.delete(ob1)
+    ob1 := na
+    ob1Age := 0
+
+if ob2Age > 25
+    box.delete(ob2)
+    ob2 := na
+    ob2Age := 0
+
+if ob3Age > 25
+    box.delete(ob3)
+    ob3 := na
+    ob3Age := 0
+
+if showOB and isDispl
+    color c = close > open ? colBull : colBear
+    if na(ob1)
+        ob1 := box.new(bar_index-1, high[1], bar_index, low[1], bgcolor=color.new(c, 88), border_color=color.new(c, 75), border_width=2)
+        ob1Age := 0
+    else if na(ob2)
+        ob2 := box.new(bar_index-1, high[1], bar_index, low[1], bgcolor=color.new(c, 88), border_color=color.new(c, 75), border_width=2)
+        ob2Age := 0
+    else if na(ob3)
+        ob3 := box.new(bar_index-1, high[1], bar_index, low[1], bgcolor=color.new(c, 88), border_color=color.new(c, 75), border_width=2)
+        ob3Age := 0
+
+if not na(ob1)
+    box.set_right(ob1, bar_index)
+
+if not na(ob2)
+    box.set_right(ob2, bar_index)
+
+if not na(ob3)
+    box.set_right(ob3, bar_index)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// OMEGA SCORING SYSTEM
+// ═════════════════════════════════════════════════════════════════════════════
+
+int scoreL = 0
+int scoreS = 0
+
+if aboveVwap or not needVWAP
+    scoreL := scoreL + 1
+
+if isDispl
+    scoreL := scoreL + 1
+
+if htfUp or not needTrend
+    scoreL := scoreL + 1
+
+if volClimax or not needVol
+    scoreL := scoreL + 1
+
+if not aboveVwap or not needVWAP
+    scoreS := scoreS + 1
+
+if isDispl
+    scoreS := scoreS + 1
+
+if not htfUp or not needTrend
+    scoreS := scoreS + 1
+
+if volClimax or not needVol
+    scoreS := scoreS + 1
+
+bool longSignal  = showSignals and scoreL >= signalScore and isDispl and close > open
+bool shortSignal = showSignals and scoreS >= signalScore and isDispl and close < open
+
+if longSignal
+    label.new(bar_index, low, "▲" + str.tostring(scoreL), color=color.new(colBull, 20), textcolor=color.white, style=label.style_label_up, size=size.small)
+
+if shortSignal
+    label.new(bar_index, high, "▼" + str.tostring(scoreS), color=color.new(colBear, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// INFO PANEL
+// ═════════════════════════════════════════════════════════════════════════════
+
+var table dash = table.new(position.top_right, 2, 4, bgcolor=#131722, border_color=#363a45, border_width=1)
+
+if showPanel and barstate.islast
+    table.cell(dash, 0, 0, "HTF Trend", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 0, htfUp ? "📈 BULL" : "📉 BEAR", bgcolor=htfUp ? colBull : colBear, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 1, "VWAP", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 1, aboveVwap ? "ABOVE ✅" : "BELOW ❌", bgcolor=aboveVwap ? colBull : colBear, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 2, "Session", text_color=color.white, text_size=size.small)
+    string sessText = inNY ? "🔴 NY" : inLondon ? "🟢 London" : inAsia ? "🔵 Asia" : "⚪ None"
+    table.cell(dash, 1, 2, sessText, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 3, "Last Signal", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 3, longSignal ? "🟢 BUY" : shortSignal ? "🔴 SELL" : "⏳ WAIT", bgcolor=longSignal ? colBull : shortSignal ? colBear : #363a45, text_color=color.white, text_size=size.small)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// BACKGROUND
+// ═════════════════════════════════════════════════════════════════════════════
+
+color bgColor = isBullTrend ? color.new(colBull, 98) : color.new(colBear, 98)
+bgcolor(bgColor)
