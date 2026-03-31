@@ -1,0 +1,291 @@
+//@version=5
+indicator("PriceAction AI — SMC Suite", shorttitle="PA AI", overlay=true, max_boxes_count=200, max_lines_count=200, max_labels_count=100)
+
+// ═══════════════════════════════════════════════════════════
+//  PriceAction AI — SMC Companion Indicator
+//  priceaction.it.com
+//  Order Blocks · FVGs · BOS/CHOCH · Killzones · Signal Plotter
+// ═══════════════════════════════════════════════════════════
+
+// ── SETTINGS ────────────────────────────────────────────────
+grpOB   = "Order Blocks"
+grpFVG  = "Fair Value Gaps"
+grpBOS  = "Structure (BOS / CHOCH)"
+grpKZ   = "Killzones"
+grpSIG  = "Signal Plotter"
+grpUI   = "Display"
+
+// Order Blocks
+showOB      = input.bool(true,  "Show Order Blocks",        group=grpOB)
+obLookback  = input.int(10,     "Lookback (bars)",          group=grpOB, minval=3, maxval=50)
+obMaxShow   = input.int(3,      "Max OBs to display",       group=grpOB, minval=1, maxval=10)
+bullOBColor = input.color(color.new(#00e676, 85), "Bullish OB",  group=grpOB)
+bearOBColor = input.color(color.new(#ff3d5a, 85), "Bearish OB",  group=grpOB)
+
+// FVGs
+showFVG     = input.bool(true,  "Show Fair Value Gaps",     group=grpFVG)
+fvgMaxShow  = input.int(3,      "Max FVGs to display",      group=grpFVG, minval=1, maxval=10)
+bullFVGColor= input.color(color.new(#00e676, 88), "Bullish FVG", group=grpFVG)
+bearFVGColor= input.color(color.new(#ff3d5a, 88), "Bearish FVG", group=grpFVG)
+fvgMitColor = input.color(color.new(#888888, 92), "Mitigated FVG", group=grpFVG)
+
+// Structure
+showBOS     = input.bool(true,  "Show BOS / CHOCH",         group=grpBOS)
+bosLen      = input.int(10,     "Swing lookback",           group=grpBOS, minval=3, maxval=30)
+bosColor    = input.color(#00bcd4, "BOS color",             group=grpBOS)
+chochColor  = input.color(#ff9800, "CHOCH color",           group=grpBOS)
+
+// Killzones
+showKZ      = input.bool(true,  "Show Killzones",           group=grpKZ)
+kzAsiaColor = input.color(color.new(#9c27b0, 92), "Asia (8pm–midnight NY)", group=grpKZ)
+kzLonColor  = input.color(color.new(#2196f3, 92), "London (3am–5am NY)",    group=grpKZ)
+kzNYColor   = input.color(color.new(#00e676, 92), "New York (9:30am–11am NY)", group=grpKZ)
+kzNYPMColor = input.color(color.new(#ff9800, 92), "NY PM (1:30pm–3pm NY)",  group=grpKZ)
+
+// Signal Plotter
+showSig     = input.bool(false, "Plot Signal from PriceAction AI", group=grpSIG)
+sigDir      = input.string("BUY", "Direction", options=["BUY","SELL"], group=grpSIG)
+sigEntry    = input.float(0.0,  "Entry Price",   group=grpSIG)
+sigSL       = input.float(0.0,  "Stop Loss",     group=grpSIG)
+sigTP1      = input.float(0.0,  "TP1",           group=grpSIG)
+sigTP2      = input.float(0.0,  "TP2 (optional)",group=grpSIG)
+
+// Display
+showWatermark = input.bool(true, "Show PriceAction AI watermark", group=grpUI)
+
+// ── COLORS ──────────────────────────────────────────────────
+GREEN       = #00e676
+RED         = #ff3d5a
+CYAN        = #00bcd4
+ORANGE      = #ff9800
+WHITE       = #ffffff
+GRAY        = color.new(#888888, 0)
+
+// ── UTILITY ─────────────────────────────────────────────────
+isNewBar = ta.change(time) != 0
+
+// ── KILLZONES ───────────────────────────────────────────────
+// Uses exchange time (UTC). Adjust offset for your broker.
+if showKZ and timeframe.in_seconds() <= 3600
+    h = hour(time, "America/New_York")
+    m = minute(time, "America/New_York")
+    totalMin = h * 60 + m
+
+    isAsia  = totalMin >= 1200 or totalMin < 0    // 8pm–midnight NY (20:00–24:00)
+    isLon   = totalMin >= 180  and totalMin < 300  // 3am–5am NY
+    isNY    = totalMin >= 570  and totalMin < 660  // 9:30am–11am NY
+    isNYPM  = totalMin >= 810  and totalMin < 900  // 1:30pm–3pm NY
+
+    // Asia: 8pm = 1200 min, midnight = 1440 min
+    isAsia2 = totalMin >= 1200 and totalMin <= 1439
+
+    bgColor = isNY ? kzNYColor : isLon ? kzLonColor : isNYPM ? kzNYPMColor : isAsia2 ? kzAsiaColor : na
+    bgcolor(bgColor)
+
+// ── ORDER BLOCKS ─────────────────────────────────────────────
+// A bullish OB = last bearish candle before a strong bullish move
+// A bearish OB = last bullish candle before a strong bearish move
+
+var box[] bullOBBoxes = array.new_box()
+var box[] bearOBBoxes = array.new_box()
+
+getBullOB() =>
+    // Last red candle before a bullish impulse (3-bar confirmation)
+    isBearCandle = close[1] < open[1]
+    isBullMove   = close > close[1] and close > open[1] and (close - open) > (high[1] - low[1]) * 0.5
+    isBullOB     = isBearCandle and isBullMove
+    [isBullOB, low[1], high[1]]
+
+getBearOB() =>
+    // Last green candle before a bearish impulse
+    isBullCandle = close[1] > open[1]
+    isBearMove   = close < close[1] and close < open[1] and (open - close) > (high[1] - low[1]) * 0.5
+    isBearOB     = isBullCandle and isBearMove
+    [isBearOB, low[1], high[1]]
+
+if showOB
+    [isBull, bLow, bHigh] = getBullOB()
+    [isBear, rLow, rHigh] = getBearOB()
+
+    // Add bullish OB
+    if isBull
+        b = box.new(bar_index - 1, bHigh, bar_index + 50, bLow,
+             border_color=color.new(GREEN, 60), border_width=1,
+             bgcolor=bullOBColor)
+        array.push(bullOBBoxes, b)
+        // Remove oldest if over limit
+        while array.size(bullOBBoxes) > obMaxShow
+            box.delete(array.shift(bullOBBoxes))
+
+    // Add bearish OB
+    if isBear
+        b = box.new(bar_index - 1, rHigh, bar_index + 50, rLow,
+             border_color=color.new(RED, 60), border_width=1,
+             bgcolor=bearOBColor)
+        array.push(bearOBBoxes, b)
+        while array.size(bearOBBoxes) > obMaxShow
+            box.delete(array.shift(bearOBBoxes))
+
+    // Extend boxes to current bar and check mitigation
+    for i = 0 to array.size(bullOBBoxes) - 1
+        b = array.get(bullOBBoxes, i)
+        box.set_right(b, bar_index + 50)
+        // Mitigated if price closes below OB low
+        if close < box.get_bottom(b)
+            box.set_bgcolor(b, color.new(#888888, 92))
+            box.set_border_color(b, color.new(#888888, 70))
+
+    for i = 0 to array.size(bearOBBoxes) - 1
+        b = array.get(bearOBBoxes, i)
+        box.set_right(b, bar_index + 50)
+        // Mitigated if price closes above OB high
+        if close > box.get_top(b)
+            box.set_bgcolor(b, color.new(#888888, 92))
+            box.set_border_color(b, color.new(#888888, 70))
+
+// ── FAIR VALUE GAPS ──────────────────────────────────────────
+var box[] bullFVGBoxes = array.new_box()
+var box[] bearFVGBoxes = array.new_box()
+var bool[] fvgFilled   = array.new_bool()
+
+if showFVG
+    // Bullish FVG: gap between candle[2] high and candle[0] low
+    bullFVG = low > high[2] and close[1] > high[2]
+    // Bearish FVG: gap between candle[2] low and candle[0] high
+    bearFVG = high < low[2] and close[1] < low[2]
+
+    if bullFVG and (low - high[2]) > syminfo.mintick * 2
+        b = box.new(bar_index - 2, low, bar_index + 30, high[2],
+             border_color=color.new(GREEN, 50), border_width=1,
+             bgcolor=bullFVGColor)
+        array.push(bullFVGBoxes, b)
+        while array.size(bullFVGBoxes) > fvgMaxShow
+            box.delete(array.shift(bullFVGBoxes))
+
+    if bearFVG and (low[2] - high) > syminfo.mintick * 2
+        b = box.new(bar_index - 2, low[2], bar_index + 30, high,
+             border_color=color.new(RED, 50), border_width=1,
+             bgcolor=bearFVGColor)
+        array.push(bearFVGBoxes, b)
+        while array.size(bearFVGBoxes) > fvgMaxShow
+            box.delete(array.shift(bearFVGBoxes))
+
+    // Extend and check if filled
+    for i = 0 to array.size(bullFVGBoxes) - 1
+        b = array.get(bullFVGBoxes, i)
+        box.set_right(b, bar_index + 30)
+        if low <= box.get_bottom(b)
+            box.set_bgcolor(b, fvgMitColor)
+            box.set_border_color(b, color.new(#888888, 60))
+
+    for i = 0 to array.size(bearFVGBoxes) - 1
+        b = array.get(bearFVGBoxes, i)
+        box.set_right(b, bar_index + 30)
+        if high >= box.get_top(b)
+            box.set_bgcolor(b, fvgMitColor)
+            box.set_border_color(b, color.new(#888888, 60))
+
+// ── BOS / CHOCH ──────────────────────────────────────────────
+var float lastSwingHigh = na
+var float lastSwingLow  = na
+var bool  inUptrend     = na
+
+swingHigh = ta.pivothigh(high, bosLen, bosLen)
+swingLow  = ta.pivotlow(low,  bosLen, bosLen)
+
+if showBOS
+    // Track swing highs and lows
+    if not na(swingHigh)
+        if na(inUptrend)
+            inUptrend := true
+        // BOS up: break above prev swing high in uptrend
+        if inUptrend and close > swingHigh
+            line.new(bar_index[bosLen], swingHigh, bar_index, swingHigh,
+                 color=bosColor, width=1, style=line.style_dashed)
+            label.new(bar_index, swingHigh, "BOS",
+                 color=color.new(bosColor, 80), textcolor=bosColor,
+                 style=label.style_label_down, size=size.tiny)
+        // CHOCH: break above prev swing high in downtrend
+        else if not inUptrend and close > swingHigh
+            line.new(bar_index[bosLen], swingHigh, bar_index, swingHigh,
+                 color=chochColor, width=1, style=line.style_dashed)
+            label.new(bar_index, swingHigh, "CHOCH",
+                 color=color.new(chochColor, 80), textcolor=chochColor,
+                 style=label.style_label_down, size=size.tiny)
+            inUptrend := true
+        lastSwingHigh := swingHigh
+
+    if not na(swingLow)
+        if na(inUptrend)
+            inUptrend := false
+        // BOS down: break below prev swing low in downtrend
+        if not inUptrend and close < swingLow
+            line.new(bar_index[bosLen], swingLow, bar_index, swingLow,
+                 color=bosColor, width=1, style=line.style_dashed)
+            label.new(bar_index, swingLow, "BOS",
+                 color=color.new(bosColor, 80), textcolor=bosColor,
+                 style=label.style_label_up, size=size.tiny)
+        // CHOCH: break below prev swing low in uptrend
+        else if inUptrend and close < swingLow
+            line.new(bar_index[bosLen], swingLow, bar_index, swingLow,
+                 color=chochColor, width=1, style=line.style_dashed)
+            label.new(bar_index, swingLow, "CHOCH",
+                 color=color.new(chochColor, 80), textcolor=chochColor,
+                 style=label.style_label_up, size=size.tiny)
+            inUptrend := false
+        lastSwingLow := swingLow
+
+// ── SIGNAL PLOTTER ───────────────────────────────────────────
+var line entryLine = na
+var line slLine    = na
+var line tp1Line   = na
+var line tp2Line   = na
+var box  riskBox   = na
+
+if showSig and sigEntry > 0 and sigSL > 0 and sigTP1 > 0 and barstate.islast
+    isBuy = sigDir == "BUY"
+    entC  = color.new(WHITE, 20)
+    slC   = color.new(RED, 20)
+    tp1C  = color.new(GREEN, 20)
+
+    startBar = bar_index - 5
+
+    // Entry line
+    entryLine := line.new(startBar, sigEntry, bar_index + 40, sigEntry,
+         color=entC, width=2, style=line.style_solid)
+    label.new(bar_index + 41, sigEntry, "ENTRY  " + str.tostring(sigEntry, "#.##"),
+         color=color.new(WHITE, 80), textcolor=WHITE, style=label.style_label_left, size=size.small)
+
+    // SL line
+    slLine := line.new(startBar, sigSL, bar_index + 40, sigSL,
+         color=slC, width=1, style=line.style_dashed)
+    label.new(bar_index + 41, sigSL, "SL  " + str.tostring(sigSL, "#.##"),
+         color=color.new(RED, 80), textcolor=RED, style=label.style_label_left, size=size.small)
+
+    // TP1 line
+    tp1Line := line.new(startBar, sigTP1, bar_index + 40, sigTP1,
+         color=tp1C, width=1, style=line.style_dashed)
+    label.new(bar_index + 41, sigTP1, "TP1  " + str.tostring(sigTP1, "#.##"),
+         color=color.new(GREEN, 80), textcolor=GREEN, style=label.style_label_left, size=size.small)
+
+    // TP2 line (optional)
+    if sigTP2 > 0
+        tp2Line := line.new(startBar, sigTP2, bar_index + 40, sigTP2,
+             color=color.new(GREEN, 40), width=1, style=line.style_dotted)
+        label.new(bar_index + 41, sigTP2, "TP2  " + str.tostring(sigTP2, "#.##"),
+             color=color.new(GREEN, 85), textcolor=color.new(GREEN, 20), style=label.style_label_left, size=size.small)
+
+    // Risk box (entry to SL shaded)
+    riskTop = isBuy ? sigEntry : sigSL
+    riskBot = isBuy ? sigSL    : sigEntry
+    riskBox := box.new(startBar, riskTop, bar_index + 40, riskBot,
+         border_color=color.new(RED, 70), bgcolor=color.new(RED, 92))
+
+// ── WATERMARK ────────────────────────────────────────────────
+if showWatermark and barstate.islast
+    table wm = table.new(position.bottom_right, 1, 1, bgcolor=na, border_width=0)
+    table.cell(wm, 0, 0,
+         "PriceAction AI  ·  priceaction.it.com",
+         text_color=color.new(#ffffff, 70),
+         text_size=size.small,
+         bgcolor=na)

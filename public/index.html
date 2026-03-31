@@ -1185,6 +1185,30 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <button class="price-btn pro" onclick="startCheckout('pro')">Get Pro →</button>
       </div>
     </div>
+
+    <!-- Indicator Add-On -->
+    <div style="margin-top:32px;background:linear-gradient(135deg,rgba(0,188,212,.07),rgba(0,230,118,.05));border:1px solid rgba(0,188,212,.25);border-radius:16px;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="font-size:32px">📊</div>
+        <div>
+          <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:4px">TradingView Indicator Add-On</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.6;max-width:480px">The PriceAction AI SMC Suite indicator — Order Blocks, FVGs, BOS/CHOCH &amp; Killzones. Invite-only access on TradingView. Works standalone or alongside any plan.</div>
+          <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--green)">✓ Order Blocks &amp; FVGs</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--green)">✓ BOS / CHOCH</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--green)">✓ ICT Killzones</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--green)">✓ Signal plotter</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--green)">✓ PA AI watermark</span>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center;flex-shrink:0">
+        <div style="font-size:28px;font-weight:900;color:var(--text)"><sup style="font-size:14px">$</sup>9.99</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px">per month</div>
+        <button onclick="startCheckout('indicator')" style="background:linear-gradient(135deg,#00bcd4,#00e676);color:#000;border:none;border-radius:10px;padding:12px 28px;font-family:var(--sans);font-size:14px;font-weight:800;cursor:pointer;white-space:nowrap">Get Indicator →</button>
+      </div>
+    </div>
+
     <p style="text-align:center;margin-top:20px;font-family:var(--mono);font-size:11px;color:var(--text3)">⚠ Not financial advice · Educational use only · Cancel anytime</p>
   </section>
 
@@ -1798,6 +1822,29 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <button onclick="clearAutofill()">Clear ✕</button>
     </div>
 
+    <!-- TradingView Indicator Access -->
+    <div class="j-panel" style="margin-bottom:16px" id="indicatorAccessPanel">
+      <div class="j-head"><span class="j-title">📊 TradingView Indicator</span></div>
+      <div style="padding:16px 20px">
+        <div id="indicatorActiveBlock" style="display:none;margin-bottom:14px;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.2);border-radius:10px;padding:12px 16px">
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:4px">✓ Indicator Access Active</div>
+          <div style="font-size:12px;color:var(--text2)">Your TradingView username will be approved within 24 hours of subscribing.</div>
+        </div>
+        <div id="indicatorInactiveBlock" style="margin-bottom:14px">
+          <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:10px">Get the PriceAction AI SMC Suite on TradingView — Order Blocks, FVGs, BOS/CHOCH &amp; Killzones. $9.99/mo.</div>
+          <button onclick="startCheckout('indicator')" style="background:linear-gradient(135deg,#00bcd4,#00e676);color:#000;border:none;border-radius:8px;padding:10px 20px;font-family:var(--sans);font-size:13px;font-weight:800;cursor:pointer">Get Indicator →</button>
+        </div>
+        <div style="margin-top:4px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Your TradingView Username</div>
+          <div style="display:flex;gap:8px">
+            <input id="tvUsernameInput" type="text" placeholder="e.g. john_trader" style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none">
+            <button onclick="saveTVUsername()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 18px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer">Save</button>
+          </div>
+          <div id="tvUsernameSaved" style="display:none;font-family:var(--mono);font-size:11px;color:var(--green);margin-top:6px">✓ Saved — we'll approve your access within 24 hours</div>
+        </div>
+      </div>
+    </div>
+
     <div class="j-panel" style="margin-bottom:20px">
       <div class="j-head"><span class="j-title">Account Settings</span></div>
       <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
@@ -2218,6 +2265,11 @@ function updateNavUI(){
     if($('chartsLabel')) $('chartsLabel').textContent = isPro
       ? 'Chart Screenshots (Pro — upload up to 6 timeframes)'
       : 'Chart Screenshots (upload up to 3 timeframes)';
+    // Indicator access panel
+    const hasIndicator = currentUser.indicatorAccess === true;
+    if($('indicatorActiveBlock'))   $('indicatorActiveBlock').style.display   = hasIndicator ? '' : 'none';
+    if($('indicatorInactiveBlock')) $('indicatorInactiveBlock').style.display = hasIndicator ? 'none' : '';
+    if($('tvUsernameInput') && currentUser.tvUsername) $('tvUsernameInput').value = currentUser.tvUsername;
   }else{
     $('navGuest').style.display='flex';
     $('navUser').style.display='none';
@@ -2367,6 +2419,24 @@ async function startCheckout(plan){
   }catch(err){
     alert('Checkout error: '+err.message);
   }
+}
+
+async function saveTVUsername(){
+  const val = ($('tvUsernameInput').value||'').trim().replace(/^@/,'');
+  if(!val){alert('Enter your TradingView username first');return;}
+  if(!currentUser){showAuth('login');return;}
+  try{
+    const res=await fetch('/api/user/tv-username',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
+      body:JSON.stringify({tvUsername:val})
+    });
+    if(res.ok){
+      $('tvUsernameInput').value=val;
+      $('tvUsernameSaved').style.display='block';
+      setTimeout(()=>{if($('tvUsernameSaved'))$('tvUsernameSaved').style.display='none';},4000);
+    }
+  }catch(e){alert('Error saving username: '+e.message);}
 }
 
 async function manageSubscription(){

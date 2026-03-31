@@ -331,7 +331,9 @@ function safeUser(u) {
 app.post('/api/checkout/create', authMiddleware, async (req, res) => {
   if (!stripe) return res.status(500).json({ error: 'Stripe is not configured on the server' });
   const { plan } = req.body;
-  const priceId  = plan === 'pro' ? process.env.STRIPE_PRO_PRICE_ID : process.env.STRIPE_BASIC_PRICE_ID;
+  const priceId  = plan === 'pro' ? process.env.STRIPE_PRO_PRICE_ID
+                 : plan === 'indicator' ? process.env.STRIPE_INDICATOR_PRICE_ID
+                 : process.env.STRIPE_BASIC_PRICE_ID;
   if (!priceId)  return res.status(500).json({ error: 'Price ID not configured for this plan' });
 
   const user = req.user;
@@ -395,9 +397,19 @@ app.post('/api/webhook', async (req, res) => {
         if (userId && session.subscription) {
           const sub  = await stripe.subscriptions.retrieve(session.subscription);
           const pid  = sub.items.data[0]?.price?.id;
-          const plan = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro' : 'basic';
+          const plan = pid === process.env.STRIPE_PRO_PRICE_ID ? 'pro'
+                     : pid === process.env.STRIPE_INDICATOR_PRICE_ID ? 'indicator'
+                     : 'basic';
           const user = await getUserById(userId);
-          if (user) { Object.assign(user, { plan, stripeCustomerId: session.customer, stripeSubscriptionId: session.subscription, subscriptionStatus: 'active' }); await saveUser(user); }
+          if (user) {
+            if (plan === 'indicator') {
+              Object.assign(user, { indicatorAccess: true, indicatorStripeSubId: session.subscription, stripeCustomerId: session.customer, subscriptionStatus: 'active' });
+              console.log(`[Webhook] Indicator purchase → ${user.email} — ADD on TradingView: ${user.tvUsername || 'NO USERNAME YET'}`);
+            } else {
+              Object.assign(user, { plan, stripeCustomerId: session.customer, stripeSubscriptionId: session.subscription, subscriptionStatus: 'active' });
+            }
+            await saveUser(user);
+          }
           console.log(`[Webhook] checkout.session.completed → ${userId} now on ${plan}`);
         }
         break;
@@ -2665,6 +2677,31 @@ app.post('/api/broker/orders/:id/cancel', authMiddleware, async (req, res) => {
     order: toBrokerOrderSummary(order)
   });
 });
+// ── TRADINGVIEW USERNAME ──────────────────────────────────────
+app.post('/api/user/tv-username', authMiddleware, async (req, res) => {
+  const { tvUsername } = req.body;
+  if (!tvUsername) return res.status(400).json({ error: 'TradingView username required' });
+  const user = req.user;
+  user.tvUsername = tvUsername.trim().replace(/^@/, '');
+  await saveUser(user);
+  console.log(`[TV] ${user.email} set TradingView username: ${user.tvUsername}`);
+  res.json({ ok: true, tvUsername: user.tvUsername });
+});
+
+// ── ADMIN: list indicator subscribers ────────────────────────
+app.get('/api/admin/indicator-subscribers', authMiddleware, async (req, res) => {
+  if (req.user.email !== (process.env.ADMIN_EMAIL || 'matthewbrouard20@gmail.com')) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const all = await getAllUsers();
+  const subs = all.filter(u => u.indicatorAccess).map(u => ({
+    email: u.email,
+    tvUsername: u.tvUsername || '⚠️ NOT SET',
+    since: u.createdAt
+  }));
+  res.json(subs);
+});
+
 app.get('/sitemap.xml', (req, res) => {
   res.setHeader('Content-Type', 'application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://nexttrade-pro.vercel.app/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url></urlset>`);
