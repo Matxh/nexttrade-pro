@@ -91,7 +91,7 @@ const API_URL      = 'https://api.groq.com/openai/v1/chat/completions';
 const HAIKU        = 'llama-3.3-70b-versatile';          // fast + smart, free
 const SONNET       = 'deepseek-r1-distill-llama-70b';    // best reasoning, free
 const OPUS         = 'deepseek-r1-distill-llama-70b';    // same
-const VISION_MODEL = 'llama-3.2-90b-vision-preview';     // for chart screenshots
+const VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'; // for chart screenshots (vision)
 
 // ─────────────────────────────────────────────
 // GITHUB STORAGE — persistent across deploys
