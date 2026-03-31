@@ -1342,27 +1342,28 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
     }
   } catch (e) { console.warn(`[Binance] ❌ ${sym}:`, e.message); }
 
-  // ── SOURCE 2: TwelveData (stocks/futures/forex/crypto — 800 free/day) ──────
+  // ── SOURCE 2: TwelveData (stocks/ETFs/forex/crypto — 800 free/day) ──────────
   try {
     const tdKey = process.env.TWELVE_DATA_KEY;
     if (!tdKey) throw new Error('No TWELVE_DATA_KEY');
-    // TwelveData symbol normalization — strips TradingView suffixes
+    // Symbol map: futures → ETF proxy (TwelveData free doesn't include CME futures)
     const TD_SYM_MAP = {
-      'ES1!':'ES','NQ1!':'NQ','YM1!':'YM','RTY1!':'RTY',
-      'CL1!':'CL','GC1!':'GC','SI1!':'SI','NG1!':'NG','ZB1!':'ZB',
-      'BTC/USD':'BTC/USD','ETH/USD':'ETH/USD','BTC/USDT':'BTC/USD','ETH/USDT':'ETH/USD',
+      'ES1!':'SPY','ES':'SPY','NQ1!':'QQQ','NQ':'QQQ',
+      'YM1!':'DIA','RTY1!':'IWM','CL1!':'USO','GC1!':'GLD','SI1!':'SLV',
+      'BTC/USDT':'BTC/USD','BTCUSD':'BTC/USD','ETHUSD':'ETH/USD','ETH/USDT':'ETH/USD',
     };
     const tdSym = TD_SYM_MAP[sym] || sym.replace('1!','');
-    const tdTF = TF_MAP_12[timeframe] || '15min';
-    const url  = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}&order=ASC`;
-    const r    = await fetch(url, { timeout: 10000 });
-    const d    = await r.json();
-    if (d.status !== 'ok' || !d.values?.length) throw new Error(d.message || `TwelveData: no values for ${tdSym}`);
+    const tdTF  = TF_MAP_12[timeframe] || '15min';
+    const url   = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}&order=ASC`;
+    const r     = await fetch(url, { timeout: 10000 });
+    const d     = await r.json();
+    if (d.status !== 'ok' || !d.values?.length) throw new Error(d.message || `TwelveData no data for ${tdSym}`);
     const candles = d.values.map(v => ({
       datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
     }));
     if (candles.length < 5) throw new Error(`TwelveData: only ${candles.length} candles`);
-    const data = { candles: candles.slice(-bars), source:'TwelveData', symbol:tdSym, tf: timeframe };
+    const usedProxy = tdSym !== sym;
+    const data = { candles: candles.slice(-bars), source: usedProxy ? `TwelveData(${tdSym})` : 'TwelveData', symbol: tdSym, tf: timeframe };
     _ohlcvCache[cacheKey] = { ts: Date.now(), data };
     console.log(`[TwelveData] ✅ ${sym}→${tdSym} ${timeframe} — ${candles.length} candles`);
     return data;
