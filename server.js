@@ -2516,17 +2516,20 @@ app.post('/api/backtest', authMiddleware, requirePlan, async (req, res) => {
     // Get last N trading day dates
     const tradingDays = dailyData.candles.slice(-numDays).map(c => c.datetime.split(' ')[0]);
 
-    // For each day, fetch intraday 15m data and run analysis
-    const dayResults = await Promise.all(tradingDays.map(async (date) => {
-      try {
-        // Fetch 15m data for that day
-        const intradayData = await fetchOHLCV(sym, '15m', 100);
-        if (!intradayData) return { date, result: 'no_data', grade: 'N/A', verdict: 'N/A', entry: null, sl: null, tp1: null, rr: null };
+    // Fetch 15m data ONCE outside the loop — 500 bars covers ~10 trading days (500×15min ≈ 3 weeks)
+    // Old bug: fetched 100 bars inside each loop iteration, so older dates had 0 candles
+    const intradayData = await fetchOHLCV(sym, '15m', 500);
+    if (!intradayData) return res.status(400).json({ error: `Could not fetch intraday data for ${sym}. Try again later.` });
+    console.log(`[BACKTEST] Got ${intradayData.candles.length} 15m candles for ${sym}`);
 
-        // Filter candles to morning session of that date (9:30-11:30am approximate)
+    // Process days sequentially to avoid Groq rate-limit errors from parallel AI calls
+    const dayResults = [];
+    for (const date of tradingDays) {
+      try {
+        // Filter pre-fetched candles to this specific date
         const dayCandles = intradayData.candles.filter(c => c.datetime.startsWith(date));
-        const morningCandles = dayCandles.slice(0, 8); // First 8 × 15min = 2 hours
-        if (morningCandles.length < 3) return { date, result: 'insufficient_data', grade: 'N/A', verdict: 'N/A' };
+        const morningCandles = dayCandles.slice(0, 8); // First 8 × 15min = 2 hours (9:30–11:30)
+        if (morningCandles.length < 3) { dayResults.push({ date, result: 'insufficient_data', grade: 'N/A', verdict: 'N/A' }); continue; }
 
         // Build a text summary
         const candleText = morningCandles.map(c =>
@@ -2559,15 +2562,15 @@ Return ONLY valid raw JSON: {"verdict":"BUY/SELL/WAIT","grade":"A+/A/B/C/D","ent
           }
         }
 
-        return {
+        dayResults.push({
           date, verdict: analysis.verdict, grade: analysis.grade || 'C',
           entry: analysis.entry, sl: analysis.sl, tp1: analysis.tp1,
           rr: analysis.rr, result, reason: analysis.reason || ''
-        };
+        });
       } catch(e) {
-        return { date, result: 'error', grade: 'N/A', verdict: 'N/A', error: e.message };
+        dayResults.push({ date, result: 'error', grade: 'N/A', verdict: 'N/A', error: e.message });
       }
-    }));
+    }
 
     // Calculate stats
     const signals = dayResults.filter(d => d.verdict && d.verdict !== 'WAIT' && d.verdict !== 'N/A');

@@ -862,7 +862,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <a class="nav-link" onclick="goTo('pricing')">Pricing</a>
     <a class="nav-link" onclick="goTo('how')">How It Works</a>
     <a class="nav-link" onclick="showPage('analyzer')">Analyzer</a>
-    <a class="nav-link" onclick="showPage('scanner')">Scanner</a>
     <a class="nav-link" onclick="showPage('journal')">Journal</a>
     <a class="nav-link" onclick="showPage('calculator')">Risk Calc</a>
     <a class="nav-link" href="/trading-guide.html" target="_blank">Trading Guide</a>
@@ -2131,44 +2130,6 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 </div>
 
 <!-- ════════ SCANNER PAGE ════════ -->
-<div class="page" id="page-scanner">
-  <div class="app-wrap">
-    <div class="app-header">
-      <div style="flex:1">
-        <div class="app-title">📡 Multi-Symbol Scanner</div>
-        <div class="app-sub">Scan multiple markets simultaneously — ranked by signal grade</div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-      <div style="flex:1;min-width:200px">
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Symbols to scan</div>
-        <input id="scannerSymsInput" type="text" value="ES1!,NQ1!,CL1!,GC1!,SPY,QQQ,BTC/USD,EUR/USD"
-          style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none"
-          placeholder="comma-separated symbols">
-      </div>
-      <div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Mode</div>
-        <select id="scannerMode" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none">
-          <option value="dayTrade">Day Trade</option>
-          <option value="scalp">Scalp</option>
-          <option value="swing">Swing</option>
-        </select>
-      </div>
-      <div style="padding-top:20px">
-        <button onclick="runScanner()" id="scannerBtn" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:11px 28px;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:8px">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="currentColor"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          Scan Now
-        </button>
-      </div>
-    </div>
-    <div id="scannerLoading" style="display:none;text-align:center;padding:32px;font-family:var(--mono);font-size:12px;color:var(--text2)">
-      <div class="scan-bar" style="max-width:300px;margin:0 auto 14px"><div class="scan-fill"></div></div>
-      Scanning all symbols in parallel...
-    </div>
-    <div id="scannerError" style="display:none;background:var(--red-dim);border:1px solid rgba(255,61,90,.25);border-radius:8px;padding:14px;color:var(--red);font-family:var(--mono);font-size:12px;margin-bottom:14px"></div>
-    <div id="scannerResults" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px"></div>
-  </div>
-</div>
 
 
 <!-- ════════ AI REVIEW MODAL ════════ -->
