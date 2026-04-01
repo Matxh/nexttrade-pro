@@ -13,8 +13,20 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PriceAction AI">
-<meta name="description" content="PriceAction AI — Upload any trading chart and get institutional-grade signals in seconds. BUY/SELL/WAIT with exact entry, stop loss, and take profit levels. Powered by Claude AI.">
+<meta name="description" content="PriceAction AI — Get AI-graded trading signals in seconds. BUY/SELL/WAIT with exact entry, stop loss, and take profit. Grade A+ setups only. Try free.">
 <meta name="keywords" content="AI trading, price action, chart analysis, trading signals, ICT, SMC, order blocks, forex, crypto, stocks">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://priceaction.it.com">
+<meta property="og:title" content="PriceAction AI — Institutional-Grade Trading Signals">
+<meta property="og:description" content="Get AI-graded trading signals in seconds. BUY/SELL/WAIT with exact entry, stop loss, and take profit. Try 3 analyses free — no credit card needed.">
+<meta property="og:image" content="https://priceaction.it.com/og-image.png">
+<meta property="og:site_name" content="PriceAction AI">
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="PriceAction AI — Institutional-Grade Trading Signals">
+<meta name="twitter:description" content="Get AI-graded trading signals in seconds. BUY/SELL/WAIT with exact entry, stop loss, and take profit. Try 3 analyses free.">
+<meta name="twitter:image" content="https://priceaction.it.com/og-image.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Barlow:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
@@ -872,7 +884,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <!-- shown when logged out -->
     <div id="navGuest">
       <button class="btn btn-ghost btn-sm" onclick="showAuth('login')">Log In</button>
-      <button class="btn btn-primary btn-sm" onclick="showAuth('signup')">Get Started →</button>
+      <button class="btn btn-primary btn-sm" onclick="showAuth('signup')">Try Free →</button>
     </div>
     <!-- shown when logged in -->
     <div id="navUser" class="nav-user" style="display:none">
@@ -893,12 +905,12 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <h1>Stop Guessing.<br><span class="grad">Let AI Trade</span><br><span class="dim">Like a Hedge Fund.</span></h1>
     <p class="hero-sub">Live market data, AI-graded signals, backtesting, and a trade journal — everything a serious trader needs in one platform.</p>
     <div class="hero-ctas">
-      <button class="btn btn-primary btn-xl" onclick="goTo('pricing')">Get Started →</button>
-      <button class="btn btn-ghost btn-lg" onclick="goToAnalyzer()">Try the Analyzer</button>
+      <button class="btn btn-primary btn-xl" onclick="showAuth('signup')">Try Free — 3 Analyses →</button>
+      <button class="btn btn-ghost btn-lg" onclick="goTo('pricing')">See Pricing</button>
     </div>
     <div class="hero-trust">
       <span>★★★★★</span>
-      <span>Trusted by 2,400+ traders worldwide</span>
+      <span>No credit card needed · Cancel anytime</span>
     </div>
     <div class="stats-bar">
       <div class="stat-item"><div class="stat-num" id="statWinRate">74%</div><div class="stat-lbl">AI Win Rate</div></div>
@@ -1303,12 +1315,34 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
   <div class="app-wrap">
     <!-- paywall / usage shown by JS -->
     <div id="analyzerPaywall" class="paywall" style="display:none">
-      <h3>Subscription Required</h3>
-      <p>Start a Basic or Pro plan to unlock the AI analyzer. Cancel anytime, no contracts.</p>
-      <div class="paywall-btns">
-        <button class="btn btn-primary btn-lg" onclick="goTo('pricing');showPage('home')">View Plans →</button>
-        <button class="btn btn-ghost btn-lg" onclick="showAuth('login')">Log In</button>
+      <div id="paywallSignup">
+        <div style="font-size:36px;margin-bottom:12px">🚀</div>
+        <h3>Try 3 Analyses Free</h3>
+        <p>No credit card needed. Get your first AI-graded signal in under 60 seconds.</p>
+        <div class="paywall-btns">
+          <button class="btn btn-primary btn-lg" onclick="showAuth('signup')">Start Free →</button>
+          <button class="btn btn-ghost btn-lg" onclick="showAuth('login')">Log In</button>
+        </div>
       </div>
+      <div id="paywallSubscribe" style="display:none">
+        <div style="font-size:36px;margin-bottom:12px">⚡</div>
+        <h3>Free Trial Used Up</h3>
+        <p>You've used all 3 free analyses. Subscribe to keep trading smarter.</p>
+        <div class="paywall-btns">
+          <button class="btn btn-primary btn-lg" onclick="goTo('pricing');showPage('home')">View Plans →</button>
+        </div>
+      </div>
+    </div>
+    <!-- Trial banner — shown to free trial users inside analyzer -->
+    <div id="trialBanner" style="display:none;background:linear-gradient(135deg,rgba(0,229,180,0.12),rgba(61,158,255,0.08));border:1px solid rgba(0,229,180,0.25);border-radius:12px;padding:14px 20px;margin:16px 24px 0;display:none;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">🎁</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent)" id="trialBannerText">3 free analyses remaining</div>
+          <div style="font-size:11px;color:var(--text3)">No credit card needed — upgrade anytime</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="padding:8px 18px;font-size:13px" onclick="goTo('pricing');showPage('home')">Upgrade →</button>
     </div>
     <div id="analyzerContent">
     <div class="app-header">
@@ -1324,6 +1358,7 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
         <div class="usage-track"><div class="usage-fill" id="usageFill" style="width:0%"></div></div>
         <a style="color:var(--accent);cursor:pointer;font-size:10px" onclick="startCheckout('pro')">Upgrade to Pro →</a>
       </div>
+      <div id="upgradeNudge" onclick="startCheckout('pro')" style="display:none;cursor:pointer;margin-top:8px;padding:10px 16px;background:rgba(255,179,0,0.08);border:1px solid rgba(255,179,0,0.25);border-radius:8px;font-size:12px;color:#ffb300;font-weight:600;text-align:center"></div>
     </div>
     <!-- Trading Mode Switcher -->
     <div style="margin-bottom:10px">
@@ -2100,6 +2135,33 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
   </div>
 </div>
 
+<!-- ════════ ONBOARDING MODAL ════════ -->
+<div class="modal-overlay" id="onboardModal" style="display:none;z-index:1100">
+  <div class="modal" style="max-width:480px;text-align:center">
+    <div id="onboardStep1">
+      <div style="font-size:48px;margin-bottom:16px">🚀</div>
+      <h2 style="margin-bottom:8px">Welcome to PriceAction AI</h2>
+      <p style="color:var(--text2);margin-bottom:24px">You have <strong style="color:var(--accent)">3 free analyses</strong> to try. Here's how to get your first signal in 60 seconds:</p>
+      <div style="text-align:left;background:var(--bg2);border-radius:12px;padding:20px;margin-bottom:24px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--accent);flex-shrink:0">1</div>
+          <div><div style="font-weight:600;font-size:14px">Choose your mode</div><div style="font-size:12px;color:var(--text3)">Scalp, Day Trade, or Swing</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--accent);flex-shrink:0">2</div>
+          <div><div style="font-weight:600;font-size:14px">Type any symbol</div><div style="font-size:12px;color:var(--text3)">ES1!, BTC/USD, AAPL, EUR/USD…</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--accent);flex-shrink:0">3</div>
+          <div><div style="font-weight:600;font-size:14px">Get your graded signal</div><div style="font-size:12px;color:var(--text3)">BUY/SELL/WAIT with entry, SL, and TP</div></div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-lg" style="width:100%" onclick="closeOnboard();showPage('analyzer')">Get My First Signal →</button>
+      <p style="margin-top:12px;font-size:11px;color:var(--text3)">Only take A+ and A grades — they're the highest probability setups</p>
+    </div>
+  </div>
+</div>
+
 <!-- ════════ AUTH MODAL ════════ -->
 <div class="modal-overlay" id="authModal" onclick="closeAuthOnBg(event)">
   <div class="modal">
@@ -2226,14 +2288,38 @@ function updateNavUI(){
 
 function updateAnalyzerGate(){
   const hasActiveSub=currentUser&&currentUser.plan&&currentUser.subscriptionStatus==='active';
-  $('analyzerPaywall').style.display=hasActiveSub?'none':'';
-  $('analyzerContent').style.display=hasActiveSub?'':'none';
-  if(hasActiveSub){
-    $('manageSubBtn').style.display='';
-    if(currentUser.plan==='basic'){
+  const trialUsed=currentUser?(currentUser.trialUsage||0):0;
+  const hasTrial=currentUser&&!hasActiveSub&&trialUsed<3;
+  const trialExpired=currentUser&&!hasActiveSub&&trialUsed>=3;
+  const showContent=hasActiveSub||hasTrial;
+
+  $('analyzerPaywall').style.display=showContent?'none':'';
+  $('analyzerContent').style.display=showContent?'':'none';
+
+  // Paywall variant
+  if(!showContent){
+    const isLoggedOut=!currentUser;
+    $('paywallSignup').style.display=(isLoggedOut||hasTrial===false&&!trialExpired)?'':'none';
+    $('paywallSubscribe').style.display=trialExpired?'':'none';
+    if(isLoggedOut){$('paywallSignup').style.display='';$('paywallSubscribe').style.display='none';}
+  }
+
+  // Trial banner
+  const tb=$('trialBanner');
+  if(hasTrial){
+    tb.style.display='flex';
+    const left=3-trialUsed;
+    $('trialBannerText').textContent=`${left} free ${left===1?'analysis':'analyses'} remaining`;
+  } else {
+    tb.style.display='none';
+  }
+
+  if(showContent){
+    $('manageSubBtn').style.display=hasActiveSub?'':'none';
+    if(hasActiveSub&&currentUser.plan==='basic'){
       $('usageBarWrap').style.display='';
       fetchUsage();
-    }else{
+    } else if(hasActiveSub){
       $('usageBarWrap').style.display='none';
     }
   }
@@ -2245,12 +2331,25 @@ async function fetchUsage(){
     const res=await fetch('/api/auth/me',{headers:{Authorization:'Bearer '+authToken}});
     if(!res.ok)return;
     const u=await res.json();
+    // Update trial usage if changed server-side
+    if(currentUser&&u.trialUsage!==undefined){
+      currentUser.trialUsage=u.trialUsage;
+      updateAnalyzerGate();
+    }
+    if(currentUser&&currentUser.plan!=='basic')return;
     const count=u.dailyUsageToday||0;
     const pct=Math.min(100,count/10*100);
     $('usageText').textContent=`${count} / 10 analyses today`;
     const fill=$('usageFill');
     fill.style.width=pct+'%';
     fill.className='usage-fill'+(pct>=100?' full':pct>=70?' warn':'');
+    // Upgrade nudge at 8+
+    const nudge=$('upgradeNudge');
+    if(nudge){
+      if(count>=8&&count<10){nudge.style.display='';nudge.textContent=`⚠️ Only ${10-count} ${10-count===1?'analysis':'analyses'} left today — Upgrade to Pro for unlimited →`;}
+      else if(count>=10){nudge.style.display='';nudge.textContent='🚫 Daily limit reached — Upgrade to Pro for unlimited analyses →';}
+      else{nudge.style.display='none';}
+    }
   }catch{}
 }
 
@@ -2290,6 +2389,15 @@ async function initAuth(){
     alert('Payment successful! Welcome to PriceAction AI. Your account is now active.');
   }else if(params.get('checkout')==='cancel'){
     history.replaceState({},'','/');
+  }
+}
+
+// ── ONBOARDING MODAL ──
+function showOnboard(){$('onboardModal').style.display='flex';}
+function closeOnboard(){$('onboardModal').style.display='none';localStorage.setItem('nt_onboarded','1');}
+function maybeShowOnboard(){
+  if(!localStorage.getItem('nt_onboarded')&&currentUser&&!currentUser.plan){
+    setTimeout(showOnboard,800);
   }
 }
 
@@ -2336,7 +2444,12 @@ async function submitAuth(){
     updateNavUI();
     updateAnalyzerGate();
     closeAuth();
-    if(data.user.plan&&data.user.subscriptionStatus==='active'){showPage('analyzer');}
+    if(data.user.plan&&data.user.subscriptionStatus==='active'){
+      showPage('analyzer');
+    } else if(authMode==='signup'){
+      // New user — show onboarding
+      maybeShowOnboard();
+    }
   }catch(err){
     $('authError').textContent=err.message;
     $('authSubmit').disabled=false;

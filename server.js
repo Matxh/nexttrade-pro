@@ -343,8 +343,14 @@ async function authMiddleware(req, res, next) {
 function requirePlan(req, res, next) {
   const user = req.user;
   if (isWhitelisted(user)) return next();
+  // Free trial: 3 free analyses before subscription required
   if (!user.plan || user.subscriptionStatus !== 'active') {
-    return res.status(403).json({ error: 'subscription_required', message: 'An active subscription is required.' });
+    const trialCount = user.trialUsage || 0;
+    if (trialCount >= 3) {
+      return res.status(403).json({ error: 'subscription_required', message: 'Your 3 free analyses are used up. Subscribe to continue.' });
+    }
+    req._isTrial = true;
+    return next();
   }
   const today = new Date().toISOString().split('T')[0];
   const usage = user.dailyUsage || { date: '', count: 0 };
@@ -400,6 +406,7 @@ app.post('/api/auth/signup', async (req, res) => {
     stripeSubscriptionId: null,
     subscriptionStatus: null,
     dailyUsage: { date: '', count: 0 },
+    trialUsage: 0,
     createdAt: new Date().toISOString()
   };
   saveUser(user);
@@ -428,7 +435,7 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
   const u     = req.user;
   const today = new Date().toISOString().split('T')[0];
   const usage = u.dailyUsage || { date: '', count: 0 };
-  res.json({ ...safeUser(u), dailyUsageToday: usage.date === today ? usage.count : 0 });
+  res.json({ ...safeUser(u), dailyUsageToday: usage.date === today ? usage.count : 0, trialUsage: u.trialUsage || 0 });
 });
 
 function safeUser(u) {
@@ -1134,11 +1141,15 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
     // Update daily usage
     const user = req.user;
     if (!isWhitelisted(user)) {
-      const today = new Date().toISOString().split('T')[0];
-      const usage = user.dailyUsage || { date:'', count:0 };
-      if (usage.date !== today) { usage.date = today; usage.count = 0; }
-      usage.count++;
-      user.dailyUsage = usage;
+      if (req._isTrial) {
+        user.trialUsage = (user.trialUsage || 0) + 1;
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        const usage = user.dailyUsage || { date:'', count:0 };
+        if (usage.date !== today) { usage.date = today; usage.count = 0; }
+        usage.count++;
+        user.dailyUsage = usage;
+      }
       await saveUser(user);
     }
 
