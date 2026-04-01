@@ -860,6 +860,24 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
 .review-grade.C{background:var(--amber-dim);color:var(--amber)}
 .review-grade.D{background:var(--red-dim);color:var(--red)}
 </style>
+
+<!-- Meta Pixel Code -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '1846301572629346');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=1846301572629346&ev=PageView&noscript=1"
+/></noscript>
+<!-- End Meta Pixel Code -->
 </head>
 <body>
 
@@ -2417,6 +2435,7 @@ async function initAuth(){
         if(res.ok){currentUser=await res.json();saveAuthState(authToken,currentUser);updateNavUI();updateAnalyzerGate();}
       }catch{}
     },2000);
+    if(typeof fbq==='function') fbq('track','Subscribe');
     alert('Payment successful! Welcome to PriceAction AI. Your account is now active.');
   }else if(params.get('checkout')==='cancel'){
     history.replaceState({},'','/');
@@ -2478,6 +2497,11 @@ async function submitAuth(){
     updateAnalyzerGate();
     closeAuth();
     loadReferral();
+    // Meta Pixel tracking
+    if(typeof fbq==='function'){
+      if(authMode==='signup') fbq('track','Lead');
+      if(data.user.plan&&data.user.subscriptionStatus==='active') fbq('track','Subscribe');
+    }
     if(data.user.plan&&data.user.subscriptionStatus==='active'){
       showPage('analyzer');
     } else if(authMode==='signup'){
