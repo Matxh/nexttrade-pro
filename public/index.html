@@ -1842,28 +1842,30 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       <button onclick="clearAutofill()">Clear ✕</button>
     </div>
 
-    <!-- TradingView Indicator Access -->
+    <!-- Pine Script Source Code -->
     <div class="j-panel" style="margin-bottom:16px" id="indicatorAccessPanel">
-      <div class="j-head"><span class="j-title">📊 TradingView Indicator</span></div>
+      <div class="j-head"><span class="j-title">📜 PriceAction AI | FULL SUITE – Pine Script Source Code</span></div>
       <div style="padding:16px 20px">
-        <div id="indicatorActiveBlock" style="display:none;margin-bottom:14px;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.2);border-radius:10px;padding:12px 16px">
-          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:4px">✓ Indicator Access Active</div>
-          <div style="font-size:12px;color:var(--text2)">Your TradingView username will be approved within 24 hours of subscribing.</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">Get the full Pine Script v6 source code for the PriceAction AI FULL SUITE indicator. Import directly into TradingView's Pine Editor — yours to keep forever. Includes a setup guide delivered straight to your inbox.</div>
+        
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <span style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-family:var(--mono);font-size:11px;color:var(--blue)">✓ Full Pine Script v6 source</span>
+          <span style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-family:var(--mono);font-size:11px;color:var(--blue)">✓ Session boxes (Asia/London/NY)</span>
+          <span style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-family:var(--mono);font-size:11px;color:var(--blue)">✓ Order Blocks & FVGs</span>
+          <span style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-family:var(--mono);font-size:11px;color:var(--blue)">✓ OMEGA scoring system</span>
         </div>
-        <div id="indicatorInactiveBlock" style="margin-bottom:14px">
-          <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:10px">Get the PriceAction AI SMC Suite on TradingView — Order Blocks, FVGs, BOS/CHOCH &amp; Killzones. $9.99/mo.</div>
-          <button onclick="startCheckout('indicator')" style="background:linear-gradient(135deg,#00bcd4,#00e676);color:#000;border:none;border-radius:8px;padding:10px 20px;font-family:var(--sans);font-size:13px;font-weight:800;cursor:pointer">Get Indicator →</button>
+        
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-bottom:12px">One-time purchase · Keep forever</div>
+        
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+          <div style="font-size:32px;font-weight:900;color:var(--accent)">$24.99</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">one-time · emailed instantly</div>
         </div>
-        <div style="margin-top:4px">
-          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Your TradingView Username</div>
-          <div style="display:flex;gap:8px">
-            <input id="tvUsernameInput" type="text" placeholder="e.g. john_trader" style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none">
-            <button onclick="saveTVUsername()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 18px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer">Save</button>
-          </div>
-          <div id="tvUsernameSaved" style="display:none;font-family:var(--mono);font-size:11px;color:var(--green);margin-top:6px">✓ Saved — we'll approve your access within 24 hours</div>
-        </div>
+        
+        <button onclick="startCheckout('pine')" style="background:linear-gradient(135deg,#3d9eff,#00e5b4);color:#000;border:none;border-radius:10px;padding:12px 28px;font-family:var(--sans);font-size:14px;font-weight:800;cursor:pointer;white-space:nowrap">Get Indicator →</button>
       </div>
     </div>
+
 
     <!-- Referral Section -->
     <div class="j-panel" id="referralSection" style="margin-bottom:16px;display:none">
