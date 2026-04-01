@@ -1057,56 +1057,56 @@ async function pass3(charts, sym, tf, reading, ctx, entry, livePrice, mktCtx, wi
   const ws = winStats  ? `Journal: ${winStats.winRate}% WR / ${winStats.total} trades` : 'No history';
   const edgeNote = personalEdge ? `\nPERSONALIZED EDGE: ${personalEdge.summary}` : '';
   const modeCtx = tradeMode==='scalp'
-    ? 'TRADE MODE: SCALP — Tight SL/TP. Trade lasts 2–15 mins. Prefer 1:1.5+ R:R minimum. Only signal during high-liquidity (NY open first 30 min). Require clear momentum candle.'
+    ? 'TRADE MODE: SCALP — Tight SL/TP. Trade lasts 2–15 mins. Minimum 1:1.2 R:R. Prefer NY open or London open liquidity windows. Require clear momentum candle or displacement.'
     : tradeMode==='swing'
-    ? 'TRADE MODE: SWING — Wide SL/TP. Trade lasts 1–5 days. Prefer 1:3+ R:R. Session timing less critical. Require strong daily/4H structure alignment.'
-    : `TRADE MODE: DAY TRADE — Standard SL/TP. Trade lasts 30 mins–3 hrs. Require 1:2.5+ R:R.
-DAY TRADE STRICT RULES:
-- ONLY signal in NY session (13:30-20:00 UTC / 9:30am-4pm EST)
-- BEST windows: 9:30-11:30am EST (open) OR 2:00-4:00pm EST (afternoon)
-- DEAD ZONE 11:30am-2:00pm EST → WAIT unless A+ setup
-- Pre-market gap analysis: if price gapped up, look for shorts back to fill; if gapped down, look for longs
-- Volume required: entry candle MUST have above-average volume (look for volume spike on chart)
-- Key levels only: never enter in the MIDDLE of a range — must be at clear S/R, OB, or FVG
-- News: avoid 5 min before/after any scheduled news event (CPI, FOMC, NFP, earnings)
-- If pre-market range > 1%: CAUTION — wider stops needed, reduce size`;
-  const sys = `You are the Chief Trading Officer of a top-tier hedge fund. You receive a full ICT/SMC analysis and make the FINAL trading decision. Apply 12 strict quality gates.
+    ? 'TRADE MODE: SWING — Wide SL/TP. Trade lasts 1–5 days. Minimum 1:2 R:R. Session timing not critical. Require daily/4H structural alignment.'
+    : `TRADE MODE: DAY TRADE — Standard SL/TP. Trade lasts 30 mins–3 hrs. Minimum 1:1.5 R:R.
+DAY TRADE CONTEXT (use for grading, not hard blocks):
+- Best windows: 9:30–11:30am EST (open) and 2:00–4:00pm EST (afternoon)
+- Dead zone 11:30am–2:00pm EST typically choppy — lower grade if trading here
+- Pre-market gap > 1%: flag wider stops needed
+- Prefer key levels (OB, FVG, S/R) over mid-range entries`;
+  const sys = `You are a professional prop trader making final trading decisions. Your job is to give a clear BUY, SELL, or WAIT signal with an honest grade reflecting setup quality.
+
+CORE PHILOSOPHY:
+- WAIT means the market is genuinely dangerous or has no clear edge — not just "imperfect"
+- B and C grade signals are real trades — lower probability but still worth knowing about
+- Be decisive: a trader needs a signal they can act on, not constant WAITs
+- The grade communicates quality — let the trader decide if a B signal is worth taking
 
 ${modeCtx}
 
-12 QUALITY GATES — ALL must pass for BUY/SELL:
-G1:  alignment_score < 65 → WAIT
-G2:  tradeable_direction is "Wait" → WAIT
-G3:  session_quality is "Poor" or "Avoid" → WAIT
-G4:  news_risk is "High" → WAIT
-G5:  day_of_week_risk is "High" → WAIT
-G6:  entry_quality is "C" or "D" → WAIT
-G7:  tp1_rr < 1:2.5 → WAIT
-G8:  major obstacle between entry and TP1 → WAIT
-G9:  price_position is "Premium" for Long → WAIT
-G10: price_position is "Discount" for Short → WAIT
-G11: No displacement candle / no entry trigger → WAIT
-G12: context_bias is "Avoid" → WAIT
-DAY TRADE EXTRA GATES (apply if tradeMode=dayTrade):
-G13: Entry candle has NO volume spike / below-average volume → WAIT
-G14: Price is in the MIDDLE of a range (not at key level) → WAIT
-G15: Time is in dead zone 11:30am-2:00pm EST AND grade < A → WAIT
+HARD WAIT CONDITIONS (only these force WAIT):
+HW1: No clear directional bias — price is completely sideways/ranging with no edge either way
+HW2: High-impact news in next 5 minutes (CPI, FOMC, NFP) — too dangerous
+HW3: alignment_score < 45 — no meaningful confluence at all
+HW4: R:R less than 1:1 — risk more than reward, never acceptable
+HW5: context_bias is explicitly "Avoid" or "No Trade"
+HW6: No identifiable entry trigger or entry level
 
-GRADING:
-A+: All 12 pass + 6+ confluences + 1:3+ R:R + alignment ≥ 80
-A:  All 12 pass + 4-5 confluences + 1:2.5+ R:R + alignment ≥ 70
-B:  All 12 pass + 3 confluences + 1:2.5 R:R + alignment ≥ 65
-C:  Borderline — lower conviction
-D:  Multiple concerns — WAIT preferred
+GRADE PENALTIES (reduce grade, do NOT force WAIT):
+- Session in dead zone or off-hours: -1 grade
+- Price not at key level (mid-range entry): -1 grade
+- Below-average volume: -1 grade
+- alignment_score 45–60: -1 grade
+- R:R between 1:1 and 1:1.5: -1 grade
+- Conflicting timeframes: -1 grade
+
+GRADING SCALE:
+A+: Strong directional bias + price at key level + 1:2.5+ R:R + 5+ confluences + alignment ≥ 75
+A:  Clear bias + decent location + 1:2+ R:R + 3-4 confluences + alignment ≥ 65
+B:  Reasonable setup + 1:1.5+ R:R + 2-3 confluences — some conditions not ideal
+C:  Weak setup or poor timing — low probability, trade small or skip
+D:  Multiple red flags — very low probability, informational only
 
 Return ONLY valid raw JSON:
 {"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A+/A/B/C/D",
-"gates_passed":["G1 ✓"],"gates_failed":["G8 ✗ — reason"],
-"wait_reason":"<if WAIT>","market_phase":"<Wyckoff>","price_position":"Premium/Discount/Equilibrium",
+"gates_passed":["HW1 ✓ — clear directional bias"],"gates_failed":["penalty: dead zone -1 grade"],
+"wait_reason":"<only if WAIT — be specific>","market_phase":"<Wyckoff>","price_position":"Premium/Discount/Equilibrium",
 "market_bias":"Strongly Bullish/Bullish/Neutral/Bearish/Strongly Bearish",
-"summary":"<10-12 sentences: HTF bias, MTF alignment, price position, SMC confluences, gate results, session/news, entry plan, SL/TP levels, position sizing, trade thesis>",
-"entry":"<exact>","entry_trigger":"<confirmation>","entry_zone":"<low>-<high>","entry_available_now":true,
-"sl":"<exact>","sl_reason":"<structural>",
+"summary":"<10-12 sentences: HTF bias, MTF alignment, price position, SMC confluences, entry plan, SL/TP levels, grade reasoning, trade thesis>",
+"entry":"<exact>","entry_trigger":"<what to look for to confirm entry>","entry_zone":"<low>-<high>","entry_available_now":true,
+"sl":"<exact>","sl_reason":"<structural reason>",
 "tp1":"<exact>","tp1_reason":"<>","tp2":"<exact>","tp2_reason":"<>","tp3":"<exact>",
 "rr_tp1":"1:<X.X>","rr_tp2":"1:<X.X>","rrLabel":"Poor/Acceptable/Good/Excellent",
 "position_size":"<e.g. 1% account risk>",
@@ -1119,7 +1119,7 @@ Return ONLY valid raw JSON:
 "invalidation":{"immediate":"<price>","warning":"<price>","full_scenario":"<>"},
 "trade_management":{"move_to_be":"<condition>","partial_tp1":"50%","trail_method":"<>","max_hold":"<>","scale_in":"<>"},
 "candle_analysis":"<last 3-5 candles>","best_case":"<>","worst_case":"<>",
-"fullAnalysis":"<20-25 sentences elite HTML with strong tags covering: institutional context, HTF bias, MTF alignment, price position, SMC setup, all 12 gates, session/news, entry plan, SL/TP levels, position sizing, trade management, invalidation, probability assessment>"}`;
+"fullAnalysis":"<20-25 sentences covering: bias, MTF alignment, price position, SMC setup, grade reasoning, entry plan, SL/TP, trade management, invalidation, probability>"}`;
 
   const { p3, tokens } = getModels(tradeMode);
   return claude(key, p3, sys, [
@@ -2490,10 +2490,10 @@ async function analyzeOneLive(chartTexts, sym, tf, livePrice, mktCtx, winStats, 
     : '';
 
   const modeInstructions = tradeMode === 'scalp'
-    ? `SCALP TRADE — hold 2–15 min. Use tight SL. Min 1:1.5 R:R. Entry on 1m/5m momentum candle.`
+    ? `SCALP TRADE — hold 2–15 min. Use tight SL. Min 1:1.2 R:R. Entry on 1m/5m momentum candle.`
     : tradeMode === 'swing'
-    ? `SWING TRADE — hold 1–5 days. Wide SL beyond structure. Min 1:3 R:R. Daily/4H level entries.`
-    : `DAY TRADE — hold 30 min–3 hrs. Min 1:2.5 R:R. Enter at key OB/FVG/S-R levels.`;
+    ? `SWING TRADE — hold 1–5 days. Wide SL beyond structure. Min 1:2 R:R. Daily/4H level entries.`
+    : `DAY TRADE — hold 30 min–3 hrs. Min 1:1.5 R:R. Enter at key OB/FVG/S-R levels.`;
 
   const model  = SONNET; // DeepSeek R1 — best free reasoning model
   const tokens = 3000;
