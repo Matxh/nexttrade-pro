@@ -1453,6 +1453,9 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
     <input type="file" id="fileInput0" accept="image/*" style="display:none" onchange="onFileSelect(event,0)">
     <input type="file" id="fileInput1" accept="image/*" style="display:none" onchange="onFileSelect(event,1)">
     <input type="file" id="fileInput2" accept="image/*" style="display:none" onchange="onFileSelect(event,2)">
+    <input type="file" id="fileInput3" accept="image/*" style="display:none" onchange="onFileSelect(event,3)">
+    <input type="file" id="fileInput4" accept="image/*" style="display:none" onchange="onFileSelect(event,4)">
+    <input type="file" id="fileInput5" accept="image/*" style="display:none" onchange="onFileSelect(event,5)">
     <!-- SESSION TIMER -->
     <div id="sessionTimer" style="display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 18px;margin-bottom:10px;flex-wrap:wrap;">
       <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px;">
@@ -1709,6 +1712,13 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
   </div>
   </div><!-- /analyzerContent -->
 </div>
+<!-- File inputs live OUTSIDE analyzerContent so display:none paywall never blocks programmatic .click() -->
+<input type="file" id="fileInputGlobal0" accept="image/*" style="display:none;position:fixed;left:-9999px" onchange="onFileSelect(event,0)">
+<input type="file" id="fileInputGlobal1" accept="image/*" style="display:none;position:fixed;left:-9999px" onchange="onFileSelect(event,1)">
+<input type="file" id="fileInputGlobal2" accept="image/*" style="display:none;position:fixed;left:-9999px" onchange="onFileSelect(event,2)">
+<input type="file" id="fileInputGlobal3" accept="image/*" style="display:none;position:fixed;left:-9999px" onchange="onFileSelect(event,3)">
+<input type="file" id="fileInputGlobal4" accept="image/*" style="display:none;position:fixed;left:-9999px" onchange="onFileSelect(event,4)">
+<input type="file" id="fileInputGlobal5" accept="image/*" style="display:none;position:fixed;left:-9999px" onchange="onFileSelect(event,5)">
 
 <div id="commandPalette" style="display:none;position:fixed;inset:0;background:rgba(4,7,12,.72);backdrop-filter:blur(8px);z-index:10000;padding:10vh 20px">
   <div style="max-width:720px;margin:0 auto;background:var(--card);border:1px solid var(--border2);border-radius:16px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.45)">
@@ -2695,11 +2705,14 @@ const slotTF=['1m','5m','15m'];
 const slotSuggest=[
   ['1m','5m','15m','30m','1H','2H','4H','8H','1D','1W'],
   ['1m','5m','15m','30m','1H','2H','4H','8H','1D','1W'],
+  ['1m','5m','15m','30m','1H','2H','4H','8H','1D','1W'],
+  ['1m','5m','15m','30m','1H','2H','4H','8H','1D','1W'],
+  ['1m','5m','15m','30m','1H','2H','4H','8H','1D','1W'],
   ['1m','5m','15m','30m','1H','2H','4H','8H','1D','1W']
 ];
 function setTF(btn,t){document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');tf=t;slotTF[0]=t;if(charts[0])renderSlot(0);}
 function setSlotTF(i,t){slotTF[i]=t;renderSlot(i);}
-function triggerSlot(i){if(!charts[i])$('fileInput'+i).click();}
+function triggerSlot(i){if(!charts[i]){const inp=$('fileInputGlobal'+i)||$('fileInput'+i);if(inp)inp.click();}}
 
 function loadFile(file,i){
   if(!file?.type.startsWith('image/'))return;
@@ -2723,22 +2736,31 @@ function loadFile(file,i){
   reader.readAsDataURL(file);
 }
 
-// Mode-aware slot metadata
+// Mode-aware slot metadata (6 slots — slots 3-5 are Pro-only extras)
 const SLOT_META = {
   scalp: [
     { label:'Slot 1 — 1m (Momentum)', hint:'1m chart — fast entries & exits', icon:'⚡' },
     { label:'Slot 2 — 5m (Structure)', hint:'5m chart — key OB/FVG zones', icon:'📈' },
-    { label:'Slot 3 — 15m (Entry Zone)', hint:'15m chart — confirm & place trade', icon:'🎯' }
+    { label:'Slot 3 — 15m (Entry Zone)', hint:'15m chart — confirm & place trade', icon:'🎯' },
+    { label:'Slot 4 — 30m (Context)', hint:'30m chart — extra confluence', icon:'📊' },
+    { label:'Slot 5 — 1H (Macro)', hint:'1H chart — higher TF bias', icon:'📊' },
+    { label:'Slot 6 — 4H (Trend)', hint:'4H chart — trend direction', icon:'📊' }
   ],
   dayTrade: [
     { label:'Slot 1 — 4H (Trend)', hint:'4H chart — sets overall direction', icon:'📊' },
     { label:'Slot 2 — 1H (Zone)', hint:'1H chart — key level & OB', icon:'📈' },
-    { label:'Slot 3 — 15m (Entry)', hint:'15m chart — place trade here', icon:'🎯' }
+    { label:'Slot 3 — 15m (Entry)', hint:'15m chart — place trade here', icon:'🎯' },
+    { label:'Slot 4 — 5m (Precision)', hint:'5m chart — extra entry precision', icon:'⚡' },
+    { label:'Slot 5 — 1D (Bias)', hint:'Daily chart — macro context', icon:'🗓' },
+    { label:'Slot 6 — 1W (Trend)', hint:'Weekly chart — big picture', icon:'📊' }
   ],
   swing: [
     { label:'Slot 1 — 1D (Bias)', hint:'Daily chart — weekly bias & structure', icon:'🗓' },
     { label:'Slot 2 — 4H (Structure)', hint:'4H chart — OB/FVG & key levels', icon:'📊' },
-    { label:'Slot 3 — 1H (Entry)', hint:'1H chart — entry timing & trigger', icon:'🎯' }
+    { label:'Slot 3 — 1H (Entry)', hint:'1H chart — entry timing & trigger', icon:'🎯' },
+    { label:'Slot 4 — 1W (Macro)', hint:'Weekly chart — higher TF bias', icon:'📊' },
+    { label:'Slot 5 — 15m (Trigger)', hint:'15m chart — precise entry trigger', icon:'⚡' },
+    { label:'Slot 6 — 30m (Confirm)', hint:'30m chart — extra confirmation', icon:'📈' }
   ]
 };
 
