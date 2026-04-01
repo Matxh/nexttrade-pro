@@ -1865,6 +1865,29 @@ nav { border-bottom-color: rgba(0,229,180,.08); box-shadow: 0 1px 30px rgba(0,0,
       </div>
     </div>
 
+    <!-- Referral Section -->
+    <div class="j-panel" id="referralSection" style="margin-bottom:16px;display:none">
+      <div class="j-head"><span class="j-title">🎁 Refer a Friend</span></div>
+      <div style="padding:16px 20px">
+        <p style="font-size:13px;color:var(--text2);line-height:1.7;margin:0 0 14px">Share your referral link — for every friend who signs up you get <strong style="color:var(--accent)">5 bonus analyses</strong>.</p>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Your Referral Link</div>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input id="referralLinkInput" type="text" readonly style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--accent);font-family:var(--mono);font-size:12px;outline:none;cursor:pointer" onclick="this.select()">
+          <button onclick="copyReferralLink()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 18px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap" id="referralCopyBtn">Copy</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Traders Referred</div>
+            <div id="referralCount" style="font-size:24px;font-weight:900;color:var(--accent);font-family:var(--mono)">0</div>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Bonus Analyses</div>
+            <div id="referralBonus" style="font-size:24px;font-weight:900;color:var(--green);font-family:var(--mono)">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="j-panel" style="margin-bottom:20px">
       <div class="j-head"><span class="j-title">Account Settings</span></div>
       <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
@@ -2354,6 +2377,11 @@ async function fetchUsage(){
 }
 
 async function initAuth(){
+  // Capture referral code from URL and store in sessionStorage
+  const initParams=new URLSearchParams(window.location.search);
+  const refCode=initParams.get('ref');
+  if(refCode) sessionStorage.setItem('nt_ref',refCode);
+
   const token=localStorage.getItem('nt_token');
   const user=localStorage.getItem('nt_user');
   if(token&&user){
@@ -2368,6 +2396,7 @@ async function initAuth(){
         currentUser={...currentUser,...fresh};
         localStorage.setItem('nt_user',JSON.stringify(currentUser));
         updateNavUI();
+        loadReferral();
       }else{
         clearAuthState();
         updateNavUI();
@@ -2434,9 +2463,11 @@ async function submitAuth(){
   $('authSubmit').textContent=authMode==='login'?'Logging in…':'Creating account…';
   $('authError').textContent='';
   try{
+    const body={email,password};
+    if(authMode==='signup'){const ref=sessionStorage.getItem('nt_ref');if(ref)body.ref=ref;}
     const res=await fetch('/api/auth/'+(authMode==='login'?'login':'signup'),{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email,password})
+      body:JSON.stringify(body)
     });
     const data=await res.json();
     if(!res.ok)throw new Error(data.error||'Authentication failed');
@@ -2444,6 +2475,7 @@ async function submitAuth(){
     updateNavUI();
     updateAnalyzerGate();
     closeAuth();
+    loadReferral();
     if(data.user.plan&&data.user.subscriptionStatus==='active'){
       showPage('analyzer');
     } else if(authMode==='signup'){
@@ -2511,6 +2543,30 @@ async function manageSubscription(){
   }catch(err){
     alert('Error: '+err.message);
   }
+}
+
+// ── REFERRAL ──
+async function loadReferral(){
+  if(!currentUser||!authToken)return;
+  try{
+    const res=await fetch('/api/referral',{headers:{Authorization:'Bearer '+authToken}});
+    if(!res.ok)return;
+    const d=await res.json();
+    const sec=$('referralSection');
+    if(sec)sec.style.display='';
+    if($('referralLinkInput'))$('referralLinkInput').value=d.referralLink||'';
+    if($('referralCount'))$('referralCount').textContent=d.referrals||0;
+    if($('referralBonus'))$('referralBonus').textContent=d.bonusUsage||0;
+  }catch(e){}
+}
+
+function copyReferralLink(){
+  const inp=$('referralLinkInput');
+  if(!inp)return;
+  navigator.clipboard.writeText(inp.value).then(()=>{
+    const btn=$('referralCopyBtn');
+    if(btn){btn.textContent='Copied!';setTimeout(()=>{btn.textContent='Copy';},2000);}
+  }).catch(()=>{inp.select();document.execCommand('copy');});
 }
 
 function goToAnalyzer(){

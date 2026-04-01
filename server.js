@@ -293,6 +293,13 @@ async function hashPassword(password) {
   });
 }
 
+// ─────────────────────────────────────────────
+// REFERRAL CODE GENERATOR
+// ─────────────────────────────────────────────
+function generateReferralCode(userId) {
+  return crypto.createHash('sha256').update(String(userId)).digest('hex').slice(0, 6).toUpperCase();
+}
+
 async function verifyPassword(password, stored) {
   const [salt, key] = stored.split(':');
   return new Promise((resolve, reject) => {
@@ -356,9 +363,18 @@ function requirePlan(req, res, next) {
   const usage = user.dailyUsage || { date: '', count: 0 };
   if (usage.date !== today) { usage.date = today; usage.count = 0; }
   if (user.plan === 'basic' && usage.count >= 10) {
+    // Check bonusUsage as overflow before rejecting
+    if ((user.bonusUsage || 0) > 0) {
+      req._useBonus = true;
+      return next();
+    }
     return res.status(403).json({ error: 'limit_reached', message: 'Daily limit of 10 analyses reached. Upgrade to Pro.' });
   }
   if (user.plan === 'pro' && usage.count >= 30) {
+    if ((user.bonusUsage || 0) > 0) {
+      req._useBonus = true;
+      return next();
+    }
     return res.status(403).json({ error: 'limit_reached', message: 'Daily limit of 30 analyses reached. Resets at midnight UTC.' });
   }
   next();
@@ -389,7 +405,7 @@ app.get('/api/dbping', (req, res) => res.json({ ok: true, storage: 'Vercel KV �
 // AUTH ENDPOINTS
 // ─────────────────────────────────────────────
 app.post('/api/auth/signup', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, ref } = req.body;
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Invalid email' });
   if (!password || password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
@@ -407,9 +423,27 @@ app.post('/api/auth/signup', async (req, res) => {
     subscriptionStatus: null,
     dailyUsage: { date: '', count: 0 },
     trialUsage: 0,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    referralCode: null,
+    referredBy: null,
+    bonusUsage: 0,
+    dripSent: {}
   };
-  saveUser(user);
+  user.referralCode = generateReferralCode(user.id);
+
+  // Handle referral
+  if (ref) {
+    const allUsers = await getAllUsers();
+    const referrer = allUsers.find(u => u.referralCode === ref.toUpperCase());
+    if (referrer) {
+      user.referredBy = referrer.id;
+      referrer.bonusUsage = (referrer.bonusUsage || 0) + 5;
+      await saveUser(referrer);
+      console.log(`[Referral] ${user.email} referred by ${referrer.email} — +5 bonus analyses`);
+    }
+  }
+
+  await saveUser(user);
   console.log(`[Auth] New signup: ${user.email}`);
   sendWelcomeEmail(user.email).catch(() => {});
   const token = signToken({ userId: user.id });
@@ -435,6 +469,7 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
   const u     = req.user;
   const today = new Date().toISOString().split('T')[0];
   const usage = u.dailyUsage || { date: '', count: 0 };
+  checkAndSendDripEmails(u).catch(() => {});
   res.json({ ...safeUser(u), dailyUsageToday: usage.date === today ? usage.count : 0, trialUsage: u.trialUsage || 0 });
 });
 
@@ -444,8 +479,159 @@ function safeUser(u) {
     id: u.id,
     email: u.email,
     plan: whitelisted ? 'pro' : u.plan,
-    subscriptionStatus: whitelisted ? 'active' : u.subscriptionStatus
+    subscriptionStatus: whitelisted ? 'active' : u.subscriptionStatus,
+    referralCode: u.referralCode || generateReferralCode(u.id),
+    bonusUsage: u.bonusUsage || 0
   };
+}
+
+// ─────────────────────────────────────────────
+// REFERRAL ENDPOINT
+// ─────────────────────────────────────────────
+app.get('/api/referral', authMiddleware, async (req, res) => {
+  const user = req.user;
+  const referralCode = user.referralCode || generateReferralCode(user.id);
+  const referralLink = `https://priceaction.it.com?ref=${referralCode}`;
+  const allUsers = await getAllUsers();
+  const referrals = allUsers.filter(u => u.referredBy === user.id).length;
+  res.json({ referralCode, referralLink, referrals, bonusUsage: user.bonusUsage || 0 });
+});
+
+// ─────────────────────────────────────────────
+// EMAIL DRIP SEQUENCE
+// ─────────────────────────────────────────────
+async function checkAndSendDripEmails(user) {
+  if (!resend) return;
+  if (!user.createdAt) return;
+  const daysSince = Math.floor((Date.now() - new Date(user.createdAt).getTime()) / 86400000);
+  const dripSent = user.dripSent || {};
+  let updated = false;
+
+  if (daysSince >= 1 && !dripSent.day1) {
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: user.email,
+        subject: 'Did you get your first signal? 📈',
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#0d1117;color:#ffffff;padding:32px;border-radius:12px;">
+            <h1 style="color:#00ffbb;margin-bottom:4px;">PriceAction AI</h1>
+            <p style="color:#888;margin-top:0;">Your trading edge starts here.</p>
+            <hr style="border-color:#222;margin:24px 0;">
+            <h2 style="color:#ffffff;">Did you get your first signal? 📈</h2>
+            <p style="color:#ccc;line-height:1.8;">Hey trader — just checking in. You signed up yesterday but we're not sure if you've had a chance to run your first analysis yet.</p>
+            <p style="color:#ccc;line-height:1.8;">Here's all it takes to get a signal in under 60 seconds:</p>
+            <div style="background:#161b22;border-radius:10px;padding:20px;margin:20px 0;">
+              <h3 style="color:#00ffbb;margin-top:0;">3 steps to your first signal</h3>
+              <ol style="color:#ccc;line-height:2.2;margin:0;padding-left:20px;">
+                <li>Log in at <a href="https://priceaction.it.com" style="color:#00ffbb;">priceaction.it.com</a></li>
+                <li>Take a screenshot of any chart (BTC, NQ, EUR/USD — anything)</li>
+                <li>Upload it and hit <strong style="color:#fff;">Analyze</strong></li>
+              </ol>
+            </div>
+            <p style="color:#ccc;line-height:1.8;">You have <strong style="color:#00ffbb;">free analyses</strong> waiting — no subscription needed to start.</p>
+            <div style="text-align:center;margin:28px 0;">
+              <a href="https://priceaction.it.com" style="background:#00ffbb;color:#000;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;display:inline-block;">Get My First Signal →</a>
+            </div>
+            <hr style="border-color:#222;margin:24px 0;">
+            <p style="color:#888;font-size:13px;">Trade smart. Trade with confluence. — PriceAction AI</p>
+          </div>
+        `,
+      });
+      dripSent.day1 = new Date().toISOString();
+      updated = true;
+      console.log(`[Drip] Day 1 email sent to ${user.email}`);
+    } catch(err) { console.error('[Drip] Day 1 failed:', err.message); }
+  }
+
+  if (daysSince >= 3 && !dripSent.day3) {
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: user.email,
+        subject: 'The secret to consistent trading signals 🎯',
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#0d1117;color:#ffffff;padding:32px;border-radius:12px;">
+            <h1 style="color:#00ffbb;margin-bottom:4px;">PriceAction AI</h1>
+            <p style="color:#888;margin-top:0;">Signal quality over quantity.</p>
+            <hr style="border-color:#222;margin:24px 0;">
+            <h2 style="color:#ffffff;">The secret to consistent trading signals 🎯</h2>
+            <p style="color:#ccc;line-height:1.8;">Most traders lose because they take every signal they see. The pros are ruthlessly selective.</p>
+            <div style="background:#161b22;border-radius:10px;padding:20px;margin:20px 0;">
+              <h3 style="color:#00ffbb;margin-top:0;">The A+ / A only rule</h3>
+              <p style="color:#ccc;line-height:1.8;margin:0 0 12px;">PriceAction AI grades every setup from A+ down to D. Here's why you should only take the top grades:</p>
+              <ul style="color:#ccc;line-height:2.2;margin:0;padding-left:20px;">
+                <li><strong style="color:#00ffbb;">A+ signals</strong> — All confluence factors align. Multiple timeframe confirmation. These are the setups institutions trade.</li>
+                <li><strong style="color:#00ffbb;">A signals</strong> — Strong setup, minor hesitation. Still high probability. Take these.</li>
+                <li><strong style="color:#ffb300;">B signals</strong> — Some confluence missing. Win rate drops significantly. Skip or paper trade only.</li>
+                <li><strong style="color:#ff3d5a;">C/D signals</strong> — Low probability. These lose money in the long run. Always skip.</li>
+              </ul>
+            </div>
+            <p style="color:#ccc;line-height:1.8;">Quality over quantity. Fewer, better trades = better results. Try it for a week.</p>
+            <div style="text-align:center;margin:28px 0;">
+              <a href="https://priceaction.it.com" style="background:#00ffbb;color:#000;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;display:inline-block;">Analyze A+ Setups Now →</a>
+            </div>
+            <hr style="border-color:#222;margin:24px 0;">
+            <p style="color:#888;font-size:13px;">Trade smart. Trade with confluence. — PriceAction AI</p>
+          </div>
+        `,
+      });
+      dripSent.day3 = new Date().toISOString();
+      updated = true;
+      console.log(`[Drip] Day 3 email sent to ${user.email}`);
+    } catch(err) { console.error('[Drip] Day 3 failed:', err.message); }
+  }
+
+  if (daysSince >= 7 && !dripSent.day7) {
+    const hasActiveSub = user.plan && user.subscriptionStatus === 'active';
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: user.email,
+        subject: 'One week in — are you profitable yet? 💰',
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#0d1117;color:#ffffff;padding:32px;border-radius:12px;">
+            <h1 style="color:#00ffbb;margin-bottom:4px;">PriceAction AI</h1>
+            <p style="color:#888;margin-top:0;">Week one check-in.</p>
+            <hr style="border-color:#222;margin:24px 0;">
+            <h2 style="color:#ffffff;">One week in — are you profitable yet? 💰</h2>
+            <p style="color:#ccc;line-height:1.8;">You've been using PriceAction AI for a week now. Traders who stick to A+ and A signals typically see results within their first 10 trades.</p>
+            <div style="background:#161b22;border-radius:10px;padding:20px;margin:20px 0;">
+              <h3 style="color:#00ffbb;margin-top:0;">Tips from top traders in our community</h3>
+              <ul style="color:#ccc;line-height:2.2;margin:0;padding-left:20px;">
+                <li>Only trade during <strong style="color:#fff;">Kill Zones</strong> — London Open (08:00-09:00 UTC) and NY Open (13:00-14:00 UTC)</li>
+                <li>Always wait for a <strong style="color:#fff;">confirmed entry signal</strong> — don't jump the gun</li>
+                <li>Use the <strong style="color:#fff;">Position Size Calculator</strong> to risk exactly 1-2% per trade</li>
+                <li>Log every trade in the <strong style="color:#fff;">Journal</strong> — pattern recognition takes 20+ trades</li>
+              </ul>
+            </div>
+            ${!hasActiveSub ? `
+            <div style="background:#0f2027;border:1px solid rgba(0,229,180,0.2);border-radius:10px;padding:20px;margin:20px 0;">
+              <h3 style="color:#00ffbb;margin-top:0;">Ready to go unlimited?</h3>
+              <p style="color:#ccc;line-height:1.6;margin:0 0 16px;">Upgrade to Pro for 30 analyses/day, Backtest Engine, and priority signals.</p>
+              <a href="https://priceaction.it.com" style="background:#00ffbb;color:#000;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;display:inline-block;">View Pricing →</a>
+            </div>
+            ` : `
+            <p style="color:#ccc;line-height:1.8;">You're on <strong style="color:#00ffbb;">${user.plan?.toUpperCase()}</strong> — keep going! The edge compounds over time.</p>
+            `}
+            <div style="text-align:center;margin:28px 0;">
+              <a href="https://priceaction.it.com" style="background:#00ffbb;color:#000;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;display:inline-block;">Continue Trading →</a>
+            </div>
+            <hr style="border-color:#222;margin:24px 0;">
+            <p style="color:#888;font-size:13px;">Trade smart. Trade with confluence. — PriceAction AI</p>
+          </div>
+        `,
+      });
+      dripSent.day7 = new Date().toISOString();
+      updated = true;
+      console.log(`[Drip] Day 7 email sent to ${user.email}`);
+    } catch(err) { console.error('[Drip] Day 7 failed:', err.message); }
+  }
+
+  if (updated) {
+    user.dripSent = dripSent;
+    await saveUser(user);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -1143,6 +1329,8 @@ app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
     if (!isWhitelisted(user)) {
       if (req._isTrial) {
         user.trialUsage = (user.trialUsage || 0) + 1;
+      } else if (req._useBonus) {
+        user.bonusUsage = (user.bonusUsage || 1) - 1;
       } else {
         const today = new Date().toISOString().split('T')[0];
         const usage = user.dailyUsage || { date:'', count:0 };
