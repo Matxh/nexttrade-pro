@@ -1066,38 +1066,24 @@ DAY TRADE CONTEXT (use for grading, not hard blocks):
 - Dead zone 11:30am–2:00pm EST typically choppy — lower grade if trading here
 - Pre-market gap > 1%: flag wider stops needed
 - Prefer key levels (OB, FVG, S/R) over mid-range entries`;
-  const sys = `You are a professional prop trader making final trading decisions. Your job is to give a clear BUY, SELL, or WAIT signal with an honest grade reflecting setup quality.
+  const sys = `You are a decisive prop trader. Look at these charts and give a BUY, SELL, or WAIT verdict with a grade.
 
-CORE PHILOSOPHY:
-- WAIT means the market is genuinely dangerous or has no clear edge — not just "imperfect"
-- B and C grade signals are real trades — lower probability but still worth knowing about
-- Be decisive: a trader needs a signal they can act on, not constant WAITs
-- The grade communicates quality — let the trader decide if a B signal is worth taking
+RULE #1: If you can see which direction price is moving — give BUY or SELL. Do NOT say WAIT just because conditions aren't perfect.
+RULE #2: WAIT only if price is going absolutely nowhere (true chop/range) OR there is literally no valid SL/TP placement.
+RULE #3: Grade reflects quality — B and C are real signals worth knowing. Let the grade do the work, not WAIT.
 
 ${modeCtx}
 
-HARD WAIT CONDITIONS (only these force WAIT):
-HW1: No clear directional bias — price is completely sideways/ranging with no edge either way
-HW2: High-impact news in next 5 minutes (CPI, FOMC, NFP) — too dangerous
-HW3: alignment_score < 45 — no meaningful confluence at all
-HW4: R:R less than 1:1 — risk more than reward, never acceptable
-HW5: context_bias is explicitly "Avoid" or "No Trade"
-HW6: No identifiable entry trigger or entry level
+ONLY use WAIT when:
+- Price is completely sideways with no trend in any direction
+- You cannot identify any entry, stop, or target level at all
 
-GRADE PENALTIES (reduce grade, do NOT force WAIT):
-- Session in dead zone or off-hours: -1 grade
-- Price not at key level (mid-range entry): -1 grade
-- Below-average volume: -1 grade
-- alignment_score 45–60: -1 grade
-- R:R between 1:1 and 1:1.5: -1 grade
-- Conflicting timeframes: -1 grade
-
-GRADING SCALE:
-A+: Strong directional bias + price at key level + 1:2.5+ R:R + 5+ confluences + alignment ≥ 75
-A:  Clear bias + decent location + 1:2+ R:R + 3-4 confluences + alignment ≥ 65
-B:  Reasonable setup + 1:1.5+ R:R + 2-3 confluences — some conditions not ideal
-C:  Weak setup or poor timing — low probability, trade small or skip
-D:  Multiple red flags — very low probability, informational only
+GRADING:
+A+: Strong trend + price at key level + clear confluence + good R:R
+A:  Clear direction + decent entry location + at least 1:1.5 R:R
+B:  Reasonable setup — some imperfections but tradeable direction is clear
+C:  Weak setup — direction exists but entry timing is poor or R:R is tight
+D:  Very low confidence — barely a signal but direction leans one way
 
 Return ONLY valid raw JSON:
 {"verdict":"BUY/SELL/WAIT","confidence":<40-95>,"signal_grade":"A+/A/B/C/D",
@@ -2222,28 +2208,26 @@ function validateLiveSignal(result, quality, tradeMode, personalEdge = null, mar
     }
   }
 
-  // Confidence adjustment — light touch, don't stack heavy penalties
+  // Trust the AI confidence — only apply small personalEdge boost, no stacked penalties
   const baseConfidence = parseInt(out.confidence) || 60;
-  let adjustedConfidence = Math.round((baseConfidence * 0.80) + (quality.qualityScore * 0.20));
-  if (quality.alignedTrend === 'mixed') adjustedConfidence -= 5; // soft penalty, not a WAIT
-  if (quality.warnings.length) adjustedConfidence -= Math.min(6, quality.warnings.length * 2);
-  adjustedConfidence += symbolTuning.confidenceBias;
+  let adjustedConfidence = baseConfidence;
   if (personalEdge) {
     if (out.verdict === 'BUY' && personalEdge.buyWR !== null && personalEdge.buyWR >= 60) adjustedConfidence += 3;
     if (out.verdict === 'SELL' && personalEdge.sellWR !== null && personalEdge.sellWR >= 60) adjustedConfidence += 3;
   }
-  adjustedConfidence = Math.max(out.verdict === 'WAIT' ? 40 : 48, Math.min(95, adjustedConfidence));
+  adjustedConfidence = Math.max(35, Math.min(95, adjustedConfidence));
 
-  // Only force WAIT if confidence is truly too low (< 48)
-  if (out.verdict !== 'WAIT' && adjustedConfidence < 48) {
+  // Only force WAIT if AI confidence is extremely low (< 38) — almost never override AI decision
+  if (out.verdict !== 'WAIT' && adjustedConfidence < 38) {
     out.verdict = 'WAIT';
-    notes.push('Rejected: confidence too low for a live entry.');
+    notes.push('Confidence too low for a live entry.');
   }
 
   out.confidence = adjustedConfidence;
 
-  const gradeFromConfidence = adjustedConfidence >= 88 ? 'A+' : adjustedConfidence >= 78 ? 'A' : adjustedConfidence >= 66 ? 'B' : adjustedConfidence >= 54 ? 'C' : 'D';
-  out.signal_grade = out.verdict === 'WAIT' ? (adjustedConfidence >= 60 ? 'C' : 'D') : gradeFromConfidence;
+  // Use AI's own grade if provided, otherwise derive from confidence
+  const gradeFromConfidence = adjustedConfidence >= 85 ? 'A+' : adjustedConfidence >= 73 ? 'A' : adjustedConfidence >= 60 ? 'B' : adjustedConfidence >= 48 ? 'C' : 'D';
+  out.signal_grade = out.verdict === 'WAIT' ? 'D' : (out.signal_grade && ['A+','A','B','C','D'].includes(out.signal_grade) ? out.signal_grade : gradeFromConfidence);
 
   out.factors = Array.isArray(out.factors) ? out.factors : [];
   out.factors = out.factors.filter(Boolean);
@@ -2498,28 +2482,25 @@ async function analyzeOneLive(chartTexts, sym, tf, livePrice, mktCtx, winStats, 
   const model  = SONNET; // DeepSeek R1 — best free reasoning model
   const tokens = 3000;
 
-  const sys = `You are an elite ICT/SMC prop trader. Analyze the OHLCV data and give a decisive BUY, SELL, or WAIT signal. Be direct — traders need actionable calls, not endless WAITs.
+  const sys = `You are a decisive prop trader analyzing live OHLCV data. Give BUY, SELL, or WAIT.
+
+MOST IMPORTANT RULE: If price has ANY clear direction — give BUY or SELL with the appropriate grade. Only use WAIT when price is going completely sideways with zero momentum in either direction.
 
 ${modeInstructions}
 
-ANALYSIS STEPS:
-1. TREND — Which direction is price trending on the highest TF given? Bullish = higher highs/lows. Bearish = lower highs/lows.
-2. STRUCTURE — Any recent Break of Structure (BOS) or Change of Character (CHOCH)? What's the last swing high/low?
-3. LOCATION — Is price at a key level? (prior swing high/low, round number, daily open, recent range high/low)
-4. MOMENTUM — Is the last candle bullish or bearish? Is price accelerating or stalling?
-5. R:R — Can you place a stop beyond the last structure and get at least 1:1.5 R:R to a clear target?
+HOW TO DECIDE:
+- Look at the last 10-20 candles. Is price making higher highs/lows? → BUY. Lower highs/lows? → SELL.
+- Is price near a swing high, round number, or recent range extreme? Use it as your level.
+- Set SL beyond the last structure swing. TP at the next obvious level.
+- If trend exists and you can place a SL and TP → give BUY or SELL, never WAIT.
 
-SIGNAL RULES (be decisive):
-- BUY: price trending up OR at key support + momentum bullish + R:R at least 1:1.5 → give BUY
-- SELL: price trending down OR at key resistance + momentum bearish + R:R at least 1:1.5 → give SELL
-- WAIT: truly no edge — price mid-range with no momentum, R:R impossible, or completely choppy/sideways
-- Any time of day is valid for a signal. Do NOT default to WAIT just because it's not a "kill zone."
-- If you see a clear trend with momentum, that IS a valid signal — give BUY or SELL.
-- Grade A+: Strong trend, perfect location, high conviction (conf 85-95)
-- Grade A: Clear trend, good location (conf 75-84)
-- Grade B: Decent setup, some confluence (conf 65-74)
-- Grade C: Weak but tradeable (conf 55-64)
-- Grade D or WAIT: No edge, truly choppy (conf below 55)
+GRADES (be honest, not harsh):
+- A+: Perfect setup, strong trend, key level, excellent R:R (conf 85-95)
+- A:  Clear trend, good location, solid R:R (conf 73-84)
+- B:  Clear direction, reasonable entry, decent R:R (conf 60-72)
+- C:  Direction visible but entry timing or R:R is weak (conf 48-59)
+- D:  Very weak, barely any edge (conf 40-47)
+- WAIT: Only if price is truly going nowhere — no higher highs, no lower lows, no momentum
 
 Return ONLY valid raw JSON (no markdown, no text outside JSON):
 {
