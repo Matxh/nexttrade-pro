@@ -1295,146 +1295,188 @@ async function getYahooCrumb() {
   if (_yahooCrumb && Date.now() - _yahooCrumbTs < YAHOO_CRUMB_TTL) {
     return { crumb: _yahooCrumb, cookies: _yahooCookies };
   }
-  try {
-    const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
-    // Step 1: get cookies
-    const homeRes = await fetch('https://finance.yahoo.com/', {
-      headers: { 'User-Agent': UA, 'Accept': 'text/html', 'Accept-Language': 'en-US,en;q=0.9' },
-      timeout: 6000
-    });
-    const rawCookies = homeRes.headers.get('set-cookie') || '';
-    // Collapse multi-value set-cookie into a single Cookie string
-    const cookieStr = rawCookies.split(/,\s*(?=[A-Za-z_]+=)/).map(c => c.split(';')[0]).join('; ');
-    // Step 2: get crumb
-    const crumbRes = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-      headers: { 'User-Agent': UA, 'Cookie': cookieStr, 'Accept': '*/*', 'Referer': 'https://finance.yahoo.com/' },
-      timeout: 6000
-    });
-    const crumb = (await crumbRes.text()).trim();
-    if (!crumb || crumb.length < 3) throw new Error('Bad crumb: ' + crumb);
-    _yahooCrumb = crumb;
-    _yahooCookies = cookieStr;
-    _yahooCrumbTs = Date.now();
-    console.log('[Yahoo] ✅ Crumb refreshed');
-    return { crumb, cookies: cookieStr };
-  } catch (e) {
-    console.warn('[Yahoo] ⚠️ Crumb fetch failed:', e.message);
-    return null;
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+  // Attempt 1: direct crumb fetch — no homepage needed (works when Yahoo isn't gating)
+  for (const host of ['query2', 'query1']) {
+    try {
+      const r = await fetch(`https://${host}.finance.yahoo.com/v1/test/getcrumb`, {
+        headers: { 'User-Agent': UA, 'Accept': '*/*', 'Referer': 'https://finance.yahoo.com/', 'Origin': 'https://finance.yahoo.com' },
+        timeout: 5000
+      });
+      const crumb = (await r.text()).trim();
+      if (crumb && crumb.length >= 3 && !crumb.includes('<') && !crumb.includes('{')) {
+        _yahooCrumb = crumb; _yahooCrumbTs = Date.now(); _yahooCookies = '';
+        console.log(`[Yahoo] ✅ Crumb (direct/${host}): ${crumb}`);
+        return { crumb, cookies: '' };
+      }
+    } catch {}
   }
+
+  // Attempt 2: full homepage → crumb flow with proper multi-cookie handling
+  try {
+    const homeRes = await fetch('https://finance.yahoo.com/', {
+      headers: { 'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'en-US,en;q=0.9' },
+      timeout: 8000, redirect: 'follow'
+    });
+    // node-fetch v2: use .headers.raw() to get ALL Set-Cookie headers (not just the last one)
+    const rawArr = (homeRes.headers.raw?.()?.['set-cookie']) || [];
+    let cookieStr = Array.isArray(rawArr)
+      ? rawArr.map(c => c.split(';')[0]).join('; ')
+      : (homeRes.headers.get('set-cookie') || '').split(/,\s*(?=[A-Za-z_]+=)/).map(c => c.split(';')[0]).join('; ');
+    // Inject GUC consent-bypass cookie so Yahoo doesn't redirect to consent gate
+    if (!cookieStr.includes('GUC=')) cookieStr = (cookieStr + '; GUC=AQABCAFn').trim().replace(/^; /, '');
+
+    for (const host of ['query2', 'query1']) {
+      try {
+        const crumbRes = await fetch(`https://${host}.finance.yahoo.com/v1/test/getcrumb`, {
+          headers: { 'User-Agent': UA, 'Cookie': cookieStr, 'Accept': '*/*', 'Referer': 'https://finance.yahoo.com/' },
+          timeout: 6000
+        });
+        const crumb = (await crumbRes.text()).trim();
+        if (crumb && crumb.length >= 3 && !crumb.includes('<') && !crumb.includes('{')) {
+          _yahooCrumb = crumb; _yahooCookies = cookieStr; _yahooCrumbTs = Date.now();
+          console.log(`[Yahoo] ✅ Crumb (full/${host}): ${crumb}`);
+          return { crumb, cookies: cookieStr };
+        }
+      } catch {}
+    }
+  } catch (e) { console.warn('[Yahoo] ⚠️ Crumb fetch failed:', e.message); }
+
+  return null;
 }
 
 async function fetchOHLCV(symbol, timeframe, bars=100) {
   const sym = symbol.toUpperCase().trim();
   const yahooSym = FUTURES_MAP[sym];
+  const isFutures = !!(sym.endsWith('!') || yahooSym);
+  const isCrypto  = !!(BINANCE_SYM[sym] || sym.includes('/USDT') || sym.includes('/USD'));
   const cacheKey = `${sym}|${timeframe}|${bars}`;
   const cached = _ohlcvCache[cacheKey];
-  if (cached && Date.now() - cached.ts < OHLCV_CACHE_TTL) {
-    return cached.data;
-  }
+  if (cached && Date.now() - cached.ts < OHLCV_CACHE_TTL) return cached.data;
+
+  const cacheReturn = (data) => {
+    _ohlcvCache[cacheKey] = { ts: Date.now(), data };
+    return data;
+  };
 
   // ── SOURCE 1: Binance (crypto only — free, no key, very reliable) ──────────
-  try {
-    const bd = await fetchBinance(sym, timeframe, bars);
-    if (bd) {
-      _ohlcvCache[cacheKey] = { ts: Date.now(), data: bd };
-      console.log(`[Binance] ✅ ${sym} ${timeframe} — ${bd.candles.length} candles`);
-      return bd;
-    }
-  } catch (e) { console.warn(`[Binance] ❌ ${sym}:`, e.message); }
+  if (isCrypto) {
+    try {
+      const bd = await fetchBinance(sym, timeframe, bars);
+      if (bd) {
+        console.log(`[Binance] ✅ ${sym} ${timeframe} — ${bd.candles.length} candles`);
+        return cacheReturn(bd);
+      }
+    } catch (e) { console.warn(`[Binance] ❌ ${sym}:`, e.message); }
+  }
 
-  // ── SOURCE 2: TwelveData (stocks/ETFs/forex/crypto/futures — 800 free/day) ──
-  try {
-    const tdKey = process.env.TWELVE_DATA_KEY;
-    if (!tdKey) throw new Error('No TWELVE_DATA_KEY');
-    // Futures: strip TradingView suffix and add exchange param
-    const FUTURES_TD = {
-      'ES1!':['ES','CME'],'ES':['ES','CME'],
-      'NQ1!':['NQ','CME'],'NQ':['NQ','CME'],
-      'YM1!':['YM','CBOT'],'YM':['YM','CBOT'],
-      'RTY1!':['RTY','CME'],'RTY':['RTY','CME'],
-      'CL1!':['CL','NYMEX'],'CL':['CL','NYMEX'],
-      'GC1!':['GC','COMEX'],'GC':['GC','COMEX'],
-      'SI1!':['SI','COMEX'],'SI':['SI','COMEX'],
-      'NG1!':['NG','NYMEX'],'ZB1!':['ZB','CBOT'],
-    };
-    const CRYPTO_TD = {
-      'BTC/USDT':'BTC/USD','BTCUSD':'BTC/USD','BTC':'BTC/USD',
-      'ETH/USDT':'ETH/USD','ETHUSD':'ETH/USD','ETH':'ETH/USD',
-    };
-    const futEntry  = FUTURES_TD[sym];
-    const tdSym     = futEntry ? futEntry[0] : (CRYPTO_TD[sym] || sym);
-    const tdExchange = futEntry ? futEntry[1] : '';
-    const tdTF      = TF_MAP_12[timeframe] || '15min';
-    const url       = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}${tdExchange?`&exchange=${tdExchange}`:''}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}&order=ASC`;
-    const r         = await fetch(url, { timeout: 10000 });
-    const d         = await r.json();
-    if (d.status !== 'ok' || !d.values?.length) throw new Error(d.message || `TwelveData no data for ${tdSym}`);
-    const candles = d.values.map(v => ({
-      datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
-    }));
-    if (candles.length < 5) throw new Error(`TwelveData: only ${candles.length} candles`);
-    const data = { candles: candles.slice(-bars), source:'TwelveData', symbol:tdSym, tf:timeframe };
-    _ohlcvCache[cacheKey] = { ts: Date.now(), data };
-    console.log(`[TwelveData] ✅ ${sym}→${tdSym} ${timeframe} — ${candles.length} candles`);
-    return data;
-  } catch (e) { console.warn(`[TwelveData] ❌ ${sym}:`, e.message); }
+  // ── SOURCE 2: Stooq — try FIRST for futures (free, no key, reliable) ──────
+  // TwelveData free plan does NOT include CME/NYMEX/COMEX futures, so skip it
+  // for futures and go straight to Stooq which has ES/NQ/GC daily + some intraday
+  if (isFutures) {
+    try {
+      const sd = await fetchStooq(sym, timeframe, bars);
+      if (sd) {
+        console.log(`[Stooq] ✅ ${sym} ${timeframe} — ${sd.candles.length} candles`);
+        return cacheReturn(sd);
+      }
+    } catch (e) { console.warn(`[Stooq/futures] ❌ ${sym}:`, e.message); }
+  }
 
-  // ── SOURCE 3: Yahoo Finance with crumb (backup) ────────────────────────────
-  try {
+  // ── SOURCE 3: TwelveData (stocks/ETFs/forex/crypto — 800 free/day) ─────────
+  // Skip for futures — free plan returns "plan does not include this resource"
+  if (!isFutures) {
+    try {
+      const tdKey = process.env.TWELVE_DATA_KEY;
+      if (!tdKey) throw new Error('No TWELVE_DATA_KEY');
+      const CRYPTO_TD = {
+        'BTC/USDT':'BTC/USD','BTCUSD':'BTC/USD','BTC':'BTC/USD',
+        'ETH/USDT':'ETH/USD','ETHUSD':'ETH/USD','ETH':'ETH/USD',
+      };
+      const tdSym = CRYPTO_TD[sym] || sym;
+      const tdTF  = TF_MAP_12[timeframe] || '15min';
+      const url   = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}&interval=${tdTF}&outputsize=${bars}&apikey=${tdKey}&order=ASC`;
+      const r     = await fetch(url, { timeout: 7000 });
+      const d     = await r.json();
+      if (d.status !== 'ok' || !d.values?.length) throw new Error(d.message || `TwelveData no data for ${tdSym}`);
+      const candles = d.values.map(v => ({
+        datetime:v.datetime, open:v.open, high:v.high, low:v.low, close:v.close, volume:v.volume||0
+      }));
+      if (candles.length < 5) throw new Error(`TwelveData: only ${candles.length} candles`);
+      const data = { candles: candles.slice(-bars), source:'TwelveData', symbol:tdSym, tf:timeframe };
+      console.log(`[TwelveData] ✅ ${sym}→${tdSym} ${timeframe} — ${candles.length} candles`);
+      return cacheReturn(data);
+    } catch (e) { console.warn(`[TwelveData] ❌ ${sym}:`, e.message); }
+  }
+
+  // ── SOURCE 4: Yahoo Finance — try without crumb first (works sometimes) ────
+  const tryYahoo = async (useCrumb) => {
     const yTF    = TF_MAP_YAHOO[timeframe] || '15m';
     const yRange = TF_RANGE[timeframe] || '5d';
     const UA     = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
-    const yc     = await getYahooCrumb();
-    const crumbParam = yc?.crumb ? `&crumb=${encodeURIComponent(yc.crumb)}` : '';
-    const url    = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym||sym)}?interval=${yTF}&range=${yRange}${crumbParam}`;
+    const ySym   = yahooSym || sym;
+    let crumbParam = '';
     const headers = { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'en-US,en;q=0.9', 'Referer': 'https://finance.yahoo.com/' };
-    if (yc?.cookies) headers['Cookie'] = yc.cookies;
-    const r   = await fetch(url, { headers, timeout: 6000 });
-    if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
-    const d   = await r.json();
-    const res = d?.chart?.result?.[0];
-    if (!res) throw new Error('No Yahoo result — ' + JSON.stringify(d?.chart?.error));
-    const ts  = res.timestamp || [];
-    const q   = res.indicators?.quote?.[0] || {};
-    const candles = ts.map((t,i) => ({
-      datetime: new Date(t*1000).toISOString().replace('T',' ').substring(0,16),
-      open: q.open?.[i]?.toFixed(2), high: q.high?.[i]?.toFixed(2),
-      low:  q.low?.[i]?.toFixed(2),  close: q.close?.[i]?.toFixed(2),
-      volume: q.volume?.[i] || 0
-    })).filter(c => c.open && c.close);
-    if (candles.length < 5) throw new Error(`Yahoo: only ${candles.length} candles`);
-    const data = { candles: candles.slice(-bars), source:'Yahoo', symbol: yahooSym||sym, tf: timeframe };
-    _ohlcvCache[cacheKey] = { ts: Date.now(), data };
-    console.log(`[Yahoo] ✅ ${sym} ${timeframe} — ${candles.length} candles`);
-    return data;
-  } catch (yErr) {
-    console.warn(`[Yahoo] ❌ ${sym} ${timeframe}:`, yErr.message);
-    _yahooCrumb = null; // reset crumb on failure
+    if (useCrumb) {
+      const yc = await getYahooCrumb();
+      if (yc?.crumb) { crumbParam = `&crumb=${encodeURIComponent(yc.crumb)}`; }
+      if (yc?.cookies) { headers['Cookie'] = yc.cookies; }
+    }
+    // Try query1 then query2 (different servers — one often works when the other is rate-limited)
+    for (const host of ['query1', 'query2']) {
+      try {
+        const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?interval=${yTF}&range=${yRange}&corsDomain=finance.yahoo.com${crumbParam}`;
+        const r   = await fetch(url, { headers, timeout: 8000 });
+        if (!r.ok) throw new Error(`Yahoo ${host} HTTP ${r.status}`);
+        const d   = await r.json();
+        const res = d?.chart?.result?.[0];
+        if (!res) throw new Error('No Yahoo result — ' + JSON.stringify(d?.chart?.error));
+        const ts = res.timestamp || [];
+        const q  = res.indicators?.quote?.[0] || {};
+        const candles = ts.map((t,i) => ({
+          datetime: new Date(t*1000).toISOString().replace('T',' ').substring(0,16),
+          open: q.open?.[i]?.toFixed(2), high: q.high?.[i]?.toFixed(2),
+          low:  q.low?.[i]?.toFixed(2),  close: q.close?.[i]?.toFixed(2),
+          volume: q.volume?.[i] || 0
+        })).filter(c => c.open && c.close);
+        if (candles.length < 5) throw new Error(`Yahoo: only ${candles.length} candles`);
+        const data = { candles: candles.slice(-bars), source:'Yahoo', symbol: ySym, tf: timeframe };
+        console.log(`[Yahoo/${host}${useCrumb?'+crumb':''}] ✅ ${sym} ${timeframe} — ${candles.length} candles`);
+        return cacheReturn(data);
+      } catch(e) {
+        console.warn(`[Yahoo/${host}${useCrumb?'+crumb':''}] ❌ ${sym}:`, e.message);
+      }
+    }
+    return null;
+  };
+
+  // Try Yahoo without crumb first (faster), then with crumb
+  const yahooResult = await tryYahoo(false) || await tryYahoo(true);
+  if (yahooResult) return yahooResult;
+  _yahooCrumb = null; // reset crumb on total Yahoo failure
+
+  // ── SOURCE 5: Stooq fallback for non-futures (stocks/forex/ETFs) ──────────
+  if (!isFutures) {
+    try {
+      const sd = await fetchStooq(sym, timeframe, bars);
+      if (sd) {
+        console.log(`[Stooq] ✅ ${sym} ${timeframe} — ${sd.candles.length} candles`);
+        return cacheReturn(sd);
+      }
+    } catch (e) { console.warn(`[Stooq] ❌ ${sym}:`, e.message); }
   }
 
-  // ── SOURCE 3: Stooq (stocks/futures/forex — free, no key needed) ──────────
-  try {
-    const sd = await fetchStooq(sym, timeframe, bars);
-    if (sd) {
-      _ohlcvCache[cacheKey] = { ts: Date.now(), data: sd };
-      console.log(`[Stooq] ✅ ${sym} ${timeframe} — ${sd.candles.length} candles`);
-      return sd;
-    }
-  } catch (e) { console.warn(`[Stooq] ❌ ${sym}:`, e.message); }
-
-
-  // ── SOURCE 5: ETF proxy (ES1!→SPY, NQ1!→QQQ etc.) ───────────────────────
+  // ── SOURCE 6: ETF proxy (ES1!→SPY, NQ1!→QQQ etc.) ───────────────────────
   const proxySym = PROXY_MAP[sym];
   if (proxySym && proxySym !== sym) {
     console.warn(`[OHLCV] Trying ETF proxy: ${sym} → ${proxySym}`);
     try {
-      const proxyKey = `${proxySym}|${timeframe}|${bars}`;
       const proxyData = await fetchOHLCV(proxySym, timeframe, bars);
       if (proxyData) {
         const data = { ...proxyData, symbol: sym, proxySymbol: proxySym, source: proxyData.source + '(proxy)' };
-        _ohlcvCache[cacheKey] = { ts: Date.now(), data };
         console.log(`[OHLCV] ✅ Proxy ${proxySym} worked for ${sym}`);
-        return data;
+        return cacheReturn(data);
       }
     } catch(e) { console.warn(`[OHLCV] Proxy failed:`, e.message); }
   }
