@@ -15,6 +15,60 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 const PINE_SCRIPT_PATH = path.join(__dirname, 'PriceActionAI.pine');
 const PINE_SCRIPT_CODE = fs.existsSync(PINE_SCRIPT_PATH) ? fs.readFileSync(PINE_SCRIPT_PATH, 'utf8') : '';
 
+async function sendWelcomeEmail(toEmail) {
+  if (!resend) { console.warn('[Email] Resend not configured'); return; }
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: toEmail,
+      subject: 'Welcome to PriceAction AI 🚀',
+      html: `
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#0d1117;color:#ffffff;padding:32px;border-radius:12px;">
+          <h1 style="color:#00ffbb;margin-bottom:4px;">PriceAction AI</h1>
+          <p style="color:#888;margin-top:0;">Your trading edge starts here.</p>
+          <hr style="border-color:#222;margin:24px 0;">
+          <h2 style="color:#ffffff;">Welcome aboard! 🎉</h2>
+          <p style="color:#ccc;line-height:1.8;">Your account is ready. Here's how to get your first signal in under 60 seconds:</p>
+
+          <div style="background:#161b22;border-radius:10px;padding:20px;margin:20px 0;">
+            <h3 style="color:#00ffbb;margin-top:0;">Quick Start Guide</h3>
+            <ol style="color:#ccc;line-height:2.2;margin:0;padding-left:20px;">
+              <li>Go to <a href="https://priceaction.it.com" style="color:#00ffbb;">priceaction.it.com</a> and log in</li>
+              <li>Click <strong style="color:#fff;">Live Analyzer</strong> in the nav</li>
+              <li>Choose your mode — <strong style="color:#fff;">Scalp, Day, or Swing</strong></li>
+              <li>Type any symbol (e.g. <strong style="color:#fff;">BTC/USD, ES1!, AAPL</strong>)</li>
+              <li>Hit <strong style="color:#fff;">Analyze</strong> — get your grade in seconds</li>
+            </ol>
+          </div>
+
+          <div style="background:#0f2027;border:1px solid rgba(0,229,180,0.2);border-radius:10px;padding:20px;margin:20px 0;">
+            <h3 style="color:#00ffbb;margin-top:0;">What you get with Basic</h3>
+            <ul style="color:#ccc;line-height:2;margin:0;padding-left:20px;">
+              <li>10 AI analyses per day</li>
+              <li>Live market data — no screenshots needed</li>
+              <li>A+/A/B/C/D signal grading system</li>
+              <li>Scalp, Day Trade &amp; Swing modes</li>
+              <li>Trade journal &amp; risk calculator</li>
+              <li>Session timer &amp; best trade windows</li>
+            </ul>
+          </div>
+
+          <p style="color:#ccc;line-height:1.8;">Want unlimited analyses and the Backtest Engine? <a href="https://priceaction.it.com" style="color:#00ffbb;">Upgrade to Pro →</a></p>
+
+          <hr style="border-color:#222;margin:24px 0;">
+          <p style="color:#888;font-size:13px;">
+            Questions? Reply to this email anytime.<br>
+            Trade smart. Trade with confluence. — PriceAction AI
+          </p>
+        </div>
+      `,
+    });
+    console.log(`[Email] Welcome email sent to ${toEmail}`);
+  } catch(err) {
+    console.error('[Email] Failed to send welcome email:', err.message);
+  }
+}
+
 async function sendPineScriptEmail(toEmail) {
   if (!resend) { console.warn('[Email] Resend not configured'); return; }
   try {
@@ -350,6 +404,7 @@ app.post('/api/auth/signup', async (req, res) => {
   };
   saveUser(user);
   console.log(`[Auth] New signup: ${user.email}`);
+  sendWelcomeEmail(user.email).catch(() => {});
   const token = signToken({ userId: user.id });
   res.json({ token, user: safeUser(user) });
 });
