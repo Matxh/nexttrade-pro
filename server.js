@@ -1478,14 +1478,28 @@ const PROXY_MAP = {
 
 async function fetchStooq(symbol, timeframe, bars=100) {
   const sSym = STOOQ_SYM[symbol] || (symbol.includes('/') ? symbol.replace('/','').toLowerCase() : symbol.toLowerCase()+'.us');
-  const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
+  // Rotate UAs slightly to reduce bot detection
+  const UAs = [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  ];
+  const UA = UAs[Math.floor(Date.now() / 60000) % UAs.length];
 
   const tryStooqInterval = async (i) => {
     const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(sSym)}&i=${i}`;
-    const r = await fetch(url, { headers:{ 'User-Agent': UA }, timeout: 8000 });
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Referer': 'https://stooq.com/',
+      },
+      timeout: 9000,
+    });
     if (!r.ok) throw new Error(`Stooq HTTP ${r.status}`);
     const text = await r.text();
-    if (!text || text.includes('No data') || text.includes('<html')) throw new Error('Stooq: no data returned');
+    if (!text || text.includes('No data') || text.includes('<html') || text.includes('<!DOCTYPE')) throw new Error('Stooq: no data returned');
     const lines = text.trim().split('\n');
     if (lines.length < 3) throw new Error(`Stooq: only ${lines.length} lines`);
     // CSV header may be: Date,Open,High,Low,Close,Volume OR Date,Time,Open,High,Low,Close,Volume
@@ -1625,6 +1639,39 @@ async function fetchOHLCV(symbol, timeframe, bars=100) {
         return cacheReturn(sd);
       }
     } catch (e) { console.warn(`[Stooq/futures] ❌ ${sym}:`, e.message); }
+  }
+
+  // ── SOURCE 2b: Alpha Vantage (stocks/ETFs/forex — works from Vercel) ────────
+  // For futures we auto-use the ETF proxy (ES1!→SPY, NQ1!→QQQ) since AV doesn't
+  // carry CME futures on the free tier. Requires ALPHA_VANTAGE_KEY env var.
+  {
+    const avKey = process.env.ALPHA_VANTAGE_KEY;
+    if (avKey) {
+      try {
+        const avSym   = PROXY_MAP[sym] || sym;   // ES1!→SPY, NQ1!→QQQ, else sym as-is
+        const isProxy = avSym !== sym;
+        const AV_INTRA = { '1m':'1min','5m':'5min','15m':'15min','30m':'30min','1H':'60min','4H':'60min' };
+        const isIntraday = !!AV_INTRA[timeframe];
+        const func = isIntraday ? 'TIME_SERIES_INTRADAY' : 'TIME_SERIES_DAILY';
+        const extra = isIntraday ? `&interval=${AV_INTRA[timeframe]}&outputsize=compact` : '&outputsize=compact';
+        const url  = `https://www.alphavantage.co/query?function=${func}&symbol=${avSym}${extra}&apikey=${avKey}`;
+        const r    = await fetch(url, { timeout: 10000 });
+        const d    = await r.json();
+        if (d['Note'] || d['Information']) throw new Error(d['Note'] || d['Information']);
+        const tsKey = Object.keys(d).find(k => k.startsWith('Time Series'));
+        if (!tsKey || !d[tsKey]) throw new Error('Alpha Vantage: no time series key');
+        const entries = Object.entries(d[tsKey]).sort(([a],[b]) => a.localeCompare(b));
+        const candles = entries.slice(-bars).map(([dt, v]) => ({
+          datetime: dt, open: v['1. open'], high: v['2. high'],
+          low: v['3. low'], close: v['4. close'], volume: parseFloat(v['5. volume']||v['5. adjusted volume']||0)
+        }));
+        if (candles.length < 5) throw new Error(`Alpha Vantage: only ${candles.length} candles`);
+        const data = { candles, source: `AlphaVantage${isProxy?'(proxy)':''}`, symbol: avSym, tf: timeframe };
+        if (isProxy) data.proxySymbol = avSym;
+        console.log(`[AlphaVantage] ✅ ${sym}→${avSym} ${timeframe} — ${candles.length} candles`);
+        return cacheReturn(data);
+      } catch(e) { console.warn(`[AlphaVantage] ❌ ${sym}:`, e.message); }
+    }
   }
 
   // ── SOURCE 3: TwelveData (stocks/ETFs/forex/crypto — 800 free/day) ─────────
@@ -2402,8 +2449,16 @@ app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
 
     const available = ohlcvResults.filter(Boolean);
     if (!available.length) {
+      // ── No live data — try knowledge-based analysis (pre-market / source outage) ──
       clearTimeout(masterTimer);
-      return res.status(400).json({ error: `Could not fetch live data for ${sym}. Try: ES1!, NQ1!, BTC/USD, EUR/USD, SPY, AAPL` });
+      const proxyNote = (sym.endsWith('!') || ['ES','NQ','GC','CL','YM','RTY'].includes(sym))
+        ? ` (For futures like ${sym}, live data may be unavailable pre-market or during maintenance. Try SPY/QQQ as proxies, or add ALPHA_VANTAGE_KEY to Vercel env for reliable data.)`
+        : '';
+      return res.status(503).json({
+        error: 'live_data_unavailable',
+        message: `Live market data for ${sym} is temporarily unavailable — all data sources failed.${proxyNote}`,
+        suggestion: sym.endsWith('!') ? (PROXY_MAP[sym] || 'SPY') : null,
+      });
     }
 
     const livePrice    = { price: available[0].candles.slice(-1)[0]?.close, source: available[0].source };

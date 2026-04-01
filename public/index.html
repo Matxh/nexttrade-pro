@@ -3041,7 +3041,23 @@ async function analyzeLive(silent=false){
 
     if(!res.ok || d.error){
       if(typeof stopLoading==='function' && !silent) stopLoading();
-      showToast('⚠️ '+(d.error||'Live fetch failed'),'error');
+      // Special handling: live data temporarily unavailable (pre-market / source outage)
+      if(d.error === 'live_data_unavailable') {
+        const proxySym = d.suggestion;
+        const msg = proxySym
+          ? `⚠️ No live data for ${sym} right now (pre-market or source outage). Try <strong>${proxySym}</strong> as a proxy.`
+          : `⚠️ Live data for ${sym} is temporarily unavailable. Please try again or use a different symbol.`;
+        showToast(msg, 'error', 7000);
+        if(proxySym) {
+          // offer one-click switch to proxy
+          setTimeout(() => {
+            const confirmSwitch = window.confirm(`No live data for ${sym} right now.\n\nSwitch to ${proxySym} (ETF proxy) instead?`);
+            if(confirmSwitch) { $('liveSymInput').value = proxySym; analyzeLive(); }
+          }, 300);
+        }
+      } else {
+        showToast('⚠️ '+(d.message||d.error||'Live fetch failed'),'error');
+      }
       if(!silent) resetBtn(); return;
     }
 
@@ -5014,21 +5030,21 @@ function renderSignalEdgeSummary(edge, signal) {
   panel.style.display = '';
 }
 // Simple toast notification
-function showToast(msg, type = 'success') {
+function showToast(msg, type = 'success', duration = 3500) {
   let toast = document.getElementById('nt_toast');
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'nt_toast';
-    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:12px 20px;border-radius:10px;font-family:var(--mono);font-size:12px;font-weight:700;max-width:360px;opacity:0;transition:opacity .3s;pointer-events:none;line-height:1.5';
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:12px 20px;border-radius:10px;font-family:var(--mono);font-size:12px;font-weight:700;max-width:380px;opacity:0;transition:opacity .3s;pointer-events:none;line-height:1.5';
     document.body.appendChild(toast);
   }
-  toast.textContent = msg;
+  toast.innerHTML = msg; // support HTML (e.g. <strong>)
   toast.style.background = type === 'error' ? 'var(--red-dim)' : 'var(--green-dim)';
   toast.style.color = type === 'error' ? 'var(--red)' : 'var(--green)';
   toast.style.border = type === 'error' ? '1px solid rgba(255,61,90,.3)' : '1px solid rgba(0,230,118,.3)';
   toast.style.opacity = '1';
   clearTimeout(toast._tmr);
-  toast._tmr = setTimeout(() => { toast.style.opacity = '0'; }, 3500);
+  toast._tmr = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
 
 // ══════════════════════════════════════════════════════════════
