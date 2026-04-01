@@ -590,6 +590,9 @@ function getMarketContext(symbol) {
 // CLAUDE HELPER
 // ─────────────────────────────────────────────
 async function claude(apiKey, model, system, content, tokens = 2000) {
+  // Trim key — Vercel env vars can have trailing newline/whitespace that breaks node-fetch headers
+  apiKey = (apiKey || '').trim();
+  if (!apiKey) throw new Error('GROQ_API_KEY is not set or empty');
   // Convert Anthropic-style content array to OpenAI format
   const toOAI = (items) => {
     if (typeof items === 'string') return items;
@@ -1023,7 +1026,7 @@ function getPersonalizedEdge(allTrades) {
 // ─────────────────────────────────────────────
 app.post('/api/analyze', authMiddleware, requirePlan, async (req, res) => {
   const { charts, imageBase64, imageMime, symbol, timeframe, tradeMode } = req.body;
-  const key = process.env.GROQ_API_KEY;
+  const key = (process.env.GROQ_API_KEY || '').trim();
   if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
 
   let chartList = [];
@@ -2123,7 +2126,7 @@ function heuristicLiveAnalysis(ohlcvResults, sym, tradeMode) {
 
 app.post('/api/analyze-live', authMiddleware, requirePlan, async (req, res) => {
   const { symbol, timeframes, tradeMode } = req.body;
-  const key = process.env.GROQ_API_KEY;
+  const key = (process.env.GROQ_API_KEY || '').trim();
   if (!symbol) return res.status(400).json({ error: 'Symbol required' });
 
   const tfs = timeframes || (tradeMode==='scalp' ? ['15m','5m','1m'] : tradeMode==='swing' ? ['1D','4H','1H'] : ['4H','1H','15m']);
@@ -2330,7 +2333,7 @@ ${dataBlock}`;
 // ─────────────────────────────────────────────
 app.post('/api/scanner', authMiddleware, requirePlan, async (req, res) => {
   const { symbols, tradeMode } = req.body;
-  const key = process.env.GROQ_API_KEY;
+  const key = (process.env.GROQ_API_KEY || '').trim();
   if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
   const syms = (symbols || ['ES1!','NQ1!','CL1!','GC1!']).slice(0, 8);
   const mode = tradeMode || 'dayTrade';
@@ -2391,7 +2394,7 @@ Return ONLY valid raw JSON:
 // FEATURE 3: MORNING MARKET BRIEFING
 // ─────────────────────────────────────────────
 app.get('/api/briefing', authMiddleware, async (req, res) => {
-  const key = process.env.GROQ_API_KEY;
+  const key = (process.env.GROQ_API_KEY || '').trim();
   if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
 
   try {
@@ -2495,7 +2498,7 @@ async function fetchCorrelatedAssets(symbol) {
 // ─────────────────────────────────────────────
 app.post('/api/backtest', authMiddleware, requirePlan, async (req, res) => {
   const { symbol, tradeMode, days } = req.body;
-  const key = process.env.GROQ_API_KEY;
+  const key = (process.env.GROQ_API_KEY || '').trim();
   if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
   if (!symbol) return res.status(400).json({ error: 'Symbol required' });
 
@@ -2691,7 +2694,7 @@ async function fetchNewsSentiment(symbol) {
     if (!headlines.length) return { sentiment: 'Neutral', score: 50, headlines: [], note: 'No recent news found' };
 
     // Score sentiment with Claude Haiku
-    const key = process.env.GROQ_API_KEY;
+    const key = (process.env.GROQ_API_KEY || '').trim();
     if (!key) return { sentiment: 'Neutral', score: 50, headlines, note: 'API not configured' };
 
     const sentResult = await claude(key, HAIKU,
@@ -2716,7 +2719,7 @@ async function fetchNewsSentiment(symbol) {
 // ─────────────────────────────────────────────
 app.post('/api/trade-review/:tradeId', authMiddleware, async (req, res) => {
   const { tradeId } = req.params;
-  const key = process.env.GROQ_API_KEY;
+  const key = (process.env.GROQ_API_KEY || '').trim();
   if (!key) return res.status(500).json({ error: 'GROQ_API_KEY not set' });
 
   try {
